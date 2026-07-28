@@ -1,0 +1,272 @@
+"use client";
+
+import { useState } from "react";
+import { Check, X, Play, Clock } from "lucide-react";
+import { toast } from "sonner";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  useProjectHoldRequests,
+  type ProcessHoldRequestPayload,
+} from "@/hooks/use-project-hold-requests";
+import { useProjectMembers } from "@/hooks/use-project-members";
+import {
+  formatHoldDate,
+  holdRequestStatusLabel,
+  holdRequestStatusStyle,
+} from "@/lib/hold-requests/display";
+import type { TaskableHoldRequest } from "@/types/hold-requests";
+
+function HoldRequestCard({
+  req,
+  isProcessing,
+  canProcess,
+  onProcess,
+}: {
+  req: TaskableHoldRequest;
+  isProcessing: boolean;
+  canProcess: boolean;
+  onProcess: (payload: ProcessHoldRequestPayload) => Promise<void>;
+}) {
+  const [remark, setRemark] = useState("");
+  const [adjustDates, setAdjustDates] = useState(false);
+  const [adjStart, setAdjStart] = useState(req.requestedStartDate.slice(0, 10));
+  const [adjEnd, setAdjEnd] = useState(req.requestedEndDate.slice(0, 10));
+  const style = holdRequestStatusStyle(req.status);
+
+  const isPending = req.status === "PENDING";
+  const isApproved = req.status === "APPROVED" || req.status === "APPROVED_MODIFIED";
+  const canApproveReject = canProcess && isPending;
+  const canResume = canProcess && isApproved && !req.resumedAt;
+
+  async function handle(action: ProcessHoldRequestPayload["action"]) {
+    try {
+      const payload: ProcessHoldRequestPayload = {
+        taskableHoldRequestId: req.id,
+        action,
+        reviewRemark: remark.trim() || undefined,
+      };
+      // When approving with adjusted dates, send the revised window. The backend
+      // extends the task and grows the parent milestone/stage if it spills past.
+      if (action === "approve" && adjustDates) {
+        if (new Date(adjEnd) < new Date(adjStart)) {
+          toast.error("Adjusted end date must be on or after the start date");
+          return;
+        }
+        payload.approvedStartDate = new Date(`${adjStart}T00:00:00`).toISOString();
+        payload.approvedEndDate = new Date(`${adjEnd}T23:59:59`).toISOString();
+      }
+      await onProcess(payload);
+      toast.success(
+        action === "approve"
+          ? "Hold request approved — task timeline extended"
+          : action === "reject"
+          ? "Hold request rejected"
+          : "Task resumed — unused hold time released"
+      );
+      setRemark("");
+      setAdjustDates(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to process request");
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-[var(--ds-separator)] bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="flex-1">
+          <div className="mb-1 flex items-center gap-2">
+            <Badge
+              variant="secondary"
+              className="border-0 text-[11px]"
+              style={{ background: style.bg, color: style.color }}
+            >
+              {holdRequestStatusLabel(req.status)}
+            </Badge>
+            <span className="text-xs text-[var(--ds-secondary-label)]">
+              {req.requestedBy?.firstName ?? ""} {req.requestedBy?.lastName ?? ""}
+              {req.requestedBy?.email ? ` · ${req.requestedBy.email}` : ""}
+            </span>
+          </div>
+          <p className="text-sm font-medium text-[var(--ds-label)]">{req.reason}</p>
+          {req.requestedNote && (
+            <p className="mt-0.5 text-xs text-[var(--ds-secondary-label)]">{req.requestedNote}</p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1 text-xs text-[var(--ds-secondary-label)]">
+          <Clock className="size-3" />
+          <span>
+            {formatHoldDate(req.requestedStartDate)} – {formatHoldDate(req.requestedEndDate)}
+          </span>
+        </div>
+      </div>
+
+      {req.adminNote && (
+        <p className="mb-3 rounded-lg bg-[var(--ds-bg)] px-3 py-2 text-xs text-[var(--ds-secondary-label)]">
+          <span className="font-medium">Admin note: </span>
+          {req.adminNote}
+        </p>
+      )}
+
+      {req.reviewedAt && (
+        <p className="mb-2 text-xs text-[var(--ds-secondary-label)]">
+          Reviewed {formatHoldDate(req.reviewedAt)}
+          {req.appliedAt ? ` · Applied ${formatHoldDate(req.appliedAt)}` : ""}
+          {req.resumedAt ? ` · Resumed ${formatHoldDate(req.resumedAt)}` : ""}
+        </p>
+      )}
+
+      {(canApproveReject || canResume) && (
+        <div className="mt-3 border-t border-[rgba(90,60,30,0.08)] pt-3">
+          <input
+            type="text"
+            placeholder="Optional remark…"
+            value={remark}
+            onChange={(e) => setRemark(e.target.value)}
+            className="mb-2 w-full rounded-lg border border-[rgba(90,60,30,0.15)] bg-[var(--ds-bg)] px-3 py-1.5 text-xs placeholder-[#C4B5A5] outline-none"
+          />
+
+          {canApproveReject && (
+            <div className="mb-2">
+              <label className="flex items-center gap-2 text-xs text-[var(--ds-secondary-label)]">
+                <input
+                  type="checkbox"
+                  checked={adjustDates}
+                  onChange={(e) => setAdjustDates(e.target.checked)}
+                />
+                Adjust the approved timeline
+              </label>
+              {adjustDates && (
+                <div className="mt-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={adjStart}
+                      onChange={(e) => setAdjStart(e.target.value)}
+                      className="flex-1 rounded-lg border border-[rgba(90,60,30,0.15)] bg-[var(--ds-bg)] px-2 py-1.5 text-xs outline-none"
+                    />
+                    <input
+                      type="date"
+                      value={adjEnd}
+                      min={adjStart}
+                      onChange={(e) => setAdjEnd(e.target.value)}
+                      className="flex-1 rounded-lg border border-[rgba(90,60,30,0.15)] bg-[var(--ds-bg)] px-2 py-1.5 text-xs outline-none"
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] text-[var(--ds-secondary-label)]">
+                    The task end date extends by this hold. If it runs past the milestone or
+                    stage, those are extended automatically.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            {canApproveReject && (
+              <>
+                <Button
+                  size="sm"
+                  disabled={isProcessing}
+                  onClick={() => void handle("approve")}
+                  className="h-7 gap-1 bg-[#3D8B5E] text-xs text-white hover:bg-[#2D7A4E]"
+                >
+                  <Check className="size-3" /> Approve
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isProcessing}
+                  onClick={() => void handle("reject")}
+                  className="h-7 gap-1 border-red-200 text-xs text-red-600 hover:bg-red-50"
+                >
+                  <X className="size-3" /> Reject
+                </Button>
+              </>
+            )}
+            {canResume && (
+              <Button
+                size="sm"
+                disabled={isProcessing}
+                onClick={() => void handle("resume")}
+                className="h-7 gap-1 bg-[var(--ds-accent)] text-xs text-white hover:bg-[#C4956A]"
+              >
+                <Play className="size-3" /> Resume task
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function ProjectHoldRequestsPage() {
+  const [filter, setFilter] = useState<"PENDING" | "APPROVED" | "all">("PENDING");
+  const { effectiveRole } = useProjectMembers();
+  const canProcess = effectiveRole === "admin" || effectiveRole === "lead";
+
+  const { requests, isLoading, isProcessing, error, processRequest } = useProjectHoldRequests({
+    status: filter === "all" ? undefined : filter,
+    limit: 50,
+  });
+
+  const tabs = [
+    { id: "PENDING" as const, label: "Pending" },
+    { id: "APPROVED" as const, label: "Approved" },
+    { id: "all" as const, label: "All" },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold text-[var(--ds-label)]">Hold Requests</h2>
+        <p className="text-xs text-[var(--ds-secondary-label)]">
+          {canProcess
+            ? "Review and process hold requests submitted by team members."
+            : "Hold requests submitted for tasks in this project."}
+        </p>
+      </div>
+
+      <div className="flex gap-1 rounded-lg bg-[var(--ds-bg)] p-1 w-fit">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setFilter(tab.id)}
+            className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+              filter === tab.id
+                ? "bg-white text-[var(--ds-accent)] shadow-sm"
+                : "text-[var(--ds-secondary-label)] hover:text-[var(--ds-secondary-label)]"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {isLoading && <p className="text-sm text-[var(--ds-secondary-label)]">Loading hold requests…</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {!isLoading && requests.length === 0 && (
+        <div className="rounded-xl border border-[var(--ds-separator)] bg-[var(--ds-surface-elevated)] px-6 py-12 text-center text-sm text-[var(--ds-secondary-label)]">
+          No{filter === "PENDING" ? " pending" : filter === "APPROVED" ? " approved" : ""} hold
+          requests.
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {requests.map((req) => (
+          <HoldRequestCard
+            key={req.id}
+            req={req}
+            isProcessing={isProcessing === req.id}
+            canProcess={canProcess}
+            onProcess={processRequest}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
