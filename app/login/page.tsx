@@ -1,84 +1,29 @@
 "use client";
 
-import { useEffect } from "react";
-import Image from "next/image";
-import { useRouter } from "next/navigation";
+import * as motion from "framer-motion/client";
 
-import { HandwritingText } from "@/components/auth/handwriting-text";
+import { LoginBrandPanel } from "@/components/auth/login-brand-panel";
 import { LoginForm } from "@/components/auth/login-form";
-import { useAuth } from "@/hooks/use-auth";
-import { getPrimaryRole } from "@/lib/auth/rbac";
-import { APP_NAME } from "@/lib/constants";
-import { NAV_ROUTES } from "@/types/navigation";
-import { resolveGuestLandingRoute } from "@/lib/navigation/guest-landing";
-import { resolveHomeRoute } from "@/lib/navigation/home-route";
-import { isGuestRole } from "@/lib/user/guest";
-
-const LOGIN_BG = "#F9F5F1";
 
 export default function LoginPage() {
-  const router = useRouter();
-  const { isAuthenticated, isHydrated, session } = useAuth();
-
-  useEffect(() => {
-    if (!isHydrated || !isAuthenticated) return;
-
-    const roles = session?.user.roles ?? [];
-    const role = roles.length ? getPrimaryRole(roles) : null;
-
-    if (isGuestRole(roles)) {
-      void resolveGuestLandingRoute(roles).then((route) => router.replace(route));
-      return;
-    }
-
-    router.replace(
-      role
-        ? resolveHomeRoute(role, session?.user.preferences)
-        : NAV_ROUTES.adminDashboard,
-    );
-  }, [isAuthenticated, isHydrated, router, session]);
-
-  if (!isHydrated || isAuthenticated) {
-    return (
-      <div
-        className="flex min-h-screen items-center justify-center"
-        style={{ background: LOGIN_BG }}
-      >
-        <div className="size-8 animate-spin rounded-full border-2 border-[var(--ds-accent)] border-t-transparent" />
-      </div>
-    );
-  }
-
   return (
-    <div className="flex min-h-screen w-full" style={{ background: LOGIN_BG }}>
-      {/* Left: brand + sign-in — tighter to viewport left, more space before hero */}
-      <div
-        className="flex w-full flex-col justify-center px-6 py-10 lg:w-1/3 lg:pl-10 lg:pr-24 lg:py-16"
-        style={{ background: LOGIN_BG }}
+    <div
+      className="flex h-svh overflow-hidden text-[#16233D]"
+      style={{ fontFamily: "Aptos, Calibri, system-ui, sans-serif" }}
+    >
+      <motion.div
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        className="flex w-full flex-col items-center justify-center overflow-y-auto bg-white px-6 py-12 md:px-16 lg:w-[55%]"
       >
-        <HandwritingText>
-          <div className="mb-6">
-            <h1 className="text-[22px] font-light tracking-tight text-[var(--ds-label)]">
-              Sign in
-            </h1>
-            <p className="mt-1 text-[13px] font-light text-muted-foreground">
-              Use your {APP_NAME} account
-            </p>
-          </div>
+        <div className="w-full max-w-[400px]">
           <LoginForm />
-        </HandwritingText>
-      </div>
+        </div>
+      </motion.div>
 
-      {/* Right: hero image — extra inset from the form column */}
-      <div className="relative hidden min-h-screen lg:block lg:w-2/3 lg:pl-8">
-        <Image
-          src="/images/heroimage.jpg"
-          alt=""
-          fill
-          priority
-          className="object-cover"
-          sizes="66vw"
-        />
+      <div className="hidden h-full w-[45%] lg:block">
+        <LoginBrandPanel />
       </div>
     </div>
   );

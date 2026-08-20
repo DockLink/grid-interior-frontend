@@ -11,6 +11,7 @@ import { isArchiveFolderPath } from "@/lib/files/archive-path";
 import type { ProjectFile, ProjectFolderNode } from "@/types/files";
 
 import { FileList } from "./file-list";
+import { FileDetailSheet } from "./file-detail-sheet";
 import { FileUploadDialog } from "./file-upload-dialog";
 import { FileVersionHistoryDialog } from "./file-version-history-dialog";
 import { FolderTree } from "./folder-tree";
@@ -83,6 +84,7 @@ export function ProjectFilesBoard({ projectId }: { projectId: string }) {
   const [isDragging, setIsDragging] = useState(false);
   const [versionTarget, setVersionTarget] = useState<ProjectFile | null>(null);
   const [shareTarget, setShareTarget] = useState<ProjectFile | null>(null);
+  const [detailTarget, setDetailTarget] = useState<ProjectFile | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [uploadingVersionId, setUploadingVersionId] = useState<string | null>(null);
   const [folderDialog, setFolderDialog] = useState<FolderDialogMode>(null);
@@ -367,6 +369,7 @@ export function ProjectFilesBoard({ projectId }: { projectId: string }) {
               onRename={handleRename}
               onVersionHistory={(f) => setVersionTarget(f)}
               onUploadNewVersion={handleUploadNewVersion}
+              onSelect={setDetailTarget}
             />
           </div>
         </div>
@@ -385,6 +388,22 @@ export function ProjectFilesBoard({ projectId }: { projectId: string }) {
           }
         />
       )}
+
+      <FileDetailSheet
+        file={detailTarget}
+        open={!!detailTarget}
+        onOpenChange={(o) => !o && setDetailTarget(null)}
+        canShare={canManage}
+        canDownload={canDownload}
+        isVersioned={isVersioned}
+        onShare={(f) => {
+          setShareTarget(f);
+        }}
+        onVersionHistory={(f) => {
+          setVersionTarget(f);
+        }}
+        onDownload={handleDownload}
+      />
 
       {/* Share dialog */}
       <ShareFileDialog

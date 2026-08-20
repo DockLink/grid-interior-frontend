@@ -19,6 +19,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${aktivGrotesk.variable} ${aktivGrotesk.className} h-full antialiased`}>
+      <head>
+        <link
+          href="https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Outlined"
+          rel="stylesheet"
+        />
+      </head>
       <body className="min-h-full">
         <QueryProvider>
           <AuthHydration />

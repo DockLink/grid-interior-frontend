@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { LayoutGrid, List, Search } from "lucide-react";
 
 import { EditRoleSheet } from "@/components/user-management/edit-role-sheet";
 import { CreateUserSheet } from "@/components/user-management/create-user-sheet";
+import { PermissionsMatrixView } from "@/components/user-management/permissions-matrix-view";
 import { UserActionMenu } from "@/components/user-management/user-action-menu";
 import { UserAvatar } from "@/components/user-management/user-avatar";
+import { UserDetailSheet } from "@/components/user-management/user-detail-sheet";
 import { UserPagination } from "@/components/user-management/user-pagination";
 import { UserPill } from "@/components/user-management/user-pill";
 import { Button } from "@/components/ui/button";
@@ -71,6 +73,8 @@ export function UserManagementPage() {
   const [activeFilter, setActiveFilter] = useState<FilterType>("ALL");
   const [page, setPage] = useState(1);
   const [showCreateSheet, setShowCreateSheet] = useState(false);
+  const [viewMode, setViewMode] = useState<"directory" | "matrix">("directory");
+  const [detailUser, setDetailUser] = useState<User | null>(null);
   const [editRoleUser, setEditRoleUser] = useState<User | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
@@ -156,6 +160,7 @@ export function UserManagementPage() {
     return (
       <div key={user.id} style={{ minWidth: "900px" }}>
         <div
+          onClick={() => setDetailUser(user)}
           style={{
             height: "56px",
             borderBottom: showConfirm ? "none" : isLast ? "none" : "1px solid rgba(90,60,30,0.08)",
@@ -163,7 +168,7 @@ export function UserManagementPage() {
             display: "grid",
             gridTemplateColumns: "1fr 220px 130px 110px 130px 40px",
             alignItems: "center",
-            cursor: "default",
+            cursor: "pointer",
             opacity: isMutating && (deactivateTarget === user.id || editRoleUser?.id === user.id) ? 0.7 : 1,
           }}
         >
@@ -214,7 +219,7 @@ export function UserManagementPage() {
 
           <div style={{ fontSize: "13px", color: "var(--ds-secondary-label)" }}>{formatLastActive(user)}</div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", justifyContent: "flex-end" }} onClick={(e) => e.stopPropagation()}>
             <UserActionMenu
               disabled={isMutating}
               canDeactivate={user.status === "ACTIVE"}
@@ -318,6 +323,26 @@ export function UserManagementPage() {
           </div>
         </div>
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <div className="flex rounded-xl bg-[#F0F2F5] p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("directory")}
+              className="rounded-lg p-2"
+              style={{ background: viewMode === "directory" ? "#fff" : "transparent" }}
+              aria-label="Directory"
+            >
+              <List size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("matrix")}
+              className="rounded-lg p-2"
+              style={{ background: viewMode === "matrix" ? "#fff" : "transparent" }}
+              aria-label="Permissions matrix"
+            >
+              <LayoutGrid size={14} />
+            </button>
+          </div>
           <div style={{ position: "relative" }}>
             <Search
               size={14}
@@ -370,6 +395,7 @@ export function UserManagementPage() {
         </div>
       )}
 
+      {viewMode === "directory" && (
       <div
         style={{
           display: "flex",
@@ -403,8 +429,11 @@ export function UserManagementPage() {
           );
         })}
       </div>
+      )}
 
-      {isLoading ? (
+      {viewMode === "matrix" ? (
+        <PermissionsMatrixView />
+      ) : isLoading ? (
         <div
           style={{
             background: "var(--ds-surface-elevated)",
@@ -457,11 +486,27 @@ export function UserManagementPage() {
         </>
       )}
 
-      <UserPagination
-        meta={meta}
-        page={page}
-        onPageChange={setPage}
-        disabled={isLoading || isMutating}
+      {viewMode === "directory" && (
+        <UserPagination
+          meta={meta}
+          page={page}
+          onPageChange={setPage}
+          disabled={isLoading || isMutating}
+        />
+      )}
+
+      <UserDetailSheet
+        user={detailUser}
+        open={!!detailUser}
+        onClose={() => setDetailUser(null)}
+        onEditRole={
+          detailUser
+            ? () => {
+                setEditRoleUser(detailUser);
+                setDetailUser(null);
+              }
+            : undefined
+        }
       />
 
       <CreateUserSheet

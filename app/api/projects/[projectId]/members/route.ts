@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { isDevBypassRequest } from "@/lib/auth/dev-bypass-server";
 import { backendFetch } from "@/lib/api/backend";
+import { isMockProjectId } from "@/lib/projects/mock-projects";
 import type { ProjectMember, ProjectWithMembers } from "@/types/projects";
 
 type RouteContext = { params: Promise<{ projectId: string }> };
@@ -15,6 +17,10 @@ export async function GET(req: NextRequest, context: RouteContext) {
   }
 
   const { projectId } = await context.params;
+
+  if (isDevBypassRequest(authorization) && isMockProjectId(projectId)) {
+    return NextResponse.json({ members: [] as ProjectMember[] });
+  }
 
   const result = await backendFetch<{ members: ProjectMember[] }>(
     `/projects/${projectId}/members`,

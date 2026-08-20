@@ -2,14 +2,14 @@
 
 import { toast } from "sonner";
 
-// Dedup guard so a burst of failing requests only shows one toast.
+import { NAV_ROUTES } from "@/types/navigation";
+
 let lastNotified = 0;
 const DEDUP_WINDOW_MS = 5_000;
 
 /**
- * Surfaces a single, friendly "session expired" toast. Safe to call from
- * non-React modules (the store, the API client) — it no-ops if called again
- * within the dedup window.
+ * Surfaces a single, friendly "session expired" toast and routes to the
+ * dedicated expired screen. Safe to call from non-React modules.
  */
 export function notifySessionExpired(): void {
   if (typeof window === "undefined") return;
@@ -17,4 +17,7 @@ export function notifySessionExpired(): void {
   if (now - lastNotified < DEDUP_WINDOW_MS) return;
   lastNotified = now;
   toast.error("Session expired, please log in.");
+  if (!window.location.pathname.startsWith(NAV_ROUTES.sessionExpired)) {
+    window.location.assign(NAV_ROUTES.sessionExpired);
+  }
 }

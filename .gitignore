@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local design system references (not part of the app)
+/Design Minimalist SaaS UI System/
+/Design System for GRID CRM/

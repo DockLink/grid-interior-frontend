@@ -38,6 +38,7 @@ export function canAccessRoute(role: UserRole | null, pathname: string): boolean
 
   if (role === "GUEST" || role === "CLIENT_FULL_ACCESS") {
     if (GUEST_BLOCKED_ROUTES.some((r) => pathname.startsWith(r))) return false;
+    if (pathname.startsWith(NAV_ROUTES.createProject)) return false;
     return (
       pathname.startsWith(NAV_ROUTES.guestDashboard) ||
       pathname.startsWith(NAV_ROUTES.projects) ||

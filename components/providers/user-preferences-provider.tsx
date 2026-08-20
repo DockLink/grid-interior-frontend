@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { useAuth } from "@/hooks/use-auth";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { authApiClient } from "@/lib/api/authenticated-client";
 import {
   applyUserPreferences,
@@ -69,6 +70,12 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
   );
 
   const refreshAppAppearance = useCallback(async () => {
+    if (isAuthDisabled()) {
+      const merged = mergeAppAppearance(DEFAULT_APP_APPEARANCE);
+      applyEffective(merged, user?.preferences);
+      return merged;
+    }
+
     const data = await authApiClient<AppAppearanceSettings>("/app-settings/appearance");
     const merged = mergeAppAppearance(data);
     applyEffective(merged, user?.preferences);
@@ -80,6 +87,11 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
       clearAppliedUserPreferences();
       setAppAppearance(DEFAULT_APP_APPEARANCE);
       setPreferencesState(DEFAULT_USER_PREFERENCES);
+      return;
+    }
+
+    if (isAuthDisabled()) {
+      applyEffective(DEFAULT_APP_APPEARANCE, user?.preferences);
       return;
     }
 
@@ -103,7 +115,7 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
   }, [isAuthenticated, user?.preferences, applyEffective]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || isAuthDisabled()) return;
 
     const onFocus = () => {
       if (!pollingPausedRef.current) {

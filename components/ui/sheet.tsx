@@ -33,15 +33,18 @@ function SheetContent({
   className,
   children,
   side = "right",
+  style,
 }: {
   className?: string;
   children: React.ReactNode;
   side?: "right" | "left";
+  style?: React.CSSProperties;
 }) {
   return (
     <aside
+      style={style}
       className={cn(
-        "fixed top-[52px] flex h-[calc(100vh-52px)] w-full max-w-md flex-col border-border bg-[#FDFAF6] shadow-2xl",
+        "fixed top-0 flex h-svh w-full max-w-md flex-col border-border bg-background shadow-2xl",
         side === "right" ? "right-0 border-l" : "left-0 border-r",
         className
       )}
@@ -56,7 +59,11 @@ function SheetHeader({ className, children }: React.ComponentProps<"div">) {
 }
 
 function SheetTitle({ className, children }: React.ComponentProps<"div">) {
-  return <div className={cn("pr-8 text-base font-light text-foreground", className)}>{children}</div>;
+  return <div className={cn("pr-8 text-base font-medium text-foreground", className)}>{children}</div>;
+}
+
+function SheetDescription({ className, children }: React.ComponentProps<"div">) {
+  return <div className={cn("text-sm text-muted-foreground", className)}>{children}</div>;
 }
 
 function SheetBody({ className, children }: React.ComponentProps<"div">) {
@@ -71,4 +78,4 @@ function SheetCloseButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-export { Sheet, SheetContent, SheetHeader, SheetTitle, SheetBody, SheetCloseButton };
+export { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetBody, SheetCloseButton };

@@ -39,6 +39,7 @@ export function FileList({
   onRename,
   onVersionHistory,
   onUploadNewVersion,
+  onSelect,
 }: {
   files: ProjectFile[];
   loading: boolean;
@@ -56,6 +57,7 @@ export function FileList({
   onRename: (file: ProjectFile) => void;
   onVersionHistory: (file: ProjectFile) => void;
   onUploadNewVersion: (file: ProjectFile, picked: File) => void;
+  onSelect?: (file: ProjectFile) => void;
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
@@ -122,6 +124,7 @@ export function FileList({
           onRename={onRename}
           onVersionHistory={onVersionHistory}
           onUploadNewVersion={onUploadNewVersion}
+          onSelect={onSelect}
         />
       ))}
     </div>
@@ -145,6 +148,7 @@ function FileRow({
   onRename,
   onVersionHistory,
   onUploadNewVersion,
+  onSelect,
 }: {
   file: ProjectFile;
   isVersioned: boolean;
@@ -162,6 +166,7 @@ function FileRow({
   onRename: (file: ProjectFile) => void;
   onVersionHistory: (file: ProjectFile) => void;
   onUploadNewVersion: (file: ProjectFile, picked: File) => void;
+  onSelect?: (file: ProjectFile) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const ext = fileExtension(file.fileName);
@@ -186,9 +191,11 @@ function FileRow({
         <div
           onMouseEnter={onMouseEnter}
           onMouseLeave={onMouseLeave}
+          onClick={() => onSelect?.(file)}
           className={cn(
             "grid h-10 grid-cols-[1fr_120px_80px_100px] items-center border-b border-[rgba(90,60,30,0.07)] px-4 transition-colors",
-            hovered ? "bg-[var(--ds-bg)]" : "bg-transparent"
+            hovered ? "bg-[var(--ds-bg)]" : "bg-transparent",
+            onSelect ? "cursor-pointer" : "",
           )}
         >
           {/* Hidden file input for new-version upload */}

@@ -42,6 +42,20 @@ export function removeProjectGalleryImage(
   return [...cover, ...gallery];
 }
 
+function formatMonthYear(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+function formatShortDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 export function mapProjectToCard(project: Project): ProjectCardView {
   return {
     id: project.id,
@@ -53,5 +67,8 @@ export function mapProjectToCard(project: Project): ProjectCardView {
     location: project.location,
     currentStage: project.current_stage ?? null,
     created_at: project.created_at,
+    startDate: formatMonthYear(project.start_date),
+    updatedAt: formatShortDate(project.updated_at),
+    updatedAtIso: project.updated_at ?? null,
   };
 }
