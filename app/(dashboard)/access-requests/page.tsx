@@ -33,45 +33,36 @@ function requesterLabel(req: AccessRequest): string {
 }
 
 export default function AccessRequestsPage() {
-  const { user } = useAuth();
-  const sidebarRole = toSidebarRole(user?.roles ? getPrimaryRole(user.roles) : null);
-  const isOrgAdmin = sidebarRole === "admin" || sidebarRole === "superadmin";
-
-  const [ledProjectIds, setLedProjectIds] = useState<Set<string>>(new Set());
-  const [ledLoaded, setLedLoaded] = useState(isOrgAdmin);
-
-  useEffect(() => {
-    if (isOrgAdmin || !user?.id) return;
-    void (async () => {
-      try {
-        const qs = toProjectsQueryString({
-          page: 1,
-          limit: 100,
-          status: "ACTIVE",
-          as_member: true,
-          as_member_role: PROJECT_LEAD_ROLE,
-        });
-        const res = await authApiClient<ProjectsListResponse>(`/projects${qs}`);
-        setLedProjectIds(new Set(res.data.map((p) => p.id)));
-      } finally {
-        setLedLoaded(true);
-      }
-    })();
-  }, [isOrgAdmin, user?.id]);
-
-  const { requests, isLoading, error, reviewRequest } = useAccessRequests(
-    { page: 1, limit: 100, status: "PENDING" },
-    { enabled: isOrgAdmin || ledLoaded }
-  );
-
+  // ── MOCK DATA ──
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [visible, setVisible] = useState<AccessRequest[]>([
+    {
+      id: "req_1",
+      projectId: "proj_1",
+      project: { id: "proj_1", name: "Marchetti Villa" } as any,
+      requestedById: "user_2",
+      requestedBy: { id: "user_2", firstName: "Dania", lastName: "Sorour", email: "dania@grid-interior.ae" } as any,
+      status: "PENDING",
+      requestNote: "Need access to check the 3D renders for the living room.",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: "req_2",
+      projectId: "proj_2",
+      project: { id: "proj_2", name: "Al-Mansoori Suite" } as any,
+      requestedById: "user_3",
+      requestedBy: { id: "user_3", firstName: "Yuki", lastName: "Tanaka", email: "yuki@grid-interior.ae" } as any,
+      status: "PENDING",
+      requestNote: "Please grant access so I can update the timeline.",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  ]);
 
-  const visible = useMemo(() => {
-    if (isOrgAdmin) return requests;
-    return requests.filter((r) => ledProjectIds.has(r.projectId));
-  }, [requests, isOrgAdmin, ledProjectIds]);
-
-  const canReview = isOrgAdmin || ledProjectIds.size > 0;
+  const canReview = true;
+  const isLoading = false;
+  const error = null;
 
   async function handleReview(
     req: AccessRequest,
@@ -80,11 +71,8 @@ export default function AccessRequestsPage() {
   ) {
     setBusyId(req.id);
     try {
-      await reviewRequest({
-        accessRequestId: req.id,
-        action,
-        grantedRole,
-      });
+      await new Promise(r => setTimeout(r, 600));
+      setVisible(prev => prev.filter(r => r.id !== req.id));
       toast.success(
         action === "reject"
           ? "Access request rejected"
@@ -93,25 +81,14 @@ export default function AccessRequestsPage() {
             : "Full access granted"
       );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to process request");
+      toast.error("Failed to process request");
     } finally {
       setBusyId(null);
     }
   }
 
-  if (!canReview && ledLoaded) {
-    return (
-      <div>
-        <div style={dsLargeTitle}>Access Requests</div>
-        <div style={{ ...dsSubtitle, marginTop: 8 }}>
-          You don&apos;t have permission to review access requests.
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div>
+    <div style={{ paddingBottom: 60 }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 20 }}>
         <div
           style={{

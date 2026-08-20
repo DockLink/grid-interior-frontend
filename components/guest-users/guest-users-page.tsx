@@ -55,13 +55,38 @@ export function GuestUsersPage() {
     setPage(1);
   }, [debouncedSearch]);
 
-  const { users, meta, isLoading, isMutating, error, createUser, setUserStatus, deleteUser } =
-    useUsers({
-      page,
-      limit: PAGE_SIZE,
-      search: debouncedSearch,
-      roles: GUEST_LIST_ROLES,
-    });
+  // ── MOCK DATA ──
+  const users: User[] = [
+    {
+      id: "guest_1",
+      first_name: "John",
+      last_name: "Client",
+      email: "john@example.com",
+      status: "ACTIVE",
+      roles: ["CLIENT_FULL_ACCESS"],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } as unknown as User,
+    {
+      id: "guest_2",
+      first_name: "Jane",
+      last_name: "Visitor",
+      email: "jane@example.com",
+      status: "ACTIVE",
+      roles: ["GUEST"],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } as unknown as User,
+  ];
+  
+  const meta = { total: 2, page: 1, limit: 20, totalPages: 1 };
+  const isLoading = false;
+  const isMutating = false;
+  const error = null;
+
+  async function createUser(payload: any) {}
+  async function setUserStatus(userId: string, status: string) {}
+  async function deleteUser(userId: string) {}
 
   const activeGuests = useMemo(
     () => users.filter((u) => u.status === "ACTIVE"),
