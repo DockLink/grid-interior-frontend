@@ -18,6 +18,7 @@ import {
   projectConceptRoute,
   projectConsultationRoute,
   projectDetailRoute,
+  projectExecutionRoute,
   projectLayoutRoute,
   projectTabRoute,
   projectThreeDRoute,
@@ -220,9 +221,25 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
       bg: "#CCFBF1",
       onClick: () => router.push(projectTabRoute(projectId, "timeline")),
     },
-    { icon: "map", label: "Site Location", color: "#D97706", bg: "#FEF3C7" },
+    {
+      icon: "map",
+      label: "Site Location",
+      color: "#D97706",
+      bg: "#FEF3C7",
+      onClick: () => {
+        document.getElementById("hub-site-location")?.scrollIntoView({ behavior: "smooth" });
+      },
+    },
     ...(project.phase === "Execution"
-      ? [{ icon: "receipt_long", label: "BOQ", color: "#1B2A4A", bg: "#E2E8F0" }]
+      ? [
+          {
+            icon: "receipt_long",
+            label: "BOQ",
+            color: "#1B2A4A",
+            bg: "#E2E8F0",
+            onClick: () => router.push(projectExecutionRoute(projectId, "boq")),
+          },
+        ]
       : []),
   ];
 
@@ -233,6 +250,7 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
       layout: projectLayoutRoute,
       threed: projectThreeDRoute,
       detail: projectDetailRoute,
+      execution: projectExecutionRoute,
     };
     router.push(routes[phase](projectId));
   };
@@ -291,12 +309,7 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
           <span className="ml-1 text-[11px] text-[var(--figma-gray400)]">Click any workspace to open it</span>
         </div>
         <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
-          {PHASE_WORKSPACES.slice(0, 3).map((ws) => (
-            <PhaseWorkspaceCard key={ws.id} ws={ws} onOpen={() => openWorkspace(ws.id)} />
-          ))}
-        </div>
-        <div className="mt-3.5 grid grid-cols-1 gap-3.5 md:grid-cols-2">
-          {PHASE_WORKSPACES.slice(3).map((ws) => (
+          {PHASE_WORKSPACES.map((ws) => (
             <PhaseWorkspaceCard key={ws.id} ws={ws} onOpen={() => openWorkspace(ws.id)} />
           ))}
         </div>
@@ -333,7 +346,36 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
               ))}
             </div>
           </div>
-          <MapThumbnail location={project.location} />
+          <div id="hub-site-location">
+            <MapThumbnail location={project.location} />
+            <p className="mt-2 text-[11px] text-[var(--figma-gray400)]">
+              {project.distanceKm} km from GRID Interior, Dehiwala
+              {project.distanceKm <= 10
+                ? " · eligible for free consultation"
+                : " · paid consultation only"}
+            </p>
+          </div>
+          <div className="neu-card rounded-2xl bg-white px-6 py-[18px]">
+            <div className="mb-3 flex items-center gap-2">
+              <MaterialIcon name="description" outlined size={18} className="text-[var(--figma-teal)]" />
+              <span className="text-sm font-semibold text-[var(--figma-navy)]">Client Brief</span>
+            </div>
+            <div className="flex items-center gap-2 rounded-xl border border-[var(--figma-border)] bg-[var(--figma-gray50)] px-3 py-2.5">
+              <MaterialIcon name="picture_as_pdf" outlined size={18} className="text-[#EF4444]" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13px] font-medium text-[var(--figma-navy)]">
+                  Client_Brief_Marchetti.pdf
+                </div>
+                <div className="text-[11px] text-[var(--figma-gray400)]">2.2 MB · 05 Jul 2026</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="mt-3 cursor-pointer border-none bg-transparent p-0 text-[12px] font-semibold text-[var(--figma-teal)]"
+            >
+              Upload brief document
+            </button>
+          </div>
         </div>
       </div>
     </div>

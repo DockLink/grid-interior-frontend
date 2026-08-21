@@ -12,7 +12,9 @@ import {
   SectionCard,
   SectionTitle,
 } from "@/components/projects/hub/consultation/consultation-ui";
+import { TimelineWidget } from "@/components/projects/hub/shared/timeline-widget";
 import { CONCEPT_AREAS, CONCEPT_CARDS, CONCEPT_RENDER_GALLERY } from "@/lib/projects/mock-concept";
+import { TEAM_MEMBERS } from "@/lib/projects/mock-projects";
 import type { ConceptRenderImage } from "@/types/concept";
 
 function RenderThumb({
@@ -182,6 +184,26 @@ export function ConceptRenderScreen({
 
       <RevisionTrackerWidget />
       <ClientPresentationWidget />
+      <TimelineWidget phase="Concept Design" initialDays="10" badgeVariant="teal" />
+      <SectionCard className="px-5 py-4">
+        <SectionTitle icon="group" title="Team Assignment" />
+        <div className="flex flex-wrap items-center gap-2">
+          {TEAM_MEMBERS.slice(0, 3).map((member) => (
+            <div
+              key={member.id}
+              className="flex items-center gap-[7px] rounded-[20px] border-[1.5px] border-[var(--figma-border)] bg-[var(--figma-gray50)] py-1.5 pl-1.5 pr-3 neu-inset"
+            >
+              <div
+                className="flex size-[26px] items-center justify-center rounded-full text-[10px] font-bold text-white"
+                style={{ background: member.color }}
+              >
+                {member.initials}
+              </div>
+              <span className="text-xs font-medium text-[var(--figma-navy)]">{member.name}</span>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
 
       <SectionCard>
         <SectionTitle icon="verified" title="Final Confirmed Presentation" />

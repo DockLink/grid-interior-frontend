@@ -30,6 +30,8 @@ export function ClientListScreen() {
   const [page, setPage] = useState(1);
   const [showAdd, setShowAdd] = useState(false);
   const [showFollowUp, setShowFollowUp] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [restored, setRestored] = useState<number[]>([]);
 
   const filtered = CLIENTS.filter((c) => {
     const q = search.toLowerCase();
@@ -37,10 +39,14 @@ export function ClientListScreen() {
       !q ||
       c.name.toLowerCase().includes(q) ||
       c.company.toLowerCase().includes(q) ||
-      c.email.toLowerCase().includes(q);
+      c.email.toLowerCase().includes(q) ||
+      (c.projects ?? []).some((p) => p.toLowerCase().includes(q));
     const matchStatus = statusFilter === "All" || c.status === statusFilter;
     const matchSource = sourceFilter === "All" || c.source === sourceFilter;
-    return matchQ && matchStatus && matchSource;
+    const matchDeleted = showDeleted
+      ? Boolean(c.deleted) && !restored.includes(c.id)
+      : !c.deleted || restored.includes(c.id);
+    return matchQ && matchStatus && matchSource && matchDeleted;
   });
 
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -70,7 +76,7 @@ export function ClientListScreen() {
             setSearch(v);
             setPage(1);
           }}
-          placeholder="Search by name, company, email…"
+          placeholder="Search by name, company, email, or project…"
         />
         <FilterDropdown
           label="Status"
@@ -91,6 +97,20 @@ export function ClientListScreen() {
           }}
         />
         <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setShowDeleted((v) => !v);
+              setPage(1);
+            }}
+            className="cursor-pointer rounded-full border px-3 py-1.5 text-[12px] font-medium"
+            style={{
+              borderColor: showDeleted ? "var(--figma-teal)" : "var(--figma-border)",
+              color: showDeleted ? "var(--figma-teal)" : "var(--figma-gray500)",
+            }}
+          >
+            {showDeleted ? "Showing deleted" : "Deleted records"}
+          </button>
           <span className="text-xs text-[var(--figma-gray400)]">
             {filtered.length} result{filtered.length !== 1 ? "s" : ""}
           </span>
@@ -128,7 +148,21 @@ export function ClientListScreen() {
             {paged.length === 0 ? (
               <EmptyState onAdd={() => setShowAdd(true)} />
             ) : (
-              paged.map((c) => <ClientRow key={c.id} client={c} onSelect={() => goToClient(c.id)} />)
+              paged.map((c) => (
+                <ClientRow
+                  key={c.id}
+                  client={c}
+                  onSelect={() => goToClient(c.id)}
+                  onRestore={
+                    c.deleted
+                      ? () => {
+                          setRestored((ids) => [...ids, c.id]);
+                          setShowDeleted(false);
+                        }
+                      : undefined
+                  }
+                />
+              ))
             )}
           </tbody>
         </table>
@@ -150,7 +184,15 @@ export function ClientListScreen() {
   );
 }
 
-function ClientRow({ client, onSelect }: { client: Client; onSelect: () => void }) {
+function ClientRow({
+  client,
+  onSelect,
+  onRestore,
+}: {
+  client: Client;
+  onSelect: () => void;
+  onRestore?: () => void;
+}) {
   const [hov, setHov] = useState(false);
 
   return (
@@ -202,7 +244,8 @@ function ClientRow({ client, onSelect }: { client: Client; onSelect: () => void 
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onSelect();
+            if (onRestore) onRestore();
+            else onSelect();
           }}
           className={cn(
             "flex items-center gap-1 rounded-lg border px-3 py-1 text-xs font-medium transition-all duration-150",
@@ -211,8 +254,8 @@ function ClientRow({ client, onSelect }: { client: Client; onSelect: () => void 
               : "border-[var(--figma-border)] bg-white text-[var(--figma-navy)]",
           )}
         >
-          View
-          <MaterialIcon name="arrow_forward" outlined size={12} />
+          {onRestore ? "Restore" : "View"}
+          <MaterialIcon name={onRestore ? "restore_from_trash" : "arrow_forward"} outlined size={12} />
         </button>
       </td>
     </tr>

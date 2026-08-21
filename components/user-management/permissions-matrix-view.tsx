@@ -5,7 +5,13 @@ import { Check, Minus } from "lucide-react";
 
 import { DemoCaption } from "@/components/demo/demo-caption";
 
-const ROLES = ["Super Admin", "Admin", "Team Lead", "Member", "Guest"] as const;
+const ROLES = [
+  "Super Admin",
+  "Designer 01",
+  "Designer 02",
+  "Project Coordinator",
+  "Social Media Admin",
+] as const;
 
 type Cell = "full" | "limited" | "none";
 
@@ -34,6 +40,14 @@ const GROUPS: { name: string; perms: { label: string; cells: Cell[] }[] }[] = [
       { label: "View board", cells: ["full", "full", "full", "full", "limited"] },
       { label: "Create / assign", cells: ["full", "full", "full", "none", "none"] },
       { label: "Complete own", cells: ["full", "full", "full", "full", "none"] },
+    ],
+  },
+  {
+    name: "Suppliers & BOQ",
+    perms: [
+      { label: "Manage suppliers", cells: ["full", "limited", "limited", "limited", "full"] },
+      { label: "View BOQ / financials", cells: ["full", "limited", "limited", "limited", "none"] },
+      { label: "Edit BOQ / rates", cells: ["full", "limited", "limited", "none", "none"] },
     ],
   },
   {

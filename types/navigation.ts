@@ -1,6 +1,7 @@
 import type { ConsultView } from "@/types/consultation";
 import type { ConceptView } from "@/types/concept";
 import type { DetailView } from "@/types/detail";
+import type { ExecutionView } from "@/types/execution";
 import type { LayoutView } from "@/types/layout";
 import type { ThreeDView } from "@/types/threed";
 
@@ -88,6 +89,13 @@ export type { DetailView };
 export function projectDetailRoute(projectId: string, view?: DetailView) {
   const base = `${projectRoute(projectId)}/detail`;
   return view && view !== "hub" ? `${base}?view=${view}` : base;
+}
+
+export type { ExecutionView };
+
+export function projectExecutionRoute(projectId: string, view?: ExecutionView) {
+  const base = `${projectRoute(projectId)}/execution`;
+  return view && view !== "stages" ? `${base}?view=${view}` : base;
 }
 
 export type ProjectTab =

@@ -7,8 +7,10 @@ import { SAMPLE_COMMENTS } from "@/lib/projects/mock-consultation";
 import { TEAM_MEMBERS } from "@/lib/projects/mock-projects";
 import type { ConsultComment } from "@/types/consultation";
 
-export function NotesThread({ compact = false }: { compact?: boolean }) {
-  const [comments, setComments] = useState<ConsultComment[]>(SAMPLE_COMMENTS);
+export function NotesThread({ compact = false, section }: { compact?: boolean; section?: string }) {
+  const [comments, setComments] = useState<ConsultComment[]>(
+    section ? SAMPLE_COMMENTS.slice(0, 2) : SAMPLE_COMMENTS,
+  );
   const [draft, setDraft] = useState("");
   const [focused, setFocused] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -32,7 +34,7 @@ export function NotesThread({ compact = false }: { compact?: boolean }) {
   };
 
   return (
-    <div className="flex flex-col" style={{ height: compact ? 480 : 560 }}>
+    <div className="flex flex-col" style={{ height: compact ? 280 : 560 }}>
       <div className="mb-4 flex-1 overflow-y-auto pr-1">
         {comments.map((c, idx) => {
           const m = TEAM_MEMBERS.find((t) => t.id === c.memberId);

@@ -54,7 +54,13 @@ export const PROJECT_TYPES = [
   "Soft Furnishing Refresh",
 ] as const;
 
-export type PhaseWorkspace = "consultation" | "concept" | "detail" | "layout" | "threed";
+export type PhaseWorkspace =
+  | "consultation"
+  | "concept"
+  | "detail"
+  | "layout"
+  | "threed"
+  | "execution";
 
 export const PHASE_WORKSPACES: {
   id: PhaseWorkspace;
@@ -108,6 +114,15 @@ export const PHASE_WORKSPACES: {
     desc: "3D visualisations and client approval confirmation",
     color: "#1B2A4A",
     bg: "rgba(27,42,74,0.06)",
+    status: "Upcoming",
+  },
+  {
+    id: "execution",
+    label: "Execution",
+    icon: "construction",
+    desc: "BOQ line items, supplier quotes, site sub-stages 6.1–6.13",
+    color: "#1B2A4A",
+    bg: "#E2E8F0",
     status: "Upcoming",
   },
 ];

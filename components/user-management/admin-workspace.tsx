@@ -736,6 +736,7 @@ function SystemSettings() {
     mention: true,
   });
   const [saved, setSaved] = useState(false);
+  const [showRecovered, setShowRecovered] = useState(false);
 
   const toggleNotif = (k: keyof typeof notifs) =>
     setNotifs((p) => ({ ...p, [k]: !p[k] }));
@@ -1139,6 +1140,7 @@ function SystemSettings() {
             </div>
           </div>
           <button
+            onClick={() => setShowRecovered((v) => !v)}
             style={{
               display: "flex",
               alignItems: "center",
@@ -1163,6 +1165,40 @@ function SystemSettings() {
             </span>
             View Deleted Records
           </button>
+          {showRecovered && (
+            <div
+              style={{
+                marginTop: 12,
+                borderRadius: 12,
+                border: `1px solid ${T.border}`,
+                background: T.gray50,
+                padding: 12,
+              }}
+            >
+              {[
+                { type: "Client", name: "Carla Conti" },
+                { type: "Supplier", name: "Cattaneo Illuminazione" },
+                { type: "Project", name: "Conti Showroom" },
+              ].map((row) => (
+                <div
+                  key={row.name}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "8px 4px",
+                    fontSize: 12,
+                    color: T.navy,
+                  }}
+                >
+                  <span>
+                    <strong>{row.type}</strong> · {row.name}
+                  </span>
+                  <span style={{ color: T.teal, fontWeight: 600 }}>Restore</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

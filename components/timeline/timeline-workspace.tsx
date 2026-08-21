@@ -4,6 +4,8 @@ import { useState } from "react";
 import { DemoCaption } from "@/components/demo/demo-caption";
 import {
   GANTT_PHASES,
+  CLIENT_GANTT_PHASES,
+  EXECUTION_OVERLAP_BARS,
   MATERIAL_ITEMS,
   MILESTONES,
   PROJECT_END,
@@ -222,6 +224,33 @@ function TabBar({
 function GanttChart() {
   const [zoom, setZoom] = useState<"month" | "week">("month");
   const [tooltip, setTooltip] = useState<GanttPhase | null>(null);
+  const [phases, setPhases] = useState(GANTT_PHASES);
+  const [fridaySent, setFridaySent] = useState<string | null>("15 Aug 2026");
+  const [copied, setCopied] = useState(false);
+
+  const nudge = (id: number, delta: number) => {
+    setPhases((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? { ...p, startWeek: Math.max(0, Math.min(TOTAL_WEEKS - p.durationWeeks, p.startWeek + delta)) }
+          : p,
+      ),
+    );
+  };
+
+  const setDuration = (id: number, weeks: number) => {
+    setPhases((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, durationWeeks: Math.max(1, weeks) } : p)),
+    );
+  };
+
+  const sendFriday = () => {
+    const stamp = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+    setFridaySent(stamp);
+    void navigator.clipboard?.writeText(`${window.location.origin}/portal/marchetti-villa`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   // Current week indicator — assume we're at week 9 (in Design Development)
   const CURRENT_WEEK = 9;
@@ -334,6 +363,12 @@ function GanttChart() {
             ))}
           </div>
           <GradBtn label="Export PDF" icon="picture_as_pdf" small />
+          <GradBtn
+            label={copied ? "Link copied" : fridaySent ? `Friday update · ${fridaySent}` : "Send Friday update"}
+            icon="send"
+            small
+            onClick={sendFriday}
+          />
         </div>
       </div>
 
@@ -349,13 +384,13 @@ function GanttChart() {
         {[
           {
             label: "Phases Complete",
-            value: `${GANTT_PHASES.filter((p) => p.status === "completed").length}/${GANTT_PHASES.length}`,
+            value: `${phases.filter((p) => p.status === "completed").length}/${phases.length}`,
             icon: "layers",
             color: T.teal,
           },
           {
             label: "Current Phase",
-            value: GANTT_PHASES.find((p) => p.status === "active")?.name ?? "—",
+            value: phases.find((p) => p.status === "active")?.name ?? "—",
             icon: "pending",
             color: "#8B5CF6",
           },
@@ -519,14 +554,14 @@ function GanttChart() {
         </div>
 
         {/* Phase rows */}
-        {GANTT_PHASES.map((phase, idx) => (
+        {phases.map((phase, idx) => (
           <div
             key={phase.id}
             style={{
               display: "flex",
               minWidth: 900,
               borderBottom:
-                idx < GANTT_PHASES.length - 1
+                idx < phases.length - 1
                   ? `1px solid ${T.border}`
                   : "none",
             }}
@@ -590,6 +625,42 @@ function GanttChart() {
                 size={22}
                 title={phase.lead.name}
               />
+              <input
+                type="number"
+                min={1}
+                value={phase.durationWeeks}
+                onChange={(e) => setDuration(phase.id, Number(e.target.value) || 1)}
+                title="Duration (weeks)"
+                style={{
+                  width: 40,
+                  padding: "2px 4px",
+                  borderRadius: 6,
+                  border: `1px solid ${T.border}`,
+                  fontSize: 11,
+                  fontFamily: "inherit",
+                  textAlign: "center",
+                }}
+              />
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <button
+                  type="button"
+                  onClick={() => nudge(phase.id, -1)}
+                  style={{ border: "none", background: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
+                >
+                  <span className="material-icons-outlined" style={{ fontSize: 14, color: T.gray400 }}>
+                    chevron_left
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => nudge(phase.id, 1)}
+                  style={{ border: "none", background: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
+                >
+                  <span className="material-icons-outlined" style={{ fontSize: 14, color: T.gray400 }}>
+                    chevron_right
+                  </span>
+                </button>
+              </div>
             </div>
 
             {/* Bar area */}
@@ -636,8 +707,27 @@ function GanttChart() {
                 }}
               />
 
-              {/* Phase bar */}
+              {/* Phase bar — drag to reschedule */}
               <div
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("text/plain", String(phase.id));
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragEnd={(e) => {
+                  const row = e.currentTarget.parentElement;
+                  if (!row) return;
+                  const rect = row.getBoundingClientRect();
+                  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                  const week = Math.round(pct * TOTAL_WEEKS);
+                  setPhases((prev) =>
+                    prev.map((p) =>
+                      p.id === phase.id
+                        ? { ...p, startWeek: Math.max(0, Math.min(TOTAL_WEEKS - p.durationWeeks, week)) }
+                        : p,
+                    ),
+                  );
+                }}
                 style={{
                   position: "absolute",
                   left: `${(phase.startWeek / TOTAL_WEEKS) * 100}%`,
@@ -690,6 +780,49 @@ function GanttChart() {
                   {phase.name}
                 </span>
               </div>
+            </div>
+          </div>
+        ))}
+
+        <div
+          style={{
+            padding: "12px 16px",
+            borderTop: `1px solid ${T.border}`,
+            fontSize: 11,
+            fontWeight: 700,
+            color: T.navy,
+            minWidth: 900,
+          }}
+        >
+          Execution sub-stages (overlapping)
+        </div>
+        {EXECUTION_OVERLAP_BARS.map((bar) => (
+          <div key={bar.id} style={{ display: "flex", minWidth: 900, borderBottom: `1px solid ${T.border}` }}>
+            <div
+              style={{
+                width: 220,
+                flexShrink: 0,
+                padding: "8px 16px",
+                borderRight: `1px solid ${T.border}`,
+                fontSize: 11,
+                color: T.gray500,
+              }}
+            >
+              {bar.id} {bar.name}
+            </div>
+            <div style={{ flex: 1, position: "relative", height: 28 }}>
+              <div
+                style={{
+                  position: "absolute",
+                  left: `${(bar.startWeek / TOTAL_WEEKS) * 100}%`,
+                  width: `${(bar.durationWeeks / TOTAL_WEEKS) * 100}%`,
+                  top: 6,
+                  height: 16,
+                  borderRadius: 8,
+                  background: bar.color,
+                  opacity: 0.85,
+                }}
+              />
             </div>
           </div>
         ))}
@@ -941,7 +1074,7 @@ function MilestonesView() {
 // ── CLIENT VIEW ───────────────────────────────────────────────────────────────
 function ClientView() {
   // Simplified phase stepper for client consumption
-  const phases = GANTT_PHASES;
+  const phases = CLIENT_GANTT_PHASES;
   const activeIdx = phases.findIndex((p) => p.status === "active");
 
   return (
@@ -967,11 +1100,18 @@ function ClientView() {
             Client-Facing Timeline
           </h1>
           <p style={{ fontSize: 12, color: T.gray500, margin: 0 }}>
-            Simplified view · For sharing with {PROJECT_NAME} client
+            Independent client timeline · edit without changing the internal Gantt
           </p>
           <DemoCaption className="mt-1" />
         </div>
-        <GradBtn label="Share with Client" icon="share" small />
+        <GradBtn
+          label="Share with Client"
+          icon="share"
+          small
+          onClick={() => {
+            void navigator.clipboard?.writeText(`${window.location.origin}/portal/marchetti-villa`);
+          }}
+        />
       </div>
 
       {/* Project progress bar */}
@@ -1468,7 +1608,44 @@ function MaterialsView() {
   );
 }
 
-// ── MAIN EXPORT ───────────────────────────────────────────────────────────────
+function StatusReportPanel() {
+  const completed = MILESTONES.filter((m) => m.status === "completed").length;
+  const overdue = MILESTONES.filter((m) => m.status === "overdue").length;
+  const upcoming = MILESTONES.filter((m) => m.status === "upcoming").length;
+  const outstanding = overdue + upcoming;
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 10,
+        flexWrap: "wrap",
+        padding: "0 40px 16px",
+      }}
+    >
+      {[
+        { label: "Completed", value: completed, color: T.success },
+        { label: "Outstanding", value: outstanding, color: T.teal },
+        { label: "Overdue", value: overdue, color: T.alert },
+        { label: "Upcoming", value: upcoming, color: T.navy },
+      ].map((s) => (
+        <div
+          key={s.label}
+          style={{
+            flex: "1 1 140px",
+            background: T.white,
+            borderRadius: 12,
+            padding: "12px 14px",
+            boxShadow: S.card,
+          }}
+        >
+          <div style={{ fontSize: 11, color: T.gray400 }}>{s.label}</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ProjectTimelineTab() {
   const [view, setView] = useState<TimelineView>("gantt");
 
@@ -1483,7 +1660,14 @@ export function ProjectTimelineTab() {
     >
       <TabBar view={view} setView={setView} />
       <div style={{ flex: 1 }}>
-        {view === "gantt" && <GanttChart />}
+        {view === "gantt" && (
+          <>
+            <div style={{ paddingTop: 20 }}>
+              <StatusReportPanel />
+            </div>
+            <GanttChart />
+          </>
+        )}
         {view === "milestones" && <MilestonesView />}
         {view === "client" && <ClientView />}
         {view === "materials" && <MaterialsView />}

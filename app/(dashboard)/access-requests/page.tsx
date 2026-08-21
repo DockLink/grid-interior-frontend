@@ -44,8 +44,8 @@ export default function AccessRequestsPage() {
       requestedBy: { id: "user_2", firstName: "Dania", lastName: "Sorour", email: "dania@grid-interior.ae" } as any,
       status: "PENDING",
       requestNote: "Need access to check the 3D renders for the living room.",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     },
     {
       id: "req_2",
@@ -55,8 +55,8 @@ export default function AccessRequestsPage() {
       requestedBy: { id: "user_3", firstName: "Yuki", lastName: "Tanaka", email: "yuki@grid-interior.ae" } as any,
       status: "PENDING",
       requestNote: "Please grant access so I can update the timeline.",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     },
   ]);
 

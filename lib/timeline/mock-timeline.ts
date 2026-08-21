@@ -252,3 +252,91 @@ export const TOTAL_WEEKS = 30;
 export const PROJECT_START = "15 May 2026";
 export const PROJECT_END = "18 Dec 2026";
 export const PROJECT_NAME = "Marchetti Villa";
+
+/** Independent client-facing timeline — not a filter of the internal Gantt. */
+export const CLIENT_GANTT_PHASES: GanttPhase[] = [
+  {
+    id: 1,
+    name: "Consultation",
+    color: "#7C3AED",
+    bg: "rgba(124,58,237,0.12)",
+    startWeek: 0,
+    durationWeeks: 2,
+    progress: 100,
+    milestone: "Brief confirmed",
+    status: "completed",
+    lead: { initials: "PN", color: "#7C3AED", name: "Priya Nair" },
+  },
+  {
+    id: 2,
+    name: "Concept",
+    color: "#0E7C86",
+    bg: "rgba(14,124,134,0.12)",
+    startWeek: 2,
+    durationWeeks: 4,
+    progress: 100,
+    milestone: "Concept approved",
+    status: "completed",
+    lead: { initials: "DS", color: "#D97706", name: "Dilani Silva" },
+  },
+  {
+    id: 3,
+    name: "Layout & 3D",
+    color: "#0891B2",
+    bg: "rgba(8,145,178,0.12)",
+    startWeek: 6,
+    durationWeeks: 5,
+    progress: 40,
+    milestone: "Client presentation",
+    status: "active",
+    lead: { initials: "AP", color: "#0891B2", name: "Ashan Perera" },
+  },
+  {
+    id: 4,
+    name: "Detail Drawings",
+    color: "#BE185D",
+    bg: "rgba(190,24,93,0.12)",
+    startWeek: 11,
+    durationWeeks: 3,
+    progress: 0,
+    status: "upcoming",
+    lead: { initials: "CG", color: "#BE185D", name: "Chamari Gunasena" },
+  },
+  {
+    id: 5,
+    name: "Site Execution",
+    color: "#059669",
+    bg: "rgba(5,150,105,0.12)",
+    startWeek: 14,
+    durationWeeks: 12,
+    progress: 0,
+    status: "upcoming",
+    lead: { initials: "RF", color: "#059669", name: "Roshan Fernando" },
+  },
+  {
+    id: 6,
+    name: "Handover",
+    color: "#1B2A4A",
+    bg: "rgba(27,42,74,0.10)",
+    startWeek: 26,
+    durationWeeks: 2,
+    progress: 0,
+    status: "upcoming",
+    lead: { initials: "PN", color: "#7C3AED", name: "Priya Nair" },
+  },
+];
+
+export interface OverlapBar {
+  id: string;
+  name: string;
+  startWeek: number;
+  durationWeeks: number;
+  color: string;
+}
+
+export const EXECUTION_OVERLAP_BARS: OverlapBar[] = [
+  { id: "6.4", name: "Electrical & Wiring", startWeek: 20, durationWeeks: 3, color: "#D97706" },
+  { id: "6.5", name: "Walls / Doors / Windows", startWeek: 21, durationWeeks: 3, color: "#0891B2" },
+  { id: "6.6", name: "Ceiling Works", startWeek: 21.5, durationWeeks: 2.5, color: "#0E7C86" },
+  { id: "6.8", name: "Flooring", startWeek: 24, durationWeeks: 2, color: "#8B5CF6" },
+];

@@ -40,7 +40,7 @@ export function PaidConsultationRecord({
   };
 
   return (
-    <div className="px-10 py-8">
+    <div className="px-4 py-6 sm:px-10 sm:py-8">
       <ConsultHeader project={project} consultType="paid" mode={mode} onBack={onBack} showModeBadge />
       <PaidTabNav tab={tab} setTab={handleTabChange} />
 

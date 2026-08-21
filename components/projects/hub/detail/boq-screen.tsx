@@ -7,6 +7,7 @@ import { OutlineBtn, SectionCard } from "@/components/projects/hub/consultation/
 import { DETAIL_CATEGORIES } from "@/lib/projects/mock-detail";
 import { formatLKR } from "@/types/detail";
 import type { DetailCategory } from "@/types/detail";
+import { projectExecutionRoute } from "@/types/navigation";
 import type { ActiveProjectView } from "@/types/project-hub";
 
 function BoqCategoryCard({ cat, pct }: { cat: DetailCategory; pct: number }) {
@@ -58,6 +59,7 @@ export function BoqScreen({ project, onBack }: { project: ActiveProjectView; onB
   const cats = DETAIL_CATEGORIES;
   const grand = cats.reduce((s, c) => s + c.estimate, 0);
   const [backHover, setBackHover] = useState(false);
+  const [linkHover, setLinkHover] = useState(false);
 
   return (
     <div className="px-10 py-8">
@@ -81,9 +83,18 @@ export function BoqScreen({ project, onBack }: { project: ActiveProjectView; onB
         <OutlineBtn label="Export Summary" icon="download" />
       </div>
 
-      <p className="mb-7 flex items-center gap-1.5 text-[11px] text-[var(--figma-gray400)]">
+      <p className="mb-7 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--figma-gray400)]">
         <MaterialIcon name="info" outlined size={14} />
         Full BOQ line-item detail available in the Execution phase.
+        <a
+          href={projectExecutionRoute(project.id, "boq")}
+          onMouseEnter={() => setLinkHover(true)}
+          onMouseLeave={() => setLinkHover(false)}
+          className="ml-1 font-semibold no-underline"
+          style={{ color: linkHover ? "var(--figma-navy)" : "var(--figma-teal)" }}
+        >
+          Open Execution BOQ →
+        </a>
       </p>
 
       <div className="mb-7 grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>

@@ -4,10 +4,13 @@ import { useState } from "react";
 import { DemoCaption } from "@/components/demo/demo-caption";
 import {
   FOLDER_CFG,
+  FOLDER_TREE,
   GALLERY_PHOTOS,
   MOCK_FILES,
   MOCK_MEETINGS,
+  folderMatches,
   type DocFile,
+  type FolderNode,
   type FolderType,
   type GalleryPhoto,
   type MeetingMinute,
@@ -234,22 +237,100 @@ function FileBrowser() {
   const [activeFolder, setActiveFolder] = useState<FolderType | "all">("all");
   const [search, setSearch] = useState("");
   const [focused, setFocused] = useState(false);
-
-  const folderTypes = Object.keys(FOLDER_CFG) as FolderType[];
-  const folderCounts = folderTypes.reduce(
-    (acc, f) => {
-      acc[f] = MOCK_FILES.filter((file) => file.folder === f).length;
-      return acc;
-    },
-    {} as Record<FolderType, number>
-  );
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({
+    drawings: true,
+    designs: true,
+    approved: false,
+    admin: true,
+  });
 
   const filtered = MOCK_FILES.filter((f) => {
-    const matchFolder = activeFolder === "all" || f.folder === activeFolder;
+    const matchFolder = folderMatches(f.folder, activeFolder);
     const matchSearch =
       !search || f.name.toLowerCase().includes(search.toLowerCase());
     return matchFolder && matchSearch;
   });
+
+  const countFor = (id: string) =>
+    MOCK_FILES.filter((f) => folderMatches(f.folder, id)).length;
+
+  const renderNode = (node: FolderNode, depth = 0) => {
+    const active = activeFolder === node.id;
+    const hasChildren = Boolean(node.children?.length);
+    const open = expanded[node.id] ?? false;
+    return (
+      <div key={node.id}>
+        <button
+          onClick={() => {
+            setActiveFolder(node.id);
+            if (hasChildren) setExpanded((p) => ({ ...p, [node.id]: !open }));
+          }}
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: `8px 8px 8px ${10 + depth * 12}px`,
+            borderRadius: 10,
+            border: "none",
+            cursor: "pointer",
+            fontFamily: "inherit",
+            marginBottom: 2,
+            background: active ? `${node.color}10` : "transparent",
+            boxShadow: active ? S.raised : "none",
+          }}
+        >
+          {hasChildren ? (
+            <span className="material-icons-outlined" style={{ fontSize: 16, color: T.gray400 }}>
+              {open ? "expand_more" : "chevron_right"}
+            </span>
+          ) : (
+            <span style={{ width: 16 }} />
+          )}
+          <div
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 7,
+              background: node.bg,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <span className="material-icons-outlined" style={{ fontSize: 14, color: node.color }}>
+              {node.icon}
+            </span>
+          </div>
+          <span
+            style={{
+              flex: 1,
+              textAlign: "left",
+              fontSize: 12,
+              fontWeight: active ? 700 : 500,
+              color: active ? node.color : T.gray500,
+            }}
+          >
+            {node.label}
+          </span>
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              padding: "1px 6px",
+              borderRadius: 8,
+              background: active ? node.bg : T.gray100,
+              color: active ? node.color : T.gray400,
+            }}
+          >
+            {countFor(node.id)}
+          </span>
+        </button>
+        {hasChildren && open && node.children!.map((child) => renderNode(child, depth + 1))}
+      </div>
+    );
+  };
 
   return (
     <div style={{ padding: "28px 40px" }}>
@@ -285,7 +366,7 @@ function FileBrowser() {
 
       <div style={{ display: "flex", gap: 24 }}>
         {/* Sidebar folders */}
-        <div style={{ width: 220, flexShrink: 0 }}>
+        <div style={{ width: 260, flexShrink: 0 }}>
           <div
             style={{
               fontSize: 10,
@@ -354,76 +435,7 @@ function FileBrowser() {
             </span>
           </button>
 
-          {folderTypes.map((f) => {
-            const cfg = FOLDER_CFG[f];
-            const active = activeFolder === f;
-            return (
-              <button
-                key={f}
-                onClick={() => setActiveFolder(f)}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  border: "none",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  marginBottom: 4,
-                  background: active
-                    ? `${cfg.color}10`
-                    : "transparent",
-                  boxShadow: active ? S.raised : "none",
-                  transition: "all 150ms",
-                }}
-              >
-                <div
-                  style={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: 8,
-                    background: cfg.bg,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  <span
-                    className="material-icons-outlined"
-                    style={{ fontSize: 16, color: cfg.color }}
-                  >
-                    {cfg.icon}
-                  </span>
-                </div>
-                <span
-                  style={{
-                    flex: 1,
-                    textAlign: "left",
-                    fontSize: 12,
-                    fontWeight: active ? 700 : 400,
-                    color: active ? cfg.color : T.gray500,
-                  }}
-                >
-                  {cfg.label}
-                </span>
-                <span
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    padding: "1px 7px",
-                    borderRadius: 8,
-                    background: active ? cfg.bg : T.gray100,
-                    color: active ? cfg.color : T.gray400,
-                  }}
-                >
-                  {folderCounts[f]}
-                </span>
-              </button>
-            );
-          })}
+          {FOLDER_TREE.map((n) => renderNode(n))}
         </div>
 
         {/* File list */}
@@ -539,7 +551,12 @@ function FileRow({
   isLast: boolean;
 }) {
   const [hov, setHov] = useState(false);
-  const cfg = FOLDER_CFG[file.folder];
+  const cfg = FOLDER_CFG[file.folder] ?? {
+    label: file.folder,
+    icon: "folder",
+    color: T.gray500,
+    bg: T.gray100,
+  };
 
   return (
     <div
@@ -642,7 +659,7 @@ function FileRow({
 // ── PHOTO GALLERY ─────────────────────────────────────────────────────────────
 function PhotoGallery() {
   const [filter, setFilter] = useState<
-    "all" | "moodboards" | "swatches" | "site"
+    "all" | "moodboards" | "swatches" | "site" | "before-after"
   >("all");
   const [lightbox, setLightbox] = useState<GalleryPhoto | null>(null);
 
@@ -651,9 +668,11 @@ function PhotoGallery() {
       ? GALLERY_PHOTOS
       : GALLERY_PHOTOS.filter((p) => p.category === filter);
 
-  // Split into 3 masonry columns
-  const cols: GalleryPhoto[][] = [[], [], []];
-  filtered.forEach((p, i) => cols[i % 3].push(p));
+  const grouped = filtered.reduce<Record<string, GalleryPhoto[]>>((acc, p) => {
+    (acc[p.month] ??= []).push(p);
+    return acc;
+  }, {});
+  const months = Object.keys(grouped);
 
   return (
     <div style={{ padding: "28px 40px" }}>
@@ -701,6 +720,7 @@ function PhotoGallery() {
             { id: "moodboards", label: "Mood Boards" },
             { id: "swatches", label: "Swatches" },
             { id: "site", label: "Site Photos" },
+            { id: "before-after", label: "Before / After" },
           ] as const
         ).map((f) => (
           <button
@@ -728,7 +748,24 @@ function PhotoGallery() {
         ))}
       </div>
 
-      {/* Masonry grid */}
+      {months.map((month) => {
+        const photos = grouped[month] ?? [];
+        const cols: GalleryPhoto[][] = [[], [], []];
+        photos.forEach((p, i) => cols[i % 3].push(p));
+        return (
+          <div key={month} style={{ marginBottom: 28 }}>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: T.navy,
+                marginBottom: 12,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+              }}
+            >
+              {month}
+            </div>
       <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
         {cols.map((col, ci) => (
           <div
@@ -758,6 +795,24 @@ function PhotoGallery() {
                   alt={photo.category}
                   style={{ width: "100%", height: "auto", display: "block" }}
                 />
+                {photo.stage && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: 10,
+                      left: 10,
+                      padding: "3px 8px",
+                      borderRadius: 8,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      background: photo.stage === "before" ? "rgba(27,42,74,0.8)" : "rgba(14,124,134,0.9)",
+                      color: "white",
+                    }}
+                  >
+                    {photo.stage}
+                  </span>
+                )}
                 <div
                   style={{
                     position: "absolute",
@@ -795,6 +850,9 @@ function PhotoGallery() {
           </div>
         ))}
       </div>
+          </div>
+        );
+      })}
 
       {/* Lightbox */}
       {lightbox && (
@@ -857,6 +915,7 @@ function MeetingsList({
 }: {
   onOpenEntry: (m: MeetingMinute) => void;
 }) {
+  const [q, setQ] = useState("");
   const typeIcon = {
     typed: "edit_note",
     pdf: "picture_as_pdf",
@@ -867,6 +926,12 @@ function MeetingsList({
     pdf: "#EF4444",
     audio: "#D97706",
   };
+
+  const meetings = MOCK_MEETINGS.filter((m) => {
+    if (!q.trim()) return true;
+    const hay = `${m.title} ${m.preview} ${m.keyDecisions}`.toLowerCase();
+    return hay.includes(q.toLowerCase());
+  });
 
   return (
     <div style={{ padding: "28px 40px" }}>
@@ -898,8 +963,26 @@ function MeetingsList({
         <GradBtn label="New Minutes" icon="add" small />
       </div>
 
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Search minutes, decisions, notes…"
+        style={{
+          width: "100%",
+          maxWidth: 420,
+          marginBottom: 18,
+          padding: "10px 14px",
+          borderRadius: 10,
+          border: `1.5px solid ${T.border}`,
+          fontFamily: "inherit",
+          fontSize: 13,
+          boxShadow: S.inset,
+          outline: "none",
+        }}
+      />
+
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {MOCK_MEETINGS.map((m) => (
+        {meetings.map((m) => (
           <div
             key={m.id}
             onClick={() => onOpenEntry(m)}
@@ -994,11 +1077,26 @@ function MeetingsList({
                 fontSize: 13,
                 color: T.gray500,
                 lineHeight: 1.5,
-                margin: "0 0 14px",
+                margin: "0 0 10px",
               }}
             >
               {m.preview}
             </p>
+            {m.keyDecisions && (
+              <div
+                style={{
+                  fontSize: 12,
+                  color: T.navy,
+                  background: "#F0FDFA",
+                  borderRadius: 10,
+                  padding: "8px 12px",
+                  marginBottom: 12,
+                }}
+              >
+                <span style={{ fontWeight: 700, color: T.teal }}>Key decisions: </span>
+                {m.keyDecisions}
+              </div>
+            )}
 
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ fontSize: 11, color: T.gray400 }}>Attendees:</span>
@@ -1031,6 +1129,8 @@ function MeetingEntry({
 }) {
   const [notes, setNotes] = useState(meeting.preview);
   const [notesFocused, setNotesFocused] = useState(false);
+  const [decisions, setDecisions] = useState(meeting.keyDecisions);
+  const [decisionsFocused, setDecisionsFocused] = useState(false);
   const [actionItems] = useState([
     {
       id: 1,
@@ -1184,6 +1284,56 @@ function MeetingEntry({
         />
       </div>
 
+      <div
+        style={{
+          background: T.white,
+          borderRadius: 16,
+          padding: "22px 24px",
+          boxShadow: S.card,
+          marginBottom: 16,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: T.navy,
+            marginBottom: 12,
+            display: "flex",
+            alignItems: "center",
+            gap: 7,
+          }}
+        >
+          <span className="material-icons-outlined" style={{ fontSize: 16, color: T.teal }}>
+            gavel
+          </span>
+          Key Decisions
+        </div>
+        <textarea
+          value={decisions}
+          onChange={(e) => setDecisions(e.target.value)}
+          onFocus={() => setDecisionsFocused(true)}
+          onBlur={() => setDecisionsFocused(false)}
+          rows={4}
+          placeholder="Record key decisions…"
+          style={{
+            width: "100%",
+            padding: "12px 14px",
+            borderRadius: 10,
+            fontSize: 13,
+            fontFamily: "inherit",
+            color: T.navy,
+            background: T.white,
+            lineHeight: 1.7,
+            resize: "vertical",
+            border: decisionsFocused ? `2px solid ${T.teal}` : `1.5px solid ${T.border}`,
+            boxShadow: S.inset,
+            outline: "none",
+            boxSizing: "border-box",
+          }}
+        />
+      </div>
+
       {/* Action items */}
       <div
         style={{
@@ -1272,14 +1422,20 @@ function GlobalSearch() {
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
 
-  const results =
+  const fileResults =
     query.length > 1
       ? MOCK_FILES.filter(
           (f) =>
             f.name.toLowerCase().includes(query.toLowerCase()) ||
-            FOLDER_CFG[f.folder].label
+            (FOLDER_CFG[f.folder]?.label ?? "")
               .toLowerCase()
-              .includes(query.toLowerCase())
+              .includes(query.toLowerCase()),
+        )
+      : [];
+  const minuteResults =
+    query.length > 1
+      ? MOCK_MEETINGS.filter((m) =>
+          `${m.title} ${m.preview} ${m.keyDecisions}`.toLowerCase().includes(query.toLowerCase()),
         )
       : [];
 
@@ -1341,7 +1497,7 @@ function GlobalSearch() {
         />
       </div>
 
-      {query.length > 1 && results.length === 0 && (
+      {query.length > 1 && fileResults.length === 0 && minuteResults.length === 0 && (
         <div
           style={{
             padding: "40px 0",
@@ -1354,7 +1510,7 @@ function GlobalSearch() {
         </div>
       )}
 
-      {results.length > 0 && (
+      {fileResults.length > 0 && (
         <div
           style={{
             background: T.white,
@@ -1364,7 +1520,7 @@ function GlobalSearch() {
             maxWidth: 580,
           }}
         >
-          {results.map((file, idx) => (
+          {fileResults.map((file, idx) => (
             <div
               key={file.id}
               style={{
@@ -1373,7 +1529,7 @@ function GlobalSearch() {
                 gap: 12,
                 padding: "13px 18px",
                 borderBottom:
-                  idx < results.length - 1 ? `1px solid ${T.border}` : "none",
+                  idx < fileResults.length - 1 ? `1px solid ${T.border}` : "none",
                 cursor: "pointer",
               }}
               onMouseEnter={(e) =>
@@ -1405,6 +1561,33 @@ function GlobalSearch() {
               >
                 chevron_right
               </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {minuteResults.length > 0 && (
+        <div
+          style={{
+            background: T.white,
+            borderRadius: 16,
+            boxShadow: S.card,
+            overflow: "hidden",
+            maxWidth: 580,
+            marginTop: 16,
+          }}
+        >
+          {minuteResults.map((m, idx) => (
+            <div
+              key={m.id}
+              style={{
+                padding: "13px 18px",
+                borderBottom: idx < minuteResults.length - 1 ? `1px solid ${T.border}` : "none",
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600, color: T.navy }}>{m.title}</div>
+              <div style={{ fontSize: 11, color: T.gray400 }}>Minutes · {m.date}</div>
+              <div style={{ fontSize: 12, color: T.gray500, marginTop: 4 }}>{m.keyDecisions}</div>
             </div>
           ))}
         </div>

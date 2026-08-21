@@ -7,6 +7,7 @@ import { SAMPLE_INVENTORY } from "@/lib/projects/mock-consultation";
 import type { ConsultInventoryItem } from "@/types/consultation";
 
 import { GradientBtn, PillSwitch, SectionCard, SectionTitle } from "./consultation-ui";
+import { SectionNotes } from "./section-notes";
 
 function InventoryRow({
   item,
@@ -91,6 +92,7 @@ export function InventoryTab() {
   };
 
   return (
+    <>
     <SectionCard>
       <SectionTitle
         icon="inventory_2"
@@ -164,5 +166,7 @@ export function InventoryTab() {
         </>
       )}
     </SectionCard>
+    <SectionNotes section="inventory" />
+    </>
   );
 }

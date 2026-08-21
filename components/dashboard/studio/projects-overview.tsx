@@ -57,12 +57,14 @@ export function ProjectsOverview({
       <div className="hidden overflow-x-auto md:block">
         <div
           className="grid border-b border-[#E4E9F0] px-6 py-2.5 text-[11px] font-semibold tracking-wider text-[#5B6B85] uppercase"
-          style={{ gridTemplateColumns: "80px 2fr 1.2fr 110px 140px 72px" }}
+          style={{ gridTemplateColumns: "80px 1.6fr 1fr 1fr 110px 110px 120px 64px" }}
         >
           <span>Code</span>
           <span>Project</span>
           <span>Client</span>
+          <span>Phase</span>
           <span>Status</span>
+          <span>Next deadline</span>
           <span>Progress</span>
           <span />
         </div>
@@ -72,7 +74,7 @@ export function ProjectsOverview({
             <div
               key={proj.id}
               className="grid items-center border-b border-[#E4E9F0] px-6 py-3.5 transition-colors last:border-0 hover:bg-[#F0FAFA]"
-              style={{ gridTemplateColumns: "80px 2fr 1.2fr 110px 140px 72px" }}
+              style={{ gridTemplateColumns: "80px 1.6fr 1fr 1fr 110px 110px 120px 64px" }}
             >
               <span className="font-mono text-[11px] font-semibold text-[#5B6B85]">
                 {proj.code}
@@ -81,6 +83,7 @@ export function ProjectsOverview({
                 {proj.name}
               </span>
               <span className="text-[12px] text-[#5B6B85]">{proj.client}</span>
+              <span className="text-[12px] font-medium text-[#16233D]">{proj.phase}</span>
               <span>
                 <span
                   className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
@@ -89,6 +92,7 @@ export function ProjectsOverview({
                   {cfg.label}
                 </span>
               </span>
+              <span className="text-[12px] text-[#5B6B85]">{proj.nextDeadline}</span>
               <div className="pr-4">
                 <div className="mb-1.5 flex justify-between text-[10px] text-[#5B6B85]">
                   <span>{proj.progress}%</span>
@@ -123,6 +127,9 @@ export function ProjectsOverview({
                     {proj.name}
                   </div>
                   <div className="text-[12px] text-[#5B6B85]">{proj.client}</div>
+                  <div className="text-[11px] text-[#5B6B85]">
+                    {proj.phase} · {proj.nextDeadline}
+                  </div>
                 </div>
                 <span
                   className="rounded-full px-2.5 py-1 text-[11px] font-semibold"

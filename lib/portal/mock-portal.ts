@@ -36,6 +36,9 @@ export const PORTAL_PROJECT = {
   endDate: "18 Dec 2026",
   overallProgress: 38,
   projectId: "GRID-2026-042",
+  lastFridayUpdate: "15 Aug 2026",
+  completedDate: null as string | null,
+  bufferDays: 10,
 };
 
 export const PORTAL_PHASES: PortalPhase[] = [

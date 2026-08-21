@@ -4,9 +4,11 @@ import { useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { SAMPLE_ROOMS } from "@/lib/projects/mock-consultation";
+import { TEAM_MEMBERS } from "@/lib/projects/mock-projects";
 import type { ConsultRoom } from "@/types/consultation";
 
 import { GradientBtn, SectionCard, SectionTitle } from "./consultation-ui";
+import { SectionNotes } from "./section-notes";
 
 function MeasurementRow({
   room,
@@ -67,6 +69,10 @@ export function SiteMeasurementsTab() {
   const [sketchUploaded, setSketchUploaded] = useState(true);
   const [dragOver, setDragOver] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [visitDate, setVisitDate] = useState("2026-07-30");
+  const [visitTime, setVisitTime] = useState("10:00");
+  const [visitStatus, setVisitStatus] = useState<"scheduled" | "completed" | "cancelled">("scheduled");
+  const [attendees, setAttendees] = useState([1, 3, 4]);
 
   const updateRoom = (id: number, field: keyof ConsultRoom, val: string) => {
     setRooms((p) => p.map((r) => (r.id === id ? { ...r, [field]: val } : r)));
@@ -74,6 +80,86 @@ export function SiteMeasurementsTab() {
 
   return (
     <div>
+      <SectionCard>
+        <SectionTitle icon="event" title="Site Visit Booking" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[13px] font-medium text-[var(--figma-navy)]">Visit date</label>
+            <input
+              type="date"
+              value={visitDate}
+              onChange={(e) => setVisitDate(e.target.value)}
+              className="box-border w-full rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 py-2.5 text-[13px] neu-inset outline-none focus:border-[var(--figma-teal)]"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[13px] font-medium text-[var(--figma-navy)]">Time</label>
+            <input
+              type="time"
+              value={visitTime}
+              onChange={(e) => setVisitTime(e.target.value)}
+              className="box-border w-full rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 py-2.5 text-[13px] neu-inset outline-none focus:border-[var(--figma-teal)]"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[13px] font-medium text-[var(--figma-navy)]">Status</label>
+            <div className="flex flex-wrap gap-1.5">
+              {(["scheduled", "completed", "cancelled"] as const).map((s) => {
+                const active = visitStatus === s;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setVisitStatus(s)}
+                    className="cursor-pointer rounded-full px-3 py-1.5 text-[12px] capitalize"
+                    style={{
+                      border: active ? "2px solid var(--figma-teal)" : "1.5px solid var(--figma-border)",
+                      color: active ? "var(--figma-teal)" : "var(--figma-gray500)",
+                      fontWeight: active ? 700 : 400,
+                      background: active ? "rgba(14,124,134,0.07)" : "#fff",
+                    }}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        <div className="mt-4">
+          <div className="mb-2 text-[13px] font-medium text-[var(--figma-navy)]">Attendees</div>
+          <div className="flex flex-wrap gap-2">
+            {TEAM_MEMBERS.map((m) => {
+              const on = attendees.includes(m.id);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() =>
+                    setAttendees((prev) => (on ? prev.filter((id) => id !== m.id) : [...prev, m.id]))
+                  }
+                  className="flex cursor-pointer items-center gap-1.5 rounded-full border px-2 py-1 text-[12px]"
+                  style={{
+                    borderColor: on ? m.color : "var(--figma-border)",
+                    background: on ? `${m.color}18` : "#fff",
+                    color: on ? "var(--figma-navy)" : "var(--figma-gray500)",
+                    fontWeight: on ? 600 : 400,
+                  }}
+                >
+                  <span
+                    className="flex size-5 items-center justify-center rounded-full text-[9px] font-bold text-white"
+                    style={{ background: m.color }}
+                  >
+                    {m.initials}
+                  </span>
+                  {m.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </SectionCard>
+
       <SectionCard>
         <SectionTitle icon="upload_file" title="Measurement Sketch" />
         {sketchUploaded ? (
@@ -223,6 +309,8 @@ export function SiteMeasurementsTab() {
           />
         </div>
       </SectionCard>
+
+      <SectionNotes section="site" />
     </div>
   );
 }

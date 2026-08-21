@@ -25,7 +25,9 @@ export type ProjectOverviewItem = {
   code: string;
   name: string;
   client: string;
-  status: "active" | "at-risk" | "overdue" | "inactive" | "completed";
+  phase: string;
+  nextDeadline: string;
+  status: "on-track" | "at-risk" | "overdue" | "inactive" | "completed";
   progress: number;
 };
 
@@ -325,7 +327,9 @@ export const PROJECTS_OVERVIEW_DATA: ProjectOverviewItem[] = [
     code: "GI-024",
     name: "Lumière Penthouse",
     client: "Dumont Family",
-    status: "active",
+    phase: "Execution",
+    nextDeadline: "28 Aug 2026",
+    status: "on-track",
     progress: 62,
   },
   {
@@ -333,6 +337,8 @@ export const PROJECTS_OVERVIEW_DATA: ProjectOverviewItem[] = [
     code: "GI-023",
     name: "Noir Boutique Hotel",
     client: "Meridian Group",
+    phase: "Detail Drawings",
+    nextDeadline: "22 Aug 2026",
     status: "at-risk",
     progress: 81,
   },
@@ -341,6 +347,8 @@ export const PROJECTS_OVERVIEW_DATA: ProjectOverviewItem[] = [
     code: "GI-022",
     name: "Verdant Residence",
     client: "Chen & Partners",
+    phase: "Layout",
+    nextDeadline: "18 Aug 2026",
     status: "overdue",
     progress: 34,
   },
@@ -349,6 +357,8 @@ export const PROJECTS_OVERVIEW_DATA: ProjectOverviewItem[] = [
     code: "GI-021",
     name: "Atrium Office HQ",
     client: "Nexum Corp",
+    phase: "Consultation",
+    nextDeadline: "04 Sep 2026",
     status: "inactive",
     progress: 8,
   },
@@ -357,13 +367,15 @@ export const PROJECTS_OVERVIEW_DATA: ProjectOverviewItem[] = [
     code: "GI-020",
     name: "Cascade Spa & Wellness",
     client: "Zenith Hospitality",
+    phase: "Execution",
+    nextDeadline: "—",
     status: "completed",
     progress: 100,
   },
 ];
 
 export const PROJ_STATUS_CONFIG = {
-  active: { label: "Active", bg: "#E6F7F7", color: "#0FA8A0", bar: "#0FA8A0" },
+  "on-track": { label: "On Track", bg: "#E7F9EE", color: "#2FBE6B", bar: "#2FBE6B" },
   "at-risk": { label: "At Risk", bg: "#FEF3C7", color: "#D97706", bar: "#F59E0B" },
   overdue: { label: "Overdue", bg: "#FDECEC", color: "#FF6B6B", bar: "#FF6B6B" },
   inactive: { label: "Inactive", bg: "#EEF1F6", color: "#5B6B85", bar: "#A0AEBB" },

@@ -93,7 +93,7 @@ export function getPageMeta(pathname: string): PageMeta {
 
   if (pathname.startsWith(`${NAV_ROUTES.projects}/`)) {
     const workspaceMatch = pathname.match(
-      /^\/projects\/([^/]+)\/(consultation|concept|layout|threed|detail)$/,
+      /^\/projects\/([^/]+)\/(consultation|concept|layout|threed|detail|execution)$/,
     );
     if (workspaceMatch) {
       const project = getActiveProject(workspaceMatch[1]!);
@@ -105,6 +105,7 @@ export function getPageMeta(pathname: string): PageMeta {
         layout: "Layout",
         threed: "3D Design",
         detail: "Detail Drawings",
+        execution: "Execution",
       };
       const title = titles[segment] ?? "Workspace";
       return {

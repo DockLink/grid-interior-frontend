@@ -23,6 +23,8 @@ export interface Client {
   assignedTo: string
   assignedInitials: string
   notes?: string
+  projects?: string[]
+  deleted?: boolean
 }
 
 export const CLIENTS: Client[] = [
@@ -44,6 +46,7 @@ export const CLIENTS: Client[] = [
     lastContact: 'Jul 28, 2025',
     assignedTo: 'Sofia Marchetti',
     assignedInitials: 'SM',
+    projects: ['Marchetti Villa Renovation', 'Marchetti Country House'],
   },
   {
     id: 2,
@@ -226,6 +229,27 @@ export const CLIENTS: Client[] = [
     assignedTo: 'Chiara Romano',
     assignedInitials: 'CR',
     notes: 'Office fit-out — co-working space',
+  },
+  {
+    id: 11,
+    initials: 'CC',
+    color: '#9CA3AF',
+    name: 'Carla Conti',
+    company: 'Conti Properties',
+    phone: '+39 02 1111 2222',
+    email: 'carla@conti.it',
+    address: 'Porta Venezia, Milan',
+    preferredContact: 'Email',
+    status: 'Past',
+    source: 'Walk-in',
+    linkedProjects: 0,
+    activeProjects: 0,
+    totalInvoiced: '€ 0',
+    lastContact: 'Jan 12, 2025',
+    assignedTo: 'Chiara Romano',
+    assignedInitials: 'CR',
+    deleted: true,
+    projects: ['Conti Showroom (archived)'],
   },
 ]
 

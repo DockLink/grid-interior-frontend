@@ -23,7 +23,7 @@ export function TypeToggleScreen({
   const eligible = project.distanceKm <= 10;
 
   return (
-    <div className="px-10 py-8">
+    <div className="px-4 py-6 sm:px-10 sm:py-8">
       <button
         type="button"
         onClick={onBack}
@@ -166,7 +166,7 @@ export function TypeToggleScreen({
           label="Continue"
           icon="arrow_forward"
           onClick={() => onContinue(consultType, mode)}
-          disabled={!consultType}
+          disabled={!consultType || (consultType === "free" && !eligible)}
         />
       </div>
     </div>

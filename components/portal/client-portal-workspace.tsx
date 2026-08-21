@@ -49,9 +49,9 @@ const MILESTONE_BADGE = {
 const MATERIAL_STATUS = {
   approved: { label: "Approved", color: "#0E7C86", bg: "rgba(14,124,134,0.10)" },
   pending: {
-    label: "Your Review Needed",
-    color: "#D97706",
-    bg: "#FEF3C7",
+    label: "Finalized",
+    color: "#0E7C86",
+    bg: "rgba(14,124,134,0.10)",
   },
   ordered: { label: "On Order", color: "#3FA66B", bg: "#DCFCE7" },
   delivered: { label: "Delivered", color: "#6B7280", bg: "#F3F4F6" },
@@ -1077,40 +1077,7 @@ function PortalMaterials() {
         {PORTAL_PROJECT.name} · Selected finishes, furniture, and materials
       </p>
 
-      {/* Attention banner */}
-      {PORTAL_MATERIALS.some((m) => m.status === "pending") && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 12,
-            padding: "14px 18px",
-            borderRadius: 12,
-            background: "#FEF3C7",
-            border: `1.5px solid #F59E0B44`,
-            marginBottom: 24,
-            marginTop: 16,
-          }}
-        >
-          <span
-            className="material-icons-outlined"
-            style={{ fontSize: 20, color: "#D97706", flexShrink: 0 }}
-          >
-            notification_important
-          </span>
-          <div>
-            <div
-              style={{ fontSize: 13, fontWeight: 700, color: T.navy, marginBottom: 2 }}
-            >
-              {PORTAL_MATERIALS.filter((m) => m.status === "pending").length} items need your approval
-            </div>
-            <div style={{ fontSize: 12, color: T.gray700 }}>
-              Please review and confirm the items marked &quot;Your Review Needed&quot;
-              below. Your designer will be notified once you confirm.
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Attention banner removed — client view is read-only */}
 
       {categories.map((cat) => {
         const items = PORTAL_MATERIALS.filter((m) => m.category === cat);
@@ -1158,9 +1125,7 @@ function MaterialRow({
   item: PortalMaterial;
   isLast: boolean;
 }) {
-  const [approved, setApproved] = useState(false);
   const cfg = MATERIAL_STATUS[item.status];
-  const needsApproval = item.status === "pending";
 
   return (
     <div
@@ -1225,81 +1190,20 @@ function MaterialRow({
               fontWeight: 600,
               padding: "2px 10px",
               borderRadius: 10,
-              color: approved ? T.success : cfg.color,
-              background: approved ? "#DCFCE7" : cfg.bg,
+              color: cfg.color,
+              background: cfg.bg,
               transition: "all 200ms",
             }}
           >
-            {approved ? "Approved by you" : cfg.label}
+            {cfg.label}
           </span>
-          {item.approvedDate && !approved && (
+          {item.approvedDate && (
             <span style={{ fontSize: 11, color: T.gray400 }}>
-              Approved {item.approvedDate}
+              Confirmed {item.approvedDate}
             </span>
           )}
         </div>
       </div>
-
-      {/* Action */}
-      {needsApproval && !approved && (
-        <button
-          onClick={() => setApproved(true)}
-          style={{
-            flexShrink: 0,
-            padding: "8px 16px",
-            borderRadius: 20,
-            border: `1.5px solid ${T.teal}`,
-            background: T.white,
-            cursor: "pointer",
-            fontFamily: "inherit",
-            fontSize: 12,
-            fontWeight: 700,
-            color: T.teal,
-            display: "flex",
-            alignItems: "center",
-            gap: 5,
-            boxShadow: S.raised,
-            transition: "all 150ms",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = `linear-gradient(135deg, ${T.navy}, ${T.teal})`;
-            e.currentTarget.style.color = T.white;
-            e.currentTarget.style.borderColor = "transparent";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = T.white;
-            e.currentTarget.style.color = T.teal;
-            e.currentTarget.style.borderColor = T.teal;
-          }}
-        >
-          <span className="material-icons-outlined" style={{ fontSize: 14 }}>
-            thumb_up
-          </span>
-          Approve
-        </button>
-      )}
-      {needsApproval && approved && (
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: "50%",
-            background: T.success,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-            boxShadow: S.raised,
-          }}
-        >
-          <span
-            className="material-icons"
-            style={{ fontSize: 17, color: T.white }}
-          >
-            check
-          </span>
-        </div>
-      )}
     </div>
   );
 }
@@ -1358,8 +1262,46 @@ function PortalFooter() {
 }
 
 // ── MAIN EXPORT ───────────────────────────────────────────────────────────────
-export function ClientPortalWorkspace() {
+export function ClientPortalWorkspace({ token }: { token?: string }) {
   const [view, setView] = useState<PortalView>("home");
+  const closed = token === "expired" || token === "closed";
+  const buffer = token === "buffer";
+
+  if (closed) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#F5F7FA",
+          padding: 32,
+          fontFamily: "inherit",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 420,
+            background: T.white,
+            borderRadius: 20,
+            padding: 36,
+            boxShadow: S.card,
+            textAlign: "center",
+          }}
+        >
+          <span className="material-icons-outlined" style={{ fontSize: 40, color: T.alert }}>
+            lock
+          </span>
+          <h1 style={{ fontSize: 22, color: T.navy, margin: "12px 0 8px" }}>Portal closed</h1>
+          <p style={{ fontSize: 13, color: T.gray500, margin: 0 }}>
+            This project is complete. The client portal remained open for {PORTAL_PROJECT.bufferDays} days
+            after handover and is now closed.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -1373,6 +1315,30 @@ export function ClientPortalWorkspace() {
       }}
     >
       <PortalHeader view={view} setView={setView} />
+      {buffer && (
+        <div
+          style={{
+            background: "#FEF3C7",
+            color: "#92400E",
+            fontSize: 12,
+            fontWeight: 600,
+            padding: "10px 40px",
+          }}
+        >
+          Project complete — this portal stays open for {PORTAL_PROJECT.bufferDays} days, then closes.
+        </div>
+      )}
+      <div
+        style={{
+          background: T.white,
+          borderBottom: `1px solid ${T.border}`,
+          padding: "8px 40px",
+          fontSize: 12,
+          color: T.gray500,
+        }}
+      >
+        Last Friday update: {PORTAL_PROJECT.lastFridayUpdate} · Materials list is view-only
+      </div>
 
       <main style={{ flex: 1 }}>
         {view === "home" && <PortalHome setView={setView} />}
