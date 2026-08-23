@@ -17,6 +17,7 @@ import { HoldRequestToast } from "@/components/notifications/hold-request-toast"
 import { useAuth } from "@/hooks/use-auth";
 import type { ProcessHoldRequestPayload } from "@/hooks/use-project-hold-requests";
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { accessRequestToNotification } from "@/lib/notifications/access-request-map";
 import { fileVersionToNotification } from "@/lib/notifications/file-version-map";
 import { shareLinkToNotification } from "@/lib/notifications/share-link-map";
@@ -112,7 +113,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   // Projects this user leads (PRU) — used to scope access-request review.
   useEffect(() => {
-    if (!isAuthenticated || !userId || isOrgAdmin) {
+    if (isAuthDisabled() || !isAuthenticated || !userId || isOrgAdmin) {
       setLedProjectIds(new Set());
       return;
     }
@@ -193,7 +194,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   );
 
   const fetchNotifications = useCallback(async () => {
-    if (!isAuthenticated || !userId) return;
+    if (isAuthDisabled() || !isAuthenticated || !userId) return;
     setIsLoading(true);
     try {
       const mapped: AppNotification[] = [];
@@ -319,7 +320,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   }, [userId]);
 
   useEffect(() => {
-    if (!isAuthenticated || !userId) {
+    if (isAuthDisabled() || !isAuthenticated || !userId) {
       setNotifications([]);
       return;
     }

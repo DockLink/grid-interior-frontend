@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 import { recordActivity } from "@/lib/auth/activity";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import {
   PROACTIVE_REFRESH_WINDOW_MS,
   msUntilExpiry,
@@ -39,6 +40,7 @@ export function ActivityTracker() {
 
   useEffect(() => {
     const tick = () => {
+      if (isAuthDisabled()) return;
       const session = useAuthStore.getState().session;
       if (!session?.refreshToken) return;
       if (msUntilExpiry() <= PROACTIVE_REFRESH_WINDOW_MS) {

@@ -18,3 +18,11 @@ export class ApiError extends Error {
     this.body = body;
   }
 }
+
+/** Thrown when a backend call is skipped because the app is in UI-only mode. */
+export class BackendDisabledError extends Error {
+  constructor(message = "Unavailable in UI-only mode") {
+    super(message);
+    this.name = "BackendDisabledError";
+  }
+}

@@ -1,4 +1,5 @@
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { compareProjectsByNamePrefixDesc } from "@/lib/projects/sort-projects";
 import { isGuestFullViewAccess } from "@/lib/user/guest";
 import { NAV_ROUTES, projectRoute } from "@/types/navigation";
@@ -9,6 +10,10 @@ import type { UserRole } from "@/types/users";
 export async function resolveGuestLandingRoute(
   roles?: UserRole[],
 ): Promise<string> {
+  if (isAuthDisabled()) {
+    return NAV_ROUTES.projects;
+  }
+
   if (isGuestFullViewAccess(roles)) {
     return NAV_ROUTES.projects;
   }

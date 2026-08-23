@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { queryKeys } from "@/lib/query/keys";
 import { toUsersQueryString } from "@/lib/users/query-string";
 import type { User, UserRole, UserStatus } from "@/types/users";
@@ -34,6 +35,7 @@ export function useUsers(params: UsersQueryParams = { page: 1, limit: 20 }) {
     queryKey: qKey,
     queryFn: () => fetchUsersPage(normalizedParams),
     staleTime: 20_000,
+    enabled: !isAuthDisabled(),
   });
 
   const users = data?.data ?? [];

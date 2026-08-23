@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import type {
   AccessRequest,
   AccessRequestsListResponse,
@@ -33,7 +34,7 @@ export function useAccessRequests(
   const [error, setError] = useState<string | null>(null);
 
   const fetchRequests = useCallback(async () => {
-    if (!enabled) return;
+    if (!enabled || isAuthDisabled()) return;
     setIsLoading(true);
     setError(null);
     try {

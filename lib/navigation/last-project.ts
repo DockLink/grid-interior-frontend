@@ -1,5 +1,5 @@
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
-import { DEFAULT_DEMO_PROJECT_ID } from "@/lib/projects/mock-projects";
+import { DEFAULT_DEMO_PROJECT_ID, isMockProjectId } from "@/lib/projects/mock-projects";
 import {
   NAV_ROUTES,
   projectRoute,
@@ -46,11 +46,15 @@ export function resolveLastProjectId(pathname: string): string | null {
   return parseProjectIdFromPathname(pathname) ?? getLastProjectId();
 }
 
-/** Last project for nav links — falls back to demo project when auth bypass is on. */
+/** Last project for nav links — always a demo project when auth bypass is on. */
 export function resolveEffectiveLastProjectId(pathname: string): string | null {
+  if (isAuthDisabled()) {
+    const resolved = resolveLastProjectId(pathname);
+    if (resolved && isMockProjectId(resolved)) return resolved;
+    return DEFAULT_DEMO_PROJECT_ID;
+  }
   const resolved = resolveLastProjectId(pathname);
   if (resolved) return resolved;
-  if (isAuthDisabled()) return DEFAULT_DEMO_PROJECT_ID;
   return null;
 }
 

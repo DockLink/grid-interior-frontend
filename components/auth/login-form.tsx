@@ -9,6 +9,7 @@ import { Eye, EyeOff, Layers, Loader2, Lock, Mail } from "lucide-react";
 import { AuthInput } from "@/components/auth/auth-input";
 import { LOGIN_T } from "@/components/auth/login-tokens";
 import { useAuth } from "@/hooks/use-auth";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { getPrimaryRole } from "@/lib/auth/rbac";
 import { resolveGuestLandingRoute } from "@/lib/navigation/guest-landing";
 import { resolveHomeRoute } from "@/lib/navigation/home-route";
@@ -44,6 +45,11 @@ export function LoginForm({ className }: { className?: string }) {
   };
 
   const redirectAfterLogin = async () => {
+    if (isAuthDisabled()) {
+      router.replace(NAV_ROUTES.superAdminDashboard);
+      return;
+    }
+
     const session = useAuthStore.getState().session;
     const roles = session?.user.roles ?? [];
     const role = roles.length ? getPrimaryRole(roles) : null;

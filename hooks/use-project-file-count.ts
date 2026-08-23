@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import type { ProjectFolderTree } from "@/types/files";
 
 function sumFileCounts(fileCounts: Record<string, number> | undefined): number {
@@ -15,6 +16,11 @@ export function useProjectFileCount(projectId: string) {
   const [isLoading, setIsLoading] = useState(true);
 
   const load = useCallback(async () => {
+    if (isAuthDisabled()) {
+      setFileCount(0);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     try {
       const res = await authApiClient<{ data: ProjectFolderTree }>(

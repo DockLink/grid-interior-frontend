@@ -6,7 +6,7 @@ import {
   refreshAccessToken,
 } from "@/lib/auth/token-refresh";
 import { useAuthStore } from "@/stores/auth-store";
-import { ApiError } from "@/types/api";
+import { ApiError, BackendDisabledError } from "@/types/api";
 
 function withAuth(init: RequestInit | undefined, token: string): RequestInit {
   return {
@@ -22,6 +22,10 @@ export async function authApiClient<T>(
   path: string,
   init?: RequestInit
 ): Promise<T> {
+  if (isAuthDisabled()) {
+    throw new BackendDisabledError();
+  }
+
   // Proactively refresh if the token is about to expire, so most requests
   // never even see a 401.
   const token = await ensureFreshToken();

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { uploadFileMultipart } from "@/lib/files/multipart-upload";
 import type {
   CreateShareLinkPayload,
@@ -27,6 +28,12 @@ export function useProjectFiles(projectId: string) {
   const hasProvisionedRef = useRef(false);
 
   const loadTree = useCallback(async () => {
+    if (isAuthDisabled()) {
+      setFolderTree(null);
+      setTreeLoading(false);
+      setTreeError(null);
+      return;
+    }
     setTreeLoading(true);
     setTreeError(null);
     try {

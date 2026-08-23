@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { queryKeys } from "@/lib/query/keys";
 import { withTaskEndDate } from "@/lib/tasks/create-task-payload";
 import { toTasksQueryString } from "@/lib/tasks/query-string";
@@ -39,7 +40,7 @@ export function useProjectTaskables(
   const { data, isPending, error, refetch } = useQuery({
     queryKey: qKey,
     queryFn: () => fetchTaskables(projectId!, taskableType, options),
-    enabled: Boolean(projectId),
+    enabled: Boolean(projectId) && !isAuthDisabled(),
     staleTime: 20_000,
   });
 

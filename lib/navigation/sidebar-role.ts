@@ -1,3 +1,4 @@
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import {
   ADMIN_ONLY_ROUTES,
   GUEST_BLOCKED_ROUTES,
@@ -34,6 +35,7 @@ export const HOME_ROUTE: Record<SidebarRole, string> = {
 };
 
 export function canAccessRoute(role: UserRole | null, pathname: string): boolean {
+  if (isAuthDisabled()) return true;
   if (!role) return false;
 
   if (role === "GUEST" || role === "CLIENT_FULL_ACCESS") {

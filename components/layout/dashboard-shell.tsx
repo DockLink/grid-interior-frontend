@@ -56,7 +56,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <SidebarInset className="bg-[#F8FAFB]">
               <AppHeader />
               <div className="flex flex-1 flex-col px-4 py-6 md:px-8 md:py-7">
-                {primaryRole && !canAccessRoute(primaryRole, pathname) ? (
+                {!authDisabled && primaryRole && !canAccessRoute(primaryRole, pathname) ? (
                   <ForbiddenScreen />
                 ) : (
                   children

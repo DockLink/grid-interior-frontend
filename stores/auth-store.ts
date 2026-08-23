@@ -24,7 +24,9 @@ export const useAuthStore = create<AuthState>()(
 
       login: async (email: string, password: string) => {
         if (isAuthDisabled()) {
-          set({ session: getDevBypassSession(), isLoading: false });
+          set({ isLoading: true });
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          set({ session: getDevBypassSession(email), isLoading: false });
           return;
         }
 
