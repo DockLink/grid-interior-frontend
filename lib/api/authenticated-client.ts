@@ -1,4 +1,5 @@
 import { apiClient } from "@/lib/api/client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import {
   ensureFreshToken,
   isAuthExpiryError,
@@ -34,6 +35,10 @@ export async function authApiClient<T>(
     // Reactive path: the token expired between checks (or clock skew). Refresh
     // once and retry the original request with the new token.
     if (isAuthExpiryError(error)) {
+      if (isAuthDisabled()) {
+        throw error;
+      }
+
       const newToken = await refreshAccessToken();
       if (newToken) {
         return await apiClient<T>(path, withAuth(init, newToken));

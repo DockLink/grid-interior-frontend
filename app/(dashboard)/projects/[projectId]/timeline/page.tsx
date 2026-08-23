@@ -1,4 +1,4 @@
-import { ProjectTimelineTab } from "@/components/projects/project-timeline-tab";
+import { ProjectTimelineTab } from "@/components/timeline/timeline-workspace";
 
 export default function ProjectTimelinePage() {
   return <ProjectTimelineTab />;

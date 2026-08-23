@@ -77,6 +77,12 @@ export interface ProjectCardView {
   teamSize?: number;
   completion?: number;
   created_at?: string;
+  /** Formatted start date for list UI (e.g. "Mar 2025") */
+  startDate?: string | null;
+  /** Formatted updated_at for list UI (e.g. "Jul 30") */
+  updatedAt?: string | null;
+  /** ISO updated_at for client-side sorting */
+  updatedAtIso?: string | null;
 }
 export interface ProjectMember {
   project_id: string;

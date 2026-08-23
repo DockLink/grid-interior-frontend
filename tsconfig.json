@@ -30,5 +30,9 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "Design Minimalist SaaS UI System",
+    "Design System for GRID CRM"
+  ]
 }

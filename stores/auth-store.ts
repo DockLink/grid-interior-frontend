@@ -5,6 +5,7 @@ import { persist } from "zustand/middleware";
 
 import { apiClient } from "@/lib/api/client";
 import { clearActivity, isInactiveTooLong, recordActivity } from "@/lib/auth/activity";
+import { getDevBypassSession, isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { notifySessionExpired } from "@/lib/auth/session-expiry";
 import { getPrimaryRole, hasAnyRole } from "@/lib/auth/rbac";
 import { toAuthSession } from "@/lib/auth/sessions";
@@ -22,6 +23,11 @@ export const useAuthStore = create<AuthState>()(
       isHydrated: false,
 
       login: async (email: string, password: string) => {
+        if (isAuthDisabled()) {
+          set({ session: getDevBypassSession(), isLoading: false });
+          return;
+        }
+
         set({ isLoading: true });
         try {
           const response = await apiClient<LoginResponse>("/auth/login", {
@@ -42,11 +48,21 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        if (isAuthDisabled()) {
+          set({ session: getDevBypassSession() });
+          return;
+        }
         clearActivity();
         set({ session: null });
       },
 
       refreshSession: async () => {
+        if (isAuthDisabled()) {
+          const bypass = getDevBypassSession();
+          set({ session: bypass });
+          return bypass.accessToken;
+        }
+
         const session = get().session;
         if (!session?.refreshToken) {
           if (session) {
@@ -92,6 +108,11 @@ export const useAuthStore = create<AuthState>()(
       },
 
       refreshUser: async () => {
+        if (isAuthDisabled()) {
+          set({ session: getDevBypassSession(), isLoading: false });
+          return;
+        }
+
         const session = get().session;
         if (!session?.accessToken) return;
 
@@ -164,6 +185,15 @@ export const useAuthStore = create<AuthState>()(
         const finishHydration = () => {
           useAuthStore.setState({ isHydrated: true });
         };
+
+        if (isAuthDisabled()) {
+          useAuthStore.setState({
+            session: getDevBypassSession(),
+            isHydrated: true,
+            isLoading: false,
+          });
+          return;
+        }
 
         if (error) {
           finishHydration();

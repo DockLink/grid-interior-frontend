@@ -10,6 +10,7 @@ import { useProject } from "@/hooks/use-project";
 import { ProjectMembersProvider, useProjectMembers } from "@/hooks/use-project-members";
 import { getPrimaryRole } from "@/lib/auth/rbac";
 import { toSidebarRole } from "@/lib/navigation/sidebar-role";
+import { setLastProjectId } from "@/lib/navigation/last-project";
 import { canAccessProjectDetail } from "@/lib/projects/permissions";
 import { isGuestFullViewAccess } from "@/lib/user/guest";
 import { NAV_ROUTES } from "@/types/navigation";
@@ -39,6 +40,12 @@ function ProjectAccessGate({
       router.replace(NAV_ROUTES.projects);
     }
   }, [isLoading, user, sidebarRole, assigned, fullViewAccess, router]);
+
+  useEffect(() => {
+    if (isLoading || !project) return;
+    if (!canAccessProjectDetail(sidebarRole, assigned, fullViewAccess)) return;
+    setLastProjectId(projectId);
+  }, [isLoading, project, projectId, sidebarRole, assigned, fullViewAccess]);
 
   if (isLoading) {
     return <div style={{ padding: "24px", color: "var(--ds-tertiary-label)", fontSize: "14px" }}>Loading project…</div>;

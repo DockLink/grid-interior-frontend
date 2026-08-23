@@ -1,17 +1,28 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
+  Briefcase,
+  Calendar,
   CheckSquare,
   ClipboardList,
+  FileStack,
+  FileText,
+  Flag,
   Folder,
+  FolderOpen,
   Home,
+  Layers,
+  LayoutGrid,
   Loader2,
+  PauseCircle,
   Search,
   Settings,
+  Store,
   UserCheck,
+  UserCog,
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -19,6 +30,7 @@ import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { authApiClient } from "@/lib/api/authenticated-client";
 import { resolveHomeRoute } from "@/lib/navigation/home-route";
+import { resolveEffectiveLastProjectId, resolveProjectNavHref } from "@/lib/navigation/last-project";
 import { canAccessRoute } from "@/lib/navigation/sidebar-role";
 import { toProjectsQueryString } from "@/lib/projects/query-string";
 import { toTasksQueryString } from "@/lib/tasks/query-string";
@@ -87,6 +99,7 @@ interface ResultItem {
 
 function CommandPalette() {
   const router = useRouter();
+  const pathname = usePathname();
   const { open, setOpen } = useCommandPalette();
   const { primaryRole } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -100,20 +113,65 @@ function CommandPalette() {
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const homeHref = primaryRole ? resolveHomeRoute(primaryRole) : NAV_ROUTES.projects;
+  const lastProjectId = useMemo(
+    () => resolveEffectiveLastProjectId(pathname),
+    [pathname],
+  );
 
   const navItems = useMemo<NavItem[]>(() => {
     const items: NavItem[] = [
       { id: "nav-home", label: "Home", href: homeHref, icon: Home, keywords: "dashboard" },
       { id: "nav-projects", label: "Projects", href: NAV_ROUTES.projects, icon: Folder, keywords: "portfolio work" },
+      {
+        id: "nav-project-hub",
+        label: "Project Hub",
+        href: resolveProjectNavHref("overview", lastProjectId),
+        icon: Layers,
+        keywords: "overview hub project",
+      },
+      {
+        id: "nav-work-board",
+        label: "Work Board",
+        href: resolveProjectNavHref("tasks", lastProjectId),
+        icon: LayoutGrid,
+        keywords: "kanban board tasks work",
+      },
+      {
+        id: "nav-project-files",
+        label: "Project Files",
+        href: resolveProjectNavHref("files", lastProjectId),
+        icon: FolderOpen,
+        keywords: "documents explorer folder",
+      },
+      {
+        id: "nav-minutes",
+        label: "Minutes",
+        href: resolveProjectNavHref("minutes", lastProjectId),
+        icon: FileText,
+        keywords: "meeting notes minutes",
+      },
       { id: "nav-tasks", label: "My Tasks", href: NAV_ROUTES.myTasks, icon: CheckSquare, keywords: "todo assignments" },
+      {
+        id: "nav-timeline",
+        label: "Timeline",
+        href: resolveProjectNavHref("timeline", lastProjectId),
+        icon: Calendar,
+        keywords: "gantt schedule milestones",
+      },
       { id: "nav-notifications", label: "Notifications", href: NAV_ROUTES.notifications, icon: Bell, keywords: "alerts updates" },
-      { id: "nav-team", label: "Team", href: NAV_ROUTES.userManagement, icon: Users, keywords: "users members staff" },
+      { id: "nav-clients", label: "Clients", href: NAV_ROUTES.clients, icon: Briefcase, keywords: "crm directory" },
+      { id: "nav-suppliers", label: "Suppliers", href: NAV_ROUTES.suppliers, icon: Store, keywords: "vendors procurement sub-vendors" },
+      { id: "nav-pipeline", label: "Lead Pipeline", href: NAV_ROUTES.leadPipeline, icon: Flag, keywords: "leads inquiries" },
+      { id: "nav-files", label: "Files", href: NAV_ROUTES.files, icon: FileStack, keywords: "documents" },
+      { id: "nav-studio-team", label: "Team", href: NAV_ROUTES.team, icon: Users, keywords: "studio members" },
+      { id: "nav-users", label: "Users", href: NAV_ROUTES.userManagement, icon: UserCog, keywords: "users members staff" },
       { id: "nav-guests", label: "Guest users", href: NAV_ROUTES.guestUsers, icon: UserCheck, keywords: "external viewers" },
+      { id: "nav-holds", label: "Hold Requests", href: NAV_ROUTES.holdRequests, icon: PauseCircle, keywords: "pause timeline" },
       { id: "nav-requests", label: "Access Requests", href: NAV_ROUTES.accessRequests, icon: ClipboardList, keywords: "permissions" },
       { id: "nav-settings", label: "Settings", href: NAV_ROUTES.settings, icon: Settings, keywords: "preferences account" },
     ];
     return items.filter((item) => primaryRole && canAccessRoute(primaryRole, item.href));
-  }, [homeHref, primaryRole]);
+  }, [homeHref, lastProjectId, primaryRole]);
 
   useEffect(() => {
     if (!open) return;

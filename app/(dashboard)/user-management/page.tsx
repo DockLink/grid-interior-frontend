@@ -1,5 +1,5 @@
-import { UserManagementPage } from "@/components/user-management/user-management-page";
+import { AdminWorkspace } from "@/components/user-management/admin-workspace";
 
 export default function UserManagementRoute() {
-  return <UserManagementPage />;
+  return <AdminWorkspace />;
 }

@@ -3,10 +3,22 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { getMockProjectDetail, isMockProjectId } from "@/lib/projects/mock-projects";
 import { queryKeys } from "@/lib/query/keys";
 import type { Project } from "@/types/projects";
 
 async function fetchProject(projectId: string): Promise<Project> {
+  if (isMockProjectId(projectId)) {
+    const mock = getMockProjectDetail(projectId);
+    if (mock) return mock;
+  }
+
+  if (isAuthDisabled() && isMockProjectId(projectId)) {
+    const mock = getMockProjectDetail(projectId);
+    if (mock) return mock;
+  }
+
   return authApiClient<Project>(`/projects/${projectId}`);
 }
 

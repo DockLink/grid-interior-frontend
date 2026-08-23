@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { isDevBypassRequest } from "@/lib/auth/dev-bypass-server";
 import { backendFetch } from "@/lib/api/backend";
+import { getMockProjectDetail, isMockProjectId } from "@/lib/projects/mock-projects";
 import type { Project, ProjectWithMembers } from "@/types/projects";
 
 type RouteContext = { params: Promise<{ projectId: string }> };
@@ -17,6 +19,12 @@ export async function GET(req: NextRequest, context: RouteContext) {
   if (!authorization) return unauthorized();
 
   const { projectId } = await context.params;
+
+  if (isDevBypassRequest(authorization) && isMockProjectId(projectId)) {
+    const mock = getMockProjectDetail(projectId);
+    if (mock) return NextResponse.json(mock);
+    return NextResponse.json({ statusCode: 404, message: "Project not found" }, { status: 404 });
+  }
 
   const result = await backendFetch<Project>(`/projects/${projectId}`, {
     method: "GET",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Flag, LayoutGrid, List, ListTree, Plus, Settings, Users } from "lucide-react";
+import { Flag, GanttChart, LayoutGrid, List, ListTree, Plus, Settings, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { StageManagementModal } from "@/components/projects/stage-management-modal";
@@ -12,6 +12,7 @@ import { TaskKanbanColumn } from "@/components/projects/tasks/task-kanban";
 import { TaskListHeader, TaskListRow } from "@/components/projects/tasks/task-list";
 import { TaskMilestoneView } from "@/components/projects/tasks/task-milestone-view";
 import { TaskTeamView } from "@/components/projects/tasks/task-team-view";
+import { TimelineGantt } from "@/components/projects/timeline/timeline-gantt";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useProjectTasksBoard } from "@/hooks/use-project-tasks-board";
@@ -22,8 +23,9 @@ import {
   type BoardColumnId,
   type ProjectTaskView,
 } from "@/lib/tasks/task-board";
+import { ganttBoundsFromTasks, tasksToGanttGroups } from "@/lib/tasks/task-gantt";
 
-type ViewMode = "kanban" | "list" | "milestones" | "team";
+type ViewMode = "kanban" | "gantt" | "list" | "milestones" | "team";
 
 const ALL = "all";
 
@@ -171,7 +173,8 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
         <div className="flex items-center gap-3">
           <div className="inline-flex rounded-lg bg-[var(--ds-bg)] p-1">
             {([
-              { id: "kanban" as const, icon: LayoutGrid, label: "Kanban" },
+              { id: "kanban" as const, icon: LayoutGrid, label: "Board" },
+              { id: "gantt" as const, icon: GanttChart, label: "Gantt" },
               { id: "list" as const, icon: List, label: "List" },
               { id: "milestones" as const, icon: ListTree, label: "Milestones" },
               { id: "team" as const, icon: Users, label: "Team" },
@@ -188,7 +191,7 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
             ))}
           </div>
           <span className="rounded-lg bg-[var(--ds-bg)] px-3 py-1.5 text-xs font-medium text-[var(--ds-secondary-label)]">
-            {viewMode === "milestones" || viewMode === "team"
+            {viewMode === "milestones" || viewMode === "team" || viewMode === "gantt"
               ? `Tasks: ${filteredAll.length}`
               : isAdmin
                 ? `All tasks: ${filteredVisible.length}`
@@ -330,6 +333,21 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
               ))
             )}
           </div>
+        )}
+
+        {!isLoading && viewMode === "gantt" && (
+          filteredAll.length === 0 ? (
+            <div className="rounded-xl border border-[var(--ds-separator)] bg-white p-8 text-center text-sm text-[var(--ds-secondary-label)]">
+              No tasks match the current filters.
+            </div>
+          ) : (
+            <TimelineGantt
+              groups={tasksToGanttGroups(filteredAll)}
+              chartBounds={ganttBoundsFromTasks(filteredAll)}
+              collapsedStages={new Set()}
+              onToggleStage={() => undefined}
+            />
+          )
         )}
 
         {!isLoading && viewMode === "milestones" && (
