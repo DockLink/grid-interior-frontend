@@ -29,6 +29,7 @@ import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { resolveHomeRoute } from "@/lib/navigation/home-route";
 import { resolveEffectiveLastProjectId, resolveProjectNavHref } from "@/lib/navigation/last-project";
 import { canAccessRoute } from "@/lib/navigation/sidebar-role";
@@ -194,7 +195,7 @@ function CommandPalette() {
     if (!open) return;
     const q = debouncedQuery;
 
-    if (!q) {
+    if (!q || isAuthDisabled()) {
       setProjectResults([]);
       setTaskResults([]);
       setIsSearching(false);

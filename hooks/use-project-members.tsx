@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "@/hooks/use-auth";
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { getPrimaryRole } from "@/lib/auth/rbac";
 import { toSidebarRole } from "@/lib/navigation/sidebar-role";
 import type { SidebarRole } from "@/lib/navigation/sidebar-role";
@@ -58,6 +59,7 @@ export function ProjectMembersProvider({
       return result.members ?? [];
     },
     staleTime: 30_000,
+    enabled: !isAuthDisabled(),
   });
 
   const members: ProjectMember[] = data ?? [];

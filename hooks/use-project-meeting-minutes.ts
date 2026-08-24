@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useProjectMembers } from "@/hooks/use-project-members";
 import { useUploadFile } from "@/hooks/use-upload-file";
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { canManageProject } from "@/lib/projects/permissions";
 import type {
   CreateMeetingMinutePayload,
@@ -24,6 +25,12 @@ export function useProjectMeetingMinutes(projectId: string) {
   const canManage = canManageProject(effectiveRole, isViewer);
 
   const fetchMinutes = useCallback(async () => {
+    if (isAuthDisabled()) {
+      setMinutes([]);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {

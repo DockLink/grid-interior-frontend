@@ -4,6 +4,7 @@ import { useCallback, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { mapProjectToCard } from "@/lib/projects/map-projects";
 import { compareProjectsByNamePrefixDesc } from "@/lib/projects/sort-projects";
 import { queryKeys } from "@/lib/query/keys";
@@ -28,6 +29,7 @@ export function useProjects(params: ProjectsQueryParams = { page: 1, limit: 100 
     queryKey: qKey,
     queryFn: () => fetchProjects(params),
     staleTime: 30_000,
+    enabled: !isAuthDisabled(),
   });
 
   const rawProjects: Project[] = data?.data ?? [];

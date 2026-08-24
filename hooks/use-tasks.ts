@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { toTasksQueryString } from "@/lib/tasks/query-string";
 import type { Task, TasksListResponse, TasksQueryParams } from "@/types/tasks";
 
@@ -12,6 +13,12 @@ export function useTasks(params: TasksQueryParams) {
   const [error, setError] = useState<string | null>(null);
 
   const fetchTasks = useCallback(async () => {
+    if (isAuthDisabled()) {
+      setTasks([]);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {

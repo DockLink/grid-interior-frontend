@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useProjectMembers } from "@/hooks/use-project-members";
 import { useProjectTaskables } from "@/hooks/use-project-taskables";
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { withTaskEndDate } from "@/lib/tasks/create-task-payload";
 import { mapMilestoneToView, mapStageToView } from "@/lib/projects/map-stages";
 import { canManageProject } from "@/lib/projects/permissions";
@@ -154,6 +155,7 @@ export function useProjectTasksBoard(projectId: string) {
   const isAdmin = effectiveRole === "admin";
 
   useEffect(() => {
+    if (isAuthDisabled()) return;
     if (hierarchyKeyRef.current === stageIdsKey) return;
     hierarchyKeyRef.current = stageIdsKey;
 
@@ -217,6 +219,7 @@ export function useProjectTasksBoard(projectId: string) {
   }, [stageIdsKey, stageTasks]);
 
   useEffect(() => {
+    if (isAuthDisabled()) return;
     if (assigneesKeyRef.current === rawTaskIdsKey) return;
     assigneesKeyRef.current = rawTaskIdsKey;
 

@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { mapProjectToCard } from "@/lib/projects/map-projects";
 import { compareProjectsByNamePrefixDesc } from "@/lib/projects/sort-projects";
 import { queryKeys } from "@/lib/query/keys";
@@ -47,7 +48,7 @@ export function useInfiniteProjects(
     },
     initialPageParam: 1,
     staleTime: 30_000,
-    enabled: options?.enabled ?? true,
+    enabled: (options?.enabled ?? true) && !isAuthDisabled(),
   });
 
   const projects: ProjectCardView[] = useMemo(

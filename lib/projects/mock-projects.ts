@@ -425,6 +425,11 @@ export function filterHistoricalProjects(opts: {
   });
 }
 
+/** Always returns a demo project — used in UI-only mode for any project id. */
+export function getUiOnlyProjectDetail(id: string): Project {
+  return getMockProjectDetail(id) ?? getMockProjectDetail(DEFAULT_DEMO_PROJECT_ID)!;
+}
+
 export function getMockProjectDetail(id: string): Project | null {
   const active = getActiveProject(id);
   if (!active) return null;

@@ -1,5 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 
+import { BackendDisabledError } from "@/types/api";
+
 /**
  * Singleton QueryClient shared across the app.
  * Defaults:
@@ -14,7 +16,10 @@ export const queryClient = new QueryClient({
     queries: {
       staleTime: 30_000,
       gcTime: 5 * 60_000,
-      retry: 1,
+      retry: (failureCount, error) => {
+        if (error instanceof BackendDisabledError) return false;
+        return failureCount < 1;
+      },
       refetchOnWindowFocus: false,
     },
   },

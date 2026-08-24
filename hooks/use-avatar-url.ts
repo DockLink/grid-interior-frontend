@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import type { DownloadUrlResponse } from "@/types/files";
 
 export function useAvatarUrl(fileId: string | null | undefined): string | null {
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!fileId) {
+    if (!fileId || isAuthDisabled()) {
       setUrl(null);
       return;
     }

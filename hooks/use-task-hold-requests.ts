@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { toHoldRequestDateIso } from "@/lib/hold-requests/display";
 import type {
   CreateHoldRequestPayload,
@@ -16,7 +17,7 @@ export function useTaskHoldRequests(taskId: string | null, enabled: boolean) {
   const [error, setError] = useState<string | null>(null);
 
   const fetchHolds = useCallback(async () => {
-    if (!taskId) {
+    if (!taskId || isAuthDisabled()) {
       setHolds([]);
       return;
     }

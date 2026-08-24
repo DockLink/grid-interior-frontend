@@ -11,6 +11,7 @@ import { ProjectMembersProvider, useProjectMembers } from "@/hooks/use-project-m
 import { getPrimaryRole } from "@/lib/auth/rbac";
 import { toSidebarRole } from "@/lib/navigation/sidebar-role";
 import { setLastProjectId } from "@/lib/navigation/last-project";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { canAccessProjectDetail } from "@/lib/projects/permissions";
 import { isGuestFullViewAccess } from "@/lib/user/guest";
 import { NAV_ROUTES } from "@/types/navigation";
@@ -51,10 +52,18 @@ function ProjectAccessGate({
     return <div style={{ padding: "24px", color: "var(--ds-tertiary-label)", fontSize: "14px" }}>Loading project…</div>;
   }
 
-  if (error || !project) {
+  if (!isAuthDisabled() && (error || !project)) {
     return (
       <div style={{ padding: "24px", color: "var(--ds-destructive)", fontSize: "14px" }}>
         {error ?? "Project not found"}
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div style={{ padding: "24px", color: "var(--ds-tertiary-label)", fontSize: "14px" }}>
+        Loading project…
       </div>
     );
   }

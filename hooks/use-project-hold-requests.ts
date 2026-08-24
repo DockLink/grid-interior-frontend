@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import type { HoldRequestsListResponse, TaskableHoldRequest, TaskableHoldRequestStatus } from "@/types/hold-requests";
 
 export interface ProcessHoldRequestPayload {
@@ -24,6 +25,10 @@ export function useProjectHoldRequests(options?: {
   const [error, setError] = useState<string | null>(null);
 
   const fetchRequests = useCallback(async () => {
+    if (isAuthDisabled()) {
+      setRequests([]);
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
