@@ -6,7 +6,6 @@ import { UserManagementPage } from "@/components/user-management/user-management
 import { TeamPage } from "@/components/team/team-page";
 import { GlobalHoldRequestsPage } from "@/components/hold-requests/global-hold-requests-page";
 import AccessRequestsPage from "@/app/(dashboard)/access-requests/page";
-import { GuestUsersPage } from "@/components/guest-users/guest-users-page";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -41,7 +40,7 @@ const S = {
     "12px 12px 30px rgba(163,177,198,0.40), -8px -8px 20px rgba(255,255,255,0.95)",
 };
 
-type AdminView = "users" | "assignments" | "settings" | "team" | "holds" | "access" | "guests";
+type AdminView = "users" | "assignments" | "settings" | "team" | "holds" | "access";
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
 function GradBtn({
@@ -236,12 +235,6 @@ const ADMIN_TABS: {
     label: "Access Requests",
     icon: "how_to_reg",
     desc: "Project access approvals",
-  },
-  {
-    id: "guests",
-    label: "Guest Users",
-    icon: "person_add_alt",
-    desc: "External collaborators",
   },
 ];
 
@@ -1285,11 +1278,6 @@ export function AdminWorkspace() {
         {view === "access" && (
           <div style={{ padding: "28px 40px" }}>
             <AccessRequestsPage />
-          </div>
-        )}
-        {view === "guests" && (
-          <div style={{ padding: "28px 40px" }}>
-            <GuestUsersPage />
           </div>
         )}
       </div>

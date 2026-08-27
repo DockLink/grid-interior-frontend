@@ -253,6 +253,41 @@ export const PROJECT_START = "15 May 2026";
 export const PROJECT_END = "18 Dec 2026";
 export const PROJECT_NAME = "Marchetti Villa";
 
+export type ClientKeyDateStatus = "upcoming" | "completed" | "active";
+
+export interface ClientKeyDate {
+  id: string;
+  label: string;
+  date: string;
+  icon: string;
+  status: ClientKeyDateStatus;
+}
+
+/** @deprecated Prefer getClientKeyDatesFromSite() from mock-execution — kept for static fallbacks. */
+export const CLIENT_KEY_DATES: ClientKeyDate[] = [
+  {
+    id: "furniture",
+    label: "Furniture delivery",
+    date: "12 Nov 2026",
+    icon: "weekend",
+    status: "upcoming",
+  },
+  {
+    id: "start",
+    label: "Project start",
+    date: "01 Oct 2026",
+    icon: "flag",
+    status: "upcoming",
+  },
+  {
+    id: "handover",
+    label: "Handover",
+    date: "18 Dec 2026",
+    icon: "handshake",
+    status: "upcoming",
+  },
+];
+
 /** Independent client-facing timeline — not a filter of the internal Gantt. */
 export const CLIENT_GANTT_PHASES: GanttPhase[] = [
   {

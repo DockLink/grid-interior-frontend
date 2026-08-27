@@ -1,17 +1,10 @@
-export type ConceptView =
-  | "area-setup"
-  | "concept-list"
-  | "concept-nonrender"
-  | "concept-render"
-  | "concept-presentation"
-  | "concept-revision"
-  | "concept-walkthrough";
+export type ConceptView = "area-setup" | "concept-list";
 
-export type NonRenderStatus = "included" | "skipped";
-export type RenderStatus = "not-started" | "in-progress" | "complete";
-export type ConceptStage = "nonrender" | "render";
 export type ConfirmStatus = "confirmed" | "pending";
 export type PresentStep = "presented" | "feedback" | "confirmed";
+export type ConceptFileType = "jpg" | "pdf";
+
+export const MAX_CONCEPTS_PER_AREA = 3;
 
 export interface ConceptArea {
   id: number;
@@ -24,25 +17,17 @@ export interface ConceptCard {
   id: number;
   name: string;
   areaId: number;
-  nonRenderStatus: NonRenderStatus;
-  renderStatus: RenderStatus;
-  confirmStatus: ConfirmStatus;
+  fileName: string;
+  fileType: ConceptFileType;
+  fileSize: string;
   thumb: string;
+  confirmStatus: ConfirmStatus;
 }
 
 export interface ConceptRenderImage {
   id: number;
   url: string;
   caption: string;
-}
-
-export interface ConceptNonRenderFile {
-  id: number;
-  name: string;
-  type: "pdf" | "img";
-  size: string;
-  date: string;
-  url?: string;
 }
 
 export interface ConceptRevisionEntry {
@@ -52,15 +37,7 @@ export interface ConceptRevisionEntry {
   chargeable: boolean;
 }
 
-const ALLOWED: ConceptView[] = [
-  "area-setup",
-  "concept-list",
-  "concept-nonrender",
-  "concept-render",
-  "concept-presentation",
-  "concept-revision",
-  "concept-walkthrough",
-];
+const ALLOWED: ConceptView[] = ["area-setup", "concept-list"];
 
 export function conceptViewFromParam(view: string | undefined): ConceptView {
   if (view && ALLOWED.includes(view as ConceptView)) return view as ConceptView;

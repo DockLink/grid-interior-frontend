@@ -5,7 +5,6 @@ import { useState } from "react";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { ClientPresentationWidget } from "@/components/projects/hub/concept/concept-presentation-widget";
 import { RevisionTrackerWidget } from "@/components/projects/hub/concept/concept-revision-widget";
-import { StageTabToggle } from "@/components/projects/hub/concept/concept-ui";
 import { WorkspaceBreadcrumb } from "@/components/projects/hub/shared/workspace-breadcrumb";
 import {
   GradientBtn,
@@ -83,12 +82,10 @@ function RenderThumb({
 export function ConceptRenderScreen({
   conceptId,
   onBack,
-  onSwitchToNonRender,
   onOpenWalkthrough,
 }: {
   conceptId: number;
   onBack: () => void;
-  onSwitchToNonRender: () => void;
   onOpenWalkthrough: () => void;
 }) {
   const concept = CONCEPT_CARDS.find((c) => c.id === conceptId) ?? CONCEPT_CARDS[0];
@@ -105,7 +102,6 @@ export function ConceptRenderScreen({
         <h1 className="m-0 text-2xl font-bold text-[var(--figma-navy)]">
           {concept.name} — {area.name}
         </h1>
-        <StageTabToggle stage="render" setStage={(s) => s === "nonrender" && onSwitchToNonRender()} />
       </div>
 
       <SectionCard>

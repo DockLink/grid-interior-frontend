@@ -40,6 +40,22 @@ export type StatItem = {
   icon: "folder" | "user-plus" | "pause" | "check" | "list" | "flag" | "users" | "calendar";
 };
 
+export type TodaysTaskStatus = "todo" | "in-progress" | "review";
+
+export type TodaysTaskItem = {
+  id: string;
+  title: string;
+  project: string;
+  projectId?: string;
+  status: TodaysTaskStatus;
+  priority: "high" | "medium" | "low";
+  assignee: {
+    name: string;
+    initials: string;
+    color: string;
+  };
+};
+
 export const ADMIN_STATS: StatItem[] = [
   {
     label: "Active Projects",
@@ -277,6 +293,82 @@ export const MEMBER_ATTENTION_DATA: AttentionItem[] = [
     detail: "Assigned to you",
   },
 ];
+
+/** Fixture: today's open tasks across all users. TODO: wire useTasks + batch assignees. */
+export const TODAYS_TASKS_DATA: TodaysTaskItem[] = [
+  {
+    id: "tt-1",
+    title: "Update floor plan Rev 4",
+    project: "Lumière Penthouse",
+    projectId: "1",
+    status: "in-progress",
+    priority: "high",
+    assignee: { name: "Priya Nair", initials: "PN", color: "#0FA8A0" },
+  },
+  {
+    id: "tt-2",
+    title: "Material board review",
+    project: "Lumière Penthouse",
+    projectId: "1",
+    status: "todo",
+    priority: "high",
+    assignee: { name: "Maya Rossi", initials: "MR", color: "#0B2545" },
+  },
+  {
+    id: "tt-3",
+    title: "Client feedback reply",
+    project: "Verdant Residence",
+    projectId: "3",
+    status: "todo",
+    priority: "medium",
+    assignee: { name: "Priya Nair", initials: "PN", color: "#0FA8A0" },
+  },
+  {
+    id: "tt-4",
+    title: "Site survey photos upload",
+    project: "Noir Boutique Hotel",
+    projectId: "2",
+    status: "in-progress",
+    priority: "medium",
+    assignee: { name: "Carlos Mendez", initials: "CM", color: "#D97706" },
+  },
+  {
+    id: "tt-5",
+    title: "Spec sheet sign-off",
+    project: "Cascade Spa",
+    projectId: "5",
+    status: "review",
+    priority: "high",
+    assignee: { name: "Yuki Tanaka", initials: "YT", color: "#5B6B85" },
+  },
+  {
+    id: "tt-6",
+    title: "FF&E quantity check",
+    project: "Atrium Office HQ",
+    projectId: "4",
+    status: "todo",
+    priority: "low",
+    assignee: { name: "Lena Fischer", initials: "LF", color: "#2FBE6B" },
+  },
+  {
+    id: "tt-7",
+    title: "Mood board v2 polish",
+    project: "Verdant Residence",
+    projectId: "3",
+    status: "in-progress",
+    priority: "medium",
+    assignee: { name: "Maya Rossi", initials: "MR", color: "#0B2545" },
+  },
+];
+
+export const TODAYS_TASK_STATUS_CONFIG: Record<
+  TodaysTaskStatus,
+  { label: string; bg: string; color: string }
+> = {
+  todo: { label: "To do", bg: "rgba(11,37,69,0.08)", color: "#0B2545" },
+  "in-progress": { label: "In progress", bg: "rgba(217,119,6,0.12)", color: "#D97706" },
+  review: { label: "Review", bg: "rgba(15,168,160,0.12)", color: "#0FA8A0" },
+};
 
 export const FILE_ACTIVITY_DATA: FileActivityItem[] = [
   {

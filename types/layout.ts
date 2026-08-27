@@ -10,6 +10,7 @@ export interface LayoutArea {
 
 export interface LayoutDrawingFile {
   id: number;
+  areaId: number;
   name: string;
   type: LayoutDrawingType;
   size: string;

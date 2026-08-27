@@ -12,7 +12,12 @@ import {
   UploadDropzone,
   WorkspaceBreadcrumb,
 } from "@/components/projects/hub/shared/workspace-ui";
-import { LAYOUT_AREAS, LAYOUT_INITIAL_DRAWINGS, LAYOUT_INITIAL_TASKS } from "@/lib/projects/mock-layout";
+import {
+  LAYOUT_ALL_AREA_ID,
+  LAYOUT_AREAS,
+  LAYOUT_INITIAL_DRAWINGS,
+  LAYOUT_INITIAL_TASKS,
+} from "@/lib/projects/mock-layout";
 import { TEAM_MEMBERS } from "@/lib/projects/mock-projects";
 import { cn } from "@/lib/utils";
 import type { ActiveProjectView } from "@/types/project-hub";
@@ -210,7 +215,7 @@ export function LayoutDrawingsScreen({
   onBack: () => void;
   conceptConfirmed?: boolean;
 }) {
-  const [activeArea, setActiveArea] = useState(1);
+  const [activeArea, setActiveArea] = useState(LAYOUT_ALL_AREA_ID);
   const [drawings, setDrawings] = useState(LAYOUT_INITIAL_DRAWINGS);
   const [tasks, setTasks] = useState(LAYOUT_INITIAL_TASKS);
   const [newTask, setNewTask] = useState("");
@@ -218,6 +223,12 @@ export function LayoutDrawingsScreen({
   const [taskFocused, setTaskFocused] = useState(false);
 
   const area = LAYOUT_AREAS.find((a) => a.id === activeArea)!;
+  const isAllArea = activeArea === LAYOUT_ALL_AREA_ID;
+  const areaDrawings = drawings.filter((d) => d.areaId === activeArea);
+  const drawingsTitle = isAllArea
+    ? "Full Layout — All Rooms"
+    : `${area.name} — Layout Drawings`;
+  const uploadLabel = isAllArea ? "Upload Full Layout Drawing" : "Upload Layout Drawing";
 
   const addTask = () => {
     if (!newTask.trim()) return;
@@ -249,7 +260,7 @@ export function LayoutDrawingsScreen({
           <div>
             <h1 className="mb-1 text-[28px] font-bold text-[var(--figma-navy)]">Layout</h1>
             <p className="m-0 text-[13px] text-[var(--figma-gray500)]">
-              Follows concept sign-off · Upload and review layout drawings per area
+              Follows concept sign-off · Full layout for all rooms, or drawings per area
             </p>
           </div>
         </div>
@@ -276,21 +287,29 @@ export function LayoutDrawingsScreen({
         <SectionCard>
           <SectionTitle
             icon="upload_file"
-            title={`${area.name} — Layout Drawings`}
+            title={drawingsTitle}
             right={
               <span className="text-[11px] text-[var(--figma-gray400)]">
-                {drawings.length} file{drawings.length !== 1 ? "s" : ""}
+                {areaDrawings.length} file{areaDrawings.length !== 1 ? "s" : ""}
               </span>
             }
           />
+          {isAllArea && (
+            <p className="mb-3.5 mt-[-4px] text-[12px] text-[var(--figma-gray500)]">
+              Combined layout drawing covering all rooms in one document — the usual client deliverable.
+            </p>
+          )}
           <UploadDropzone
-            label="Upload Layout Drawing"
+            label={uploadLabel}
             onUpload={() =>
               setDrawings((prev) => [
                 ...prev,
                 {
                   id: Date.now(),
-                  name: `${area.name}_Layout_new.pdf`,
+                  areaId: activeArea,
+                  name: isAllArea
+                    ? "Full_Layout_All_Rooms_new.pdf"
+                    : `${area.name}_Layout_new.pdf`,
                   type: "pdf",
                   size: "—",
                   date: "Just now",
@@ -299,7 +318,7 @@ export function LayoutDrawingsScreen({
             }
           />
           <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
-            {drawings.map((file) => (
+            {areaDrawings.map((file) => (
               <DrawingCard
                 key={file.id}
                 file={file}
@@ -307,6 +326,13 @@ export function LayoutDrawingsScreen({
               />
             ))}
           </div>
+          {areaDrawings.length === 0 && (
+            <div className="py-4 text-center text-[13px] text-[var(--figma-gray400)]">
+              {isAllArea
+                ? "No full layout yet — upload the combined all-rooms drawing."
+                : `No drawings for ${area.name} yet.`}
+            </div>
+          )}
         </SectionCard>
 
         <TimelineWidget phase="Layout" />

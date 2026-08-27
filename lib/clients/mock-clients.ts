@@ -253,10 +253,33 @@ export const CLIENTS: Client[] = [
   },
 ]
 
-export const COMM_LOG = [
+export type CommLogType = 'call' | 'email' | 'meeting'
+export type CommLogAttachmentKind = 'pdf' | 'word' | 'image' | 'audio'
+
+export interface CommLogAttachment {
+  id: string
+  name: string
+  size: number
+  kind: CommLogAttachmentKind
+  mimeType: string
+  url?: string
+}
+
+export interface CommLogEntry {
+  id: number
+  type: CommLogType
+  date: string
+  time: string
+  member: string
+  initials: string
+  note: string
+  attachments?: CommLogAttachment[]
+}
+
+export const COMM_LOG: CommLogEntry[] = [
   {
     id: 1,
-    type: 'meeting' as const,
+    type: 'meeting',
     date: 'Jul 28, 2025',
     time: '10:30 AM',
     member: 'Sofia Marchetti',
@@ -265,7 +288,7 @@ export const COMM_LOG = [
   },
   {
     id: 2,
-    type: 'email' as const,
+    type: 'email',
     date: 'Jul 22, 2025',
     time: '3:15 PM',
     member: 'Chiara Romano',
@@ -274,7 +297,7 @@ export const COMM_LOG = [
   },
   {
     id: 3,
-    type: 'call' as const,
+    type: 'call',
     date: 'Jul 15, 2025',
     time: '11:00 AM',
     member: 'Sofia Marchetti',
@@ -283,7 +306,7 @@ export const COMM_LOG = [
   },
   {
     id: 4,
-    type: 'meeting' as const,
+    type: 'meeting',
     date: 'Jul 5, 2025',
     time: '2:00 PM',
     member: 'Lorenzo Pieri',
@@ -292,12 +315,28 @@ export const COMM_LOG = [
   },
   {
     id: 5,
-    type: 'email' as const,
+    type: 'email',
     date: 'Jun 28, 2025',
     time: '9:45 AM',
     member: 'Chiara Romano',
     initials: 'CR',
     note: 'Sent project brief and engagement letter for signature. Attached fee structure and phased timeline overview.',
+    attachments: [
+      {
+        id: 'mock-5-pdf',
+        name: 'Engagement_Letter.pdf',
+        size: 312000,
+        kind: 'pdf',
+        mimeType: 'application/pdf',
+      },
+      {
+        id: 'mock-5-docx',
+        name: 'Fee_Structure.docx',
+        size: 48000,
+        kind: 'word',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      },
+    ],
   },
 ]
 

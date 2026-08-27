@@ -1,20 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { DemoCaption } from "@/components/demo/demo-caption";
+import {
+  MeetingEntry,
+  MeetingsList,
+} from "@/components/files/meeting-minutes-section";
+import { FolderNameDialog } from "@/components/projects/files/folder-name-dialog";
 import {
   FOLDER_CFG,
   FOLDER_TREE,
+  GALLERY_CATEGORY_META,
   GALLERY_PHOTOS,
   MOCK_FILES,
   MOCK_MEETINGS,
+  cloneFolderTree,
+  flattenFolders,
+  folderCfgFromTree,
   folderMatches,
+  insertFolderNode,
   type DocFile,
+  type FolderCfg,
   type FolderNode,
   type FolderType,
   type GalleryPhoto,
+  type GalleryPhotoCategory,
   type MeetingMinute,
 } from "@/lib/files/mock-documents";
+import {
+  getActiveProject,
+  getAllActiveProjects,
+} from "@/lib/projects/mock-projects";
+import { projectTabRoute } from "@/types/navigation";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -46,6 +64,19 @@ const S = {
   dropdown:
     "12px 12px 30px rgba(163,177,198,0.40), -8px -8px 20px rgba(255,255,255,0.95)",
 };
+
+function matchesProject(projectId: string, filter: string) {
+  return filter === "all" || projectId === filter;
+}
+
+function projectLabel(projectId: string) {
+  return getActiveProject(projectId)?.name ?? "Project";
+}
+
+function projectFilterSubtitle(filter: string, suffix: string) {
+  if (filter === "all") return `All projects · ${suffix}`;
+  return `${projectLabel(filter)} · ${suffix}`;
+}
 
 type DocsView =
   | "files"
@@ -232,11 +263,88 @@ function TabBar({
   );
 }
 
+function ProjectFilterBar({
+  projectFilter,
+  onChange,
+}: {
+  projectFilter: string;
+  onChange: (id: string) => void;
+}) {
+  const projects = getAllActiveProjects();
+  const chips = [
+    { id: "all", label: "All projects" },
+    ...projects.map((p) => ({ id: p.id, label: p.name })),
+  ];
+
+  return (
+    <div
+      style={{
+        background: T.white,
+        borderBottom: `1px solid ${T.border}`,
+        padding: "10px 40px 12px",
+        display: "flex",
+        gap: 6,
+        flexWrap: "wrap",
+        flexShrink: 0,
+        alignItems: "center",
+      }}
+    >
+      <span
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          color: T.gray400,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+          marginRight: 6,
+        }}
+      >
+        Project
+      </span>
+      {chips.map((chip) => {
+        const active = projectFilter === chip.id;
+        return (
+          <button
+            key={chip.id}
+            type="button"
+            onClick={() => onChange(chip.id)}
+            style={{
+              padding: "6px 14px",
+              borderRadius: 18,
+              border: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: 12,
+              fontWeight: active ? 700 : 400,
+              background: active
+                ? `linear-gradient(135deg, ${T.navy}, ${T.teal})`
+                : T.white,
+              color: active ? T.white : T.gray500,
+              boxShadow: active ? S.raised : S.inset,
+              transition: "all 180ms",
+            }}
+          >
+            {chip.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── FILES BROWSER ─────────────────────────────────────────────────────────────
-function FileBrowser() {
+function FileBrowser({ projectFilter }: { projectFilter: string }) {
+  const canCreateFolders = projectFilter !== "all";
   const [activeFolder, setActiveFolder] = useState<FolderType | "all">("all");
   const [search, setSearch] = useState("");
   const [focused, setFocused] = useState(false);
+  const [hoveredFolder, setHoveredFolder] = useState<string | null>(null);
+  const [treesByProject, setTreesByProject] = useState<Record<string, FolderNode[]>>({});
+  const [folderDialog, setFolderDialog] = useState<
+    | { type: "create-root" }
+    | { type: "create-sub"; parentPath: string }
+    | null
+  >(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     drawings: true,
     designs: true,
@@ -244,93 +352,191 @@ function FileBrowser() {
     admin: true,
   });
 
-  const filtered = MOCK_FILES.filter((f) => {
+  const tree =
+    projectFilter === "all"
+      ? FOLDER_TREE
+      : (treesByProject[projectFilter] ?? FOLDER_TREE);
+  const liveCfg = { ...FOLDER_CFG, ...folderCfgFromTree(tree) };
+
+  useEffect(() => {
+    if (activeFolder === "all") return;
+    const ids = new Set(flattenFolders(tree).map((n) => n.id));
+    if (!ids.has(activeFolder)) setActiveFolder("all");
+  }, [projectFilter, tree, activeFolder]);
+
+  const scopedFiles = MOCK_FILES.filter((f) =>
+    matchesProject(f.projectId, projectFilter),
+  );
+
+  const filtered = scopedFiles.filter((f) => {
     const matchFolder = folderMatches(f.folder, activeFolder);
     const matchSearch =
       !search || f.name.toLowerCase().includes(search.toLowerCase());
     return matchFolder && matchSearch;
   });
 
+  const grouped =
+    projectFilter === "all"
+      ? (() => {
+          const order = getAllActiveProjects().map((p) => p.id);
+          const map = new Map<string, DocFile[]>();
+          for (const f of filtered) {
+            const list = map.get(f.projectId) ?? [];
+            list.push(f);
+            map.set(f.projectId, list);
+          }
+          const ids = [
+            ...order.filter((id) => map.has(id)),
+            ...[...map.keys()].filter((id) => !order.includes(id)),
+          ];
+          return ids.map((id) => ({ projectId: id, files: map.get(id)! }));
+        })()
+      : null;
+
   const countFor = (id: string) =>
-    MOCK_FILES.filter((f) => folderMatches(f.folder, id)).length;
+    scopedFiles.filter((f) => folderMatches(f.folder, id)).length;
+
+  function handleFolderSubmit(name: string) {
+    if (projectFilter === "all" || !folderDialog) return;
+    const parentId =
+      folderDialog.type === "create-root" ? null : folderDialog.parentPath;
+    setTreesByProject((prev) => {
+      const current = prev[projectFilter] ?? cloneFolderTree();
+      return {
+        ...prev,
+        [projectFilter]: insertFolderNode(current, parentId, name),
+      };
+    });
+    if (folderDialog.type === "create-sub") {
+      setExpanded((p) => ({ ...p, [folderDialog.parentPath]: true }));
+    }
+    setFolderDialog(null);
+  }
 
   const renderNode = (node: FolderNode, depth = 0) => {
     const active = activeFolder === node.id;
     const hasChildren = Boolean(node.children?.length);
     const open = expanded[node.id] ?? false;
+    const hovered = hoveredFolder === node.id;
     return (
       <div key={node.id}>
-        <button
-          onClick={() => {
-            setActiveFolder(node.id);
-            if (hasChildren) setExpanded((p) => ({ ...p, [node.id]: !open }));
-          }}
+        <div
+          onMouseEnter={() => setHoveredFolder(node.id)}
+          onMouseLeave={() => setHoveredFolder((id) => (id === node.id ? null : id))}
           style={{
-            width: "100%",
             display: "flex",
             alignItems: "center",
-            gap: 8,
-            padding: `8px 8px 8px ${10 + depth * 12}px`,
-            borderRadius: 10,
-            border: "none",
-            cursor: "pointer",
-            fontFamily: "inherit",
             marginBottom: 2,
+            borderRadius: 10,
             background: active ? `${node.color}10` : "transparent",
             boxShadow: active ? S.raised : "none",
           }}
         >
-          {hasChildren ? (
-            <span className="material-icons-outlined" style={{ fontSize: 16, color: T.gray400 }}>
-              {open ? "expand_more" : "chevron_right"}
-            </span>
-          ) : (
-            <span style={{ width: 16 }} />
-          )}
-          <div
-            style={{
-              width: 26,
-              height: 26,
-              borderRadius: 7,
-              background: node.bg,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
+          <button
+            type="button"
+            onClick={() => {
+              setActiveFolder(node.id);
+              if (hasChildren) setExpanded((p) => ({ ...p, [node.id]: !open }));
             }}
-          >
-            <span className="material-icons-outlined" style={{ fontSize: 14, color: node.color }}>
-              {node.icon}
-            </span>
-          </div>
-          <span
             style={{
               flex: 1,
-              textAlign: "left",
-              fontSize: 12,
-              fontWeight: active ? 700 : 500,
-              color: active ? node.color : T.gray500,
+              minWidth: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: `8px 4px 8px ${10 + depth * 12}px`,
+              borderRadius: 10,
+              border: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              background: "transparent",
             }}
           >
-            {node.label}
-          </span>
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              padding: "1px 6px",
-              borderRadius: 8,
-              background: active ? node.bg : T.gray100,
-              color: active ? node.color : T.gray400,
-            }}
-          >
-            {countFor(node.id)}
-          </span>
-        </button>
+            {hasChildren ? (
+              <span className="material-icons-outlined" style={{ fontSize: 16, color: T.gray400 }}>
+                {open ? "expand_more" : "chevron_right"}
+              </span>
+            ) : (
+              <span style={{ width: 16 }} />
+            )}
+            <div
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: 7,
+                background: node.bg,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <span className="material-icons-outlined" style={{ fontSize: 14, color: node.color }}>
+                {node.icon}
+              </span>
+            </div>
+            <span
+              style={{
+                flex: 1,
+                textAlign: "left",
+                fontSize: 12,
+                fontWeight: active ? 700 : 500,
+                color: active ? node.color : T.gray500,
+              }}
+            >
+              {node.label}
+            </span>
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                padding: "1px 6px",
+                borderRadius: 8,
+                background: active ? node.bg : T.gray100,
+                color: active ? node.color : T.gray400,
+              }}
+            >
+              {countFor(node.id)}
+            </span>
+          </button>
+          {canCreateFolders && (
+            <button
+              type="button"
+              title="New subfolder"
+              onClick={() =>
+                setFolderDialog({ type: "create-sub", parentPath: node.id })
+              }
+              style={{
+                width: 26,
+                height: 26,
+                marginRight: 4,
+                border: "none",
+                borderRadius: 6,
+                cursor: "pointer",
+                background: "transparent",
+                color: T.teal,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: hovered || active ? 1 : 0,
+                flexShrink: 0,
+              }}
+            >
+              <span className="material-icons-outlined" style={{ fontSize: 16 }}>
+                create_new_folder
+              </span>
+            </button>
+          )}
+        </div>
         {hasChildren && open && node.children!.map((child) => renderNode(child, depth + 1))}
       </div>
     );
   };
+
+  const emptyMessage =
+    scopedFiles.length === 0
+      ? "No files for this project."
+      : "No files in this folder.";
 
   return (
     <div style={{ padding: "28px 40px" }}>
@@ -357,11 +563,46 @@ function FileBrowser() {
             Documents & Files
           </h1>
           <p style={{ fontSize: 12, color: T.gray500, margin: 0 }}>
-            Marchetti Villa · All project files
+            {projectFilterSubtitle(projectFilter, "All project files")}
           </p>
           <DemoCaption className="mt-1" />
         </div>
-        <GradBtn label="Upload File" icon="upload" small />
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            type="button"
+            title={
+              canCreateFolders
+                ? "New folder"
+                : "Select a project to create a folder"
+            }
+            disabled={!canCreateFolders}
+            onClick={() => {
+              if (canCreateFolders) setFolderDialog({ type: "create-root" });
+            }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
+              padding: "8px 18px",
+              borderRadius: 24,
+              border: `1.5px solid ${T.border}`,
+              background: T.white,
+              color: canCreateFolders ? T.navy : T.gray400,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: canCreateFolders ? "pointer" : "not-allowed",
+              fontFamily: "inherit",
+              boxShadow: S.raised,
+              opacity: canCreateFolders ? 1 : 0.55,
+            }}
+          >
+            <span className="material-icons-outlined" style={{ fontSize: 14 }}>
+              create_new_folder
+            </span>
+            New folder
+          </button>
+          <GradBtn label="Upload File" icon="upload" small />
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: 24 }}>
@@ -382,6 +623,7 @@ function FileBrowser() {
 
           {/* All files */}
           <button
+            type="button"
             onClick={() => setActiveFolder("all")}
             style={{
               width: "100%",
@@ -431,11 +673,11 @@ function FileBrowser() {
                 color: T.teal,
               }}
             >
-              {MOCK_FILES.length}
+              {scopedFiles.length}
             </span>
           </button>
 
-          {FOLDER_TREE.map((n) => renderNode(n))}
+          {tree.map((n) => renderNode(n))}
         </div>
 
         {/* File list */}
@@ -525,20 +767,94 @@ function FileBrowser() {
                   fontSize: 13,
                 }}
               >
-                No files in this folder.
+                {emptyMessage}
               </div>
+            ) : grouped ? (
+              grouped.map((group, gi) => (
+                <div key={group.projectId}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 16px",
+                      background: T.gray50,
+                      borderTop: gi === 0 ? "none" : `1px solid ${T.border}`,
+                      borderBottom: `1px solid ${T.border}`,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: T.navy,
+                      }}
+                    >
+                      {projectLabel(group.projectId)}
+                    </span>
+                    <Link
+                      href={projectTabRoute(group.projectId, "files")}
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: T.teal,
+                        textDecoration: "none",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
+                      Open documents
+                      <span className="material-icons-outlined" style={{ fontSize: 14 }}>
+                        chevron_right
+                      </span>
+                    </Link>
+                  </div>
+                  {group.files.map((file, idx) => (
+                    <FileRow
+                      key={file.id}
+                      file={file}
+                      isLast={
+                        gi === grouped.length - 1 &&
+                        idx === group.files.length - 1
+                      }
+                      showProject
+                      folderCfg={liveCfg}
+                    />
+                  ))}
+                </div>
+              ))
             ) : (
               filtered.map((file, idx) => (
                 <FileRow
                   key={file.id}
                   file={file}
                   isLast={idx === filtered.length - 1}
+                  folderCfg={liveCfg}
                 />
               ))
             )}
           </div>
         </div>
       </div>
+
+      <FolderNameDialog
+        open={folderDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) setFolderDialog(null);
+        }}
+        title={
+          folderDialog?.type === "create-sub" ? "New subfolder" : "New folder"
+        }
+        description={
+          folderDialog?.type === "create-sub"
+            ? `Create a subfolder in ${liveCfg[folderDialog.parentPath]?.label ?? "this folder"}.`
+            : "Create a main folder for this project."
+        }
+        placeholder="Folder name"
+        confirmLabel="Create"
+        onSubmit={handleFolderSubmit}
+      />
     </div>
   );
 }
@@ -546,12 +862,16 @@ function FileBrowser() {
 function FileRow({
   file,
   isLast,
+  showProject = false,
+  folderCfg = FOLDER_CFG,
 }: {
   file: DocFile;
   isLast: boolean;
+  showProject?: boolean;
+  folderCfg?: Record<string, FolderCfg>;
 }) {
   const [hov, setHov] = useState(false);
-  const cfg = FOLDER_CFG[file.folder] ?? {
+  const cfg = folderCfg[file.folder] ?? FOLDER_CFG[file.folder] ?? {
     label: file.folder,
     icon: "folder",
     color: T.gray500,
@@ -610,6 +930,23 @@ function FileRow({
           </span>
           {cfg.label}
         </div>
+        {showProject && (
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 10,
+              color: T.gray500,
+              marginLeft: 6,
+            }}
+          >
+            <span className="material-icons-outlined" style={{ fontSize: 11 }}>
+              folder_open
+            </span>
+            {projectLabel(file.projectId)}
+          </div>
+        )}
       </div>
 
       {/* Size */}
@@ -657,16 +994,15 @@ function FileRow({
 }
 
 // ── PHOTO GALLERY ─────────────────────────────────────────────────────────────
-function PhotoGallery() {
-  const [filter, setFilter] = useState<
-    "all" | "moodboards" | "swatches" | "site" | "before-after"
-  >("all");
+function PhotoGallery({ projectFilter }: { projectFilter: string }) {
+  const [filter, setFilter] = useState<"all" | GalleryPhotoCategory>("all");
   const [lightbox, setLightbox] = useState<GalleryPhoto | null>(null);
 
+  const scoped = GALLERY_PHOTOS.filter((p) =>
+    matchesProject(p.projectId, projectFilter),
+  );
   const filtered =
-    filter === "all"
-      ? GALLERY_PHOTOS
-      : GALLERY_PHOTOS.filter((p) => p.category === filter);
+    filter === "all" ? scoped : scoped.filter((p) => p.category === filter);
 
   const grouped = filtered.reduce<Record<string, GalleryPhoto[]>>((acc, p) => {
     (acc[p.month] ??= []).push(p);
@@ -698,7 +1034,10 @@ function PhotoGallery() {
             Photo Gallery
           </h1>
           <p style={{ fontSize: 12, color: T.gray500, margin: 0 }}>
-            Mood boards, swatches, and site documentation
+            {projectFilterSubtitle(
+              projectFilter,
+              "Site pictures, work in progress, and completion photos",
+            )}
           </p>
           <DemoCaption className="mt-1" />
         </div>
@@ -717,10 +1056,9 @@ function PhotoGallery() {
         {(
           [
             { id: "all", label: "All" },
-            { id: "moodboards", label: "Mood Boards" },
-            { id: "swatches", label: "Swatches" },
-            { id: "site", label: "Site Photos" },
-            { id: "before-after", label: "Before / After" },
+            { id: "site", label: GALLERY_CATEGORY_META.site.label },
+            { id: "underway", label: GALLERY_CATEGORY_META.underway.label },
+            { id: "completion", label: GALLERY_CATEGORY_META.completion.label },
           ] as const
         ).map((f) => (
           <button
@@ -748,7 +1086,19 @@ function PhotoGallery() {
         ))}
       </div>
 
-      {months.map((month) => {
+      {months.length === 0 ? (
+        <div
+          style={{
+            padding: "40px",
+            textAlign: "center",
+            color: T.gray400,
+            fontSize: 13,
+          }}
+        >
+          No photos for this project.
+        </div>
+      ) : (
+        months.map((month) => {
         const photos = grouped[month] ?? [];
         const cols: GalleryPhoto[][] = [[], [], []];
         photos.forEach((p, i) => cols[i % 3].push(p));
@@ -795,24 +1145,22 @@ function PhotoGallery() {
                   alt={photo.category}
                   style={{ width: "100%", height: "auto", display: "block" }}
                 />
-                {photo.stage && (
-                  <span
-                    style={{
-                      position: "absolute",
-                      top: 10,
-                      left: 10,
-                      padding: "3px 8px",
-                      borderRadius: 8,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                      background: photo.stage === "before" ? "rgba(27,42,74,0.8)" : "rgba(14,124,134,0.9)",
-                      color: "white",
-                    }}
-                  >
-                    {photo.stage}
-                  </span>
-                )}
+                <span
+                  style={{
+                    position: "absolute",
+                    top: 10,
+                    left: 10,
+                    padding: "3px 8px",
+                    borderRadius: 8,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    background: GALLERY_CATEGORY_META[photo.category].badgeBg,
+                    color: "white",
+                  }}
+                >
+                  {GALLERY_CATEGORY_META[photo.category].badge}
+                </span>
                 <div
                   style={{
                     position: "absolute",
@@ -852,7 +1200,8 @@ function PhotoGallery() {
       </div>
           </div>
         );
-      })}
+      })
+      )}
 
       {/* Lightbox */}
       {lightbox && (
@@ -909,516 +1258,14 @@ function PhotoGallery() {
   );
 }
 
-// ── MEETING MINUTES LIST ──────────────────────────────────────────────────────
-function MeetingsList({
-  onOpenEntry,
-}: {
-  onOpenEntry: (m: MeetingMinute) => void;
-}) {
-  const [q, setQ] = useState("");
-  const typeIcon = {
-    typed: "edit_note",
-    pdf: "picture_as_pdf",
-    audio: "mic",
-  };
-  const typeColor = {
-    typed: T.teal,
-    pdf: "#EF4444",
-    audio: "#D97706",
-  };
-
-  const meetings = MOCK_MEETINGS.filter((m) => {
-    if (!q.trim()) return true;
-    const hay = `${m.title} ${m.preview} ${m.keyDecisions}`.toLowerCase();
-    return hay.includes(q.toLowerCase());
-  });
-
-  return (
-    <div style={{ padding: "28px 40px" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: 24,
-          gap: 12,
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontSize: 26,
-              fontWeight: 700,
-              color: T.navy,
-              margin: "0 0 4px",
-            }}
-          >
-            Meeting Minutes
-          </h1>
-          <p style={{ fontSize: 12, color: T.gray500, margin: 0 }}>
-            Marchetti Villa · Client & team meeting records
-          </p>
-          <DemoCaption className="mt-1" />
-        </div>
-        <GradBtn label="New Minutes" icon="add" small />
-      </div>
-
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Search minutes, decisions, notes…"
-        style={{
-          width: "100%",
-          maxWidth: 420,
-          marginBottom: 18,
-          padding: "10px 14px",
-          borderRadius: 10,
-          border: `1.5px solid ${T.border}`,
-          fontFamily: "inherit",
-          fontSize: 13,
-          boxShadow: S.inset,
-          outline: "none",
-        }}
-      />
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {meetings.map((m) => (
-          <div
-            key={m.id}
-            onClick={() => onOpenEntry(m)}
-            style={{
-              background: T.white,
-              borderRadius: 16,
-              padding: "20px 22px",
-              boxShadow: S.card,
-              cursor: "pointer",
-              transition: "transform 150ms, box-shadow 150ms",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = "translateY(-2px)";
-              e.currentTarget.style.boxShadow =
-                "10px 10px 24px rgba(163,177,198,0.50), -8px -8px 18px rgba(255,255,255,0.98)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = "none";
-              e.currentTarget.style.boxShadow = S.card;
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                gap: 12,
-                marginBottom: 12,
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: T.navy,
-                    marginBottom: 4,
-                  }}
-                >
-                  {m.title}
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 12,
-                    color: T.gray500,
-                  }}
-                >
-                  <span
-                    className="material-icons-outlined"
-                    style={{ fontSize: 14 }}
-                  >
-                    event
-                  </span>
-                  {m.date}
-                </div>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "5px 12px",
-                  borderRadius: 10,
-                  background: `${typeColor[m.type]}14`,
-                  flexShrink: 0,
-                }}
-              >
-                <span
-                  className="material-icons-outlined"
-                  style={{ fontSize: 14, color: typeColor[m.type] }}
-                >
-                  {typeIcon[m.type]}
-                </span>
-                <span
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: typeColor[m.type],
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {m.type}
-                </span>
-              </div>
-            </div>
-
-            <p
-              style={{
-                fontSize: 13,
-                color: T.gray500,
-                lineHeight: 1.5,
-                margin: "0 0 10px",
-              }}
-            >
-              {m.preview}
-            </p>
-            {m.keyDecisions && (
-              <div
-                style={{
-                  fontSize: 12,
-                  color: T.navy,
-                  background: "#F0FDFA",
-                  borderRadius: 10,
-                  padding: "8px 12px",
-                  marginBottom: 12,
-                }}
-              >
-                <span style={{ fontWeight: 700, color: T.teal }}>Key decisions: </span>
-                {m.keyDecisions}
-              </div>
-            )}
-
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 11, color: T.gray400 }}>Attendees:</span>
-              <div style={{ display: "flex", gap: 4 }}>
-                {m.attendees.map((a) => (
-                  <Avatar
-                    key={a.initials}
-                    initials={a.initials}
-                    color={a.color}
-                    size={24}
-                    title={a.name}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── MEETING ENTRY EDITOR ──────────────────────────────────────────────────────
-function MeetingEntry({
-  meeting,
-  onBack,
-}: {
-  meeting: MeetingMinute;
-  onBack: () => void;
-}) {
-  const [notes, setNotes] = useState(meeting.preview);
-  const [notesFocused, setNotesFocused] = useState(false);
-  const [decisions, setDecisions] = useState(meeting.keyDecisions);
-  const [decisionsFocused, setDecisionsFocused] = useState(false);
-  const [actionItems] = useState([
-    {
-      id: 1,
-      text: "Confirm ceiling height with structural engineer",
-      assignee: "Ashan Perera",
-      dueDate: "02 Aug 2026",
-    },
-    {
-      id: 2,
-      text: "Update stone feature wall width in drawings",
-      assignee: "Dilani Silva",
-      dueDate: "05 Aug 2026",
-    },
-  ]);
-
-  return (
-    <div style={{ padding: "28px 40px", maxWidth: 860 }}>
-      {/* Back button */}
-      <button
-        onClick={onBack}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 5,
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          fontFamily: "inherit",
-          fontSize: 12,
-          color: T.gray500,
-          marginBottom: 20,
-          padding: 0,
-        }}
-      >
-        <span className="material-icons-outlined" style={{ fontSize: 16 }}>
-          arrow_back
-        </span>
-        Back to Minutes
-      </button>
-
-      {/* Title */}
-      <div
-        style={{
-          background: T.white,
-          borderRadius: 16,
-          padding: "22px 24px",
-          boxShadow: S.card,
-          marginBottom: 16,
-        }}
-      >
-        <h2
-          style={{
-            fontSize: 20,
-            fontWeight: 700,
-            color: T.navy,
-            margin: "0 0 8px",
-          }}
-        >
-          {meeting.title}
-        </h2>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 16,
-            flexWrap: "wrap",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              fontSize: 12,
-              color: T.gray500,
-            }}
-          >
-            <span className="material-icons-outlined" style={{ fontSize: 14 }}>
-              event
-            </span>
-            {meeting.date}
-          </div>
-          <div style={{ display: "flex", gap: 4 }}>
-            {meeting.attendees.map((a) => (
-              <Avatar
-                key={a.initials}
-                initials={a.initials}
-                color={a.color}
-                size={24}
-                title={a.name}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Notes area */}
-      <div
-        style={{
-          background: T.white,
-          borderRadius: 16,
-          padding: "22px 24px",
-          boxShadow: S.card,
-          marginBottom: 16,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 700,
-            color: T.navy,
-            marginBottom: 12,
-            display: "flex",
-            alignItems: "center",
-            gap: 7,
-          }}
-        >
-          <span
-            className="material-icons-outlined"
-            style={{ fontSize: 16, color: T.teal }}
-          >
-            notes
-          </span>
-          Meeting Notes
-        </div>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          onFocus={() => setNotesFocused(true)}
-          onBlur={() => setNotesFocused(false)}
-          rows={8}
-          placeholder="Type meeting notes here…"
-          style={{
-            width: "100%",
-            padding: "12px 14px",
-            borderRadius: 10,
-            fontSize: 13,
-            fontFamily: "inherit",
-            color: T.navy,
-            background: T.white,
-            lineHeight: 1.7,
-            resize: "vertical",
-            border: notesFocused
-              ? `2px solid ${T.teal}`
-              : `1.5px solid ${T.border}`,
-            boxShadow: S.inset,
-            outline: "none",
-            boxSizing: "border-box",
-            transition: "all 150ms",
-          }}
-        />
-      </div>
-
-      <div
-        style={{
-          background: T.white,
-          borderRadius: 16,
-          padding: "22px 24px",
-          boxShadow: S.card,
-          marginBottom: 16,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 700,
-            color: T.navy,
-            marginBottom: 12,
-            display: "flex",
-            alignItems: "center",
-            gap: 7,
-          }}
-        >
-          <span className="material-icons-outlined" style={{ fontSize: 16, color: T.teal }}>
-            gavel
-          </span>
-          Key Decisions
-        </div>
-        <textarea
-          value={decisions}
-          onChange={(e) => setDecisions(e.target.value)}
-          onFocus={() => setDecisionsFocused(true)}
-          onBlur={() => setDecisionsFocused(false)}
-          rows={4}
-          placeholder="Record key decisions…"
-          style={{
-            width: "100%",
-            padding: "12px 14px",
-            borderRadius: 10,
-            fontSize: 13,
-            fontFamily: "inherit",
-            color: T.navy,
-            background: T.white,
-            lineHeight: 1.7,
-            resize: "vertical",
-            border: decisionsFocused ? `2px solid ${T.teal}` : `1.5px solid ${T.border}`,
-            boxShadow: S.inset,
-            outline: "none",
-            boxSizing: "border-box",
-          }}
-        />
-      </div>
-
-      {/* Action items */}
-      <div
-        style={{
-          background: T.white,
-          borderRadius: 16,
-          padding: "22px 24px",
-          boxShadow: S.card,
-          marginBottom: 24,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 700,
-            color: T.navy,
-            marginBottom: 14,
-            display: "flex",
-            alignItems: "center",
-            gap: 7,
-          }}
-        >
-          <span
-            className="material-icons-outlined"
-            style={{ fontSize: 16, color: T.teal }}
-          >
-            task_alt
-          </span>
-          Action Items ({actionItems.length})
-        </div>
-        {actionItems.map((item, i) => (
-          <div
-            key={item.id}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              padding: "12px 0",
-              borderBottom:
-                i < actionItems.length - 1 ? `1px solid ${T.border}` : "none",
-            }}
-          >
-            <div
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: "50%",
-                border: `2px solid ${T.border}`,
-                flexShrink: 0,
-                boxShadow: S.inset,
-              }}
-            />
-            <div style={{ flex: 1 }}>
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: T.navy,
-                  marginBottom: 2,
-                }}
-              >
-                {item.text}
-              </div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: T.gray400,
-                  display: "flex",
-                  gap: 10,
-                }}
-              >
-                <span>{item.assignee}</span>
-                <span>Due {item.dueDate}</span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <GradBtn label="Save Minutes" icon="save" />
-    </div>
-  );
-}
-
 // ── GLOBAL SEARCH ─────────────────────────────────────────────────────────────
-function GlobalSearch() {
+function GlobalSearch({
+  projectFilter,
+  meetings,
+}: {
+  projectFilter: string;
+  meetings: MeetingMinute[];
+}) {
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
 
@@ -1426,16 +1273,21 @@ function GlobalSearch() {
     query.length > 1
       ? MOCK_FILES.filter(
           (f) =>
-            f.name.toLowerCase().includes(query.toLowerCase()) ||
-            (FOLDER_CFG[f.folder]?.label ?? "")
-              .toLowerCase()
-              .includes(query.toLowerCase()),
+            matchesProject(f.projectId, projectFilter) &&
+            (f.name.toLowerCase().includes(query.toLowerCase()) ||
+              (FOLDER_CFG[f.folder]?.label ?? "")
+                .toLowerCase()
+                .includes(query.toLowerCase())),
         )
       : [];
   const minuteResults =
     query.length > 1
-      ? MOCK_MEETINGS.filter((m) =>
-          `${m.title} ${m.preview} ${m.keyDecisions}`.toLowerCase().includes(query.toLowerCase()),
+      ? meetings.filter(
+          (m) =>
+            matchesProject(m.projectId, projectFilter) &&
+            `${m.title} ${m.preview} ${m.keyDecisions}`
+              .toLowerCase()
+              .includes(query.toLowerCase()),
         )
       : [];
 
@@ -1452,7 +1304,10 @@ function GlobalSearch() {
         Search Documents
       </h1>
       <p style={{ fontSize: 12, color: T.gray500, margin: "0 0 28px" }}>
-        Search across all files, photos, and meeting minutes
+        {projectFilterSubtitle(
+          projectFilter,
+          "Search across all files, photos, and meeting minutes",
+        )}
       </p>
 
       {/* Large search bar */}
@@ -1552,7 +1407,10 @@ function GlobalSearch() {
                   {file.name}
                 </div>
                 <div style={{ fontSize: 11, color: T.gray400 }}>
-                  {FOLDER_CFG[file.folder].label} · {file.date}
+                  {(FOLDER_CFG[file.folder]?.label ?? file.folder)}
+                  {projectFilter === "all" ? ` · ${projectLabel(file.projectId)}` : ""}
+                  {" · "}
+                  {file.date}
                 </div>
               </div>
               <span
@@ -1586,7 +1444,12 @@ function GlobalSearch() {
               }}
             >
               <div style={{ fontSize: 13, fontWeight: 600, color: T.navy }}>{m.title}</div>
-              <div style={{ fontSize: 11, color: T.gray400 }}>Minutes · {m.date}</div>
+              <div style={{ fontSize: 11, color: T.gray400 }}>
+                Minutes
+                {projectFilter === "all" ? ` · ${projectLabel(m.projectId)}` : ""}
+                {" · "}
+                {m.date}
+              </div>
               <div style={{ fontSize: 12, color: T.gray500, marginTop: 4 }}>{m.keyDecisions}</div>
             </div>
           ))}
@@ -1602,8 +1465,31 @@ export { DocumentsWorkspace as GlobalFilesPage };
 
 export function DocumentsWorkspace() {
   const [view, setView] = useState<DocsView>("files");
+  const [meetings, setMeetings] = useState<MeetingMinute[]>(() => [...MOCK_MEETINGS]);
   const [selectedMeeting, setSelectedMeeting] =
     useState<MeetingMinute | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [projectFilter, setProjectFilter] = useState("all");
+
+  function handleProjectFilter(id: string) {
+    setProjectFilter(id);
+    if (selectedMeeting && id !== "all" && selectedMeeting.projectId !== id) {
+      setSelectedMeeting(null);
+      setIsCreating(false);
+    }
+  }
+
+  function handleSaveMinute(minute: MeetingMinute) {
+    setMeetings((prev) => {
+      const exists = prev.some((m) => m.id === minute.id);
+      if (exists) return prev.map((m) => (m.id === minute.id ? minute : m));
+      return [minute, ...prev];
+    });
+    setSelectedMeeting(minute);
+    setIsCreating(false);
+  }
+
+  const showEditor = view === "minutes-list" && (isCreating || selectedMeeting);
 
   return (
     <div
@@ -1619,22 +1505,46 @@ export function DocumentsWorkspace() {
         setView={(v) => {
           setView(v);
           setSelectedMeeting(null);
+          setIsCreating(false);
         }}
+      />
+      <ProjectFilterBar
+        projectFilter={projectFilter}
+        onChange={handleProjectFilter}
       />
 
       <div style={{ flex: 1 }}>
-        {view === "files" && <FileBrowser />}
-        {view === "gallery" && <PhotoGallery />}
-        {view === "minutes-list" && selectedMeeting && (
+        {view === "files" && <FileBrowser projectFilter={projectFilter} />}
+        {view === "gallery" && <PhotoGallery projectFilter={projectFilter} />}
+        {showEditor && (
           <MeetingEntry
-            meeting={selectedMeeting}
-            onBack={() => setSelectedMeeting(null)}
+            key={isCreating ? "create" : selectedMeeting?.id}
+            meeting={isCreating ? null : selectedMeeting}
+            projectFilter={projectFilter}
+            onBack={() => {
+              setSelectedMeeting(null);
+              setIsCreating(false);
+            }}
+            onSave={handleSaveMinute}
           />
         )}
-        {view === "minutes-list" && !selectedMeeting && (
-          <MeetingsList onOpenEntry={(m) => setSelectedMeeting(m)} />
+        {view === "minutes-list" && !showEditor && (
+          <MeetingsList
+            meetings={meetings}
+            projectFilter={projectFilter}
+            onOpenEntry={(m) => {
+              setIsCreating(false);
+              setSelectedMeeting(m);
+            }}
+            onNewMinutes={() => {
+              setSelectedMeeting(null);
+              setIsCreating(true);
+            }}
+          />
         )}
-        {view === "search" && <GlobalSearch />}
+        {view === "search" && (
+          <GlobalSearch projectFilter={projectFilter} meetings={meetings} />
+        )}
       </div>
     </div>
   );

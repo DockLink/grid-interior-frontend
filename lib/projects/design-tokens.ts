@@ -84,7 +84,7 @@ export const PHASE_WORKSPACES: {
     id: "concept",
     label: "Concept Design",
     icon: "palette",
-    desc: "Area setup, mood boards, renders, client presentation",
+    desc: "Area setup, up to 3 concept options, client finalized showcase",
     color: "#7C3AED",
     bg: "#EDE9FE",
     status: "In Progress",
