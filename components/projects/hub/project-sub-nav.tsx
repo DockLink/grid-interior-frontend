@@ -13,6 +13,7 @@ const FIGMA_TABS: { key: ProjectTab; label: string; icon: string }[] = [
   { key: "tasks", label: "Tasks", icon: "task_alt" },
   { key: "files", label: "Documents", icon: "description" },
   { key: "timeline", label: "Timeline", icon: "timeline" },
+  { key: "links", label: "Suppliers & Clients", icon: "handshake" },
 ];
 
 function tabFromPathname(pathname: string, projectId: string): ProjectTab {
@@ -28,7 +29,7 @@ export function ProjectSubNav({ projectId }: { projectId: string }) {
   const [hovered, setHovered] = useState<ProjectTab | null>(null);
 
   return (
-    <div className="flex gap-1">
+    <div className="flex flex-wrap gap-1">
       {FIGMA_TABS.map((tab) => {
         const active = activeTab === tab.key;
         const hover = hovered === tab.key;

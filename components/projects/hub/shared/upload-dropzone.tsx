@@ -10,11 +10,13 @@ export function UploadDropzone({
   icon = "upload_file",
   onUpload,
   className,
+  hint = "Drag & drop or click to browse · PNG, JPG, PDF, MP4",
 }: {
   label: string;
   icon?: string;
   onUpload?: () => void;
   className?: string;
+  hint?: string;
 }) {
   const [dragOver, setDragOver] = useState(false);
 
@@ -60,9 +62,7 @@ export function UploadDropzone({
       </div>
       <div className="text-center">
         <div className="mb-0.5 text-[13px] font-semibold text-[var(--figma-navy)]">{label}</div>
-        <div className="text-[11px] text-[var(--figma-gray500)]">
-          Drag & drop or click to browse · PNG, JPG, PDF, MP4
-        </div>
+        <div className="text-[11px] text-[var(--figma-gray500)]">{hint}</div>
       </div>
     </div>
   );

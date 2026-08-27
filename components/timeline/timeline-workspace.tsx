@@ -1,11 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
+import { toast } from "sonner";
 import { DemoCaption } from "@/components/demo/demo-caption";
+import { openTimelinePrintWindow } from "@/components/timeline/timeline-print";
+import {
+  formatSiteDayDate,
+  getClientKeyDatesFromSite,
+  getSiteExecutionProgress,
+  getSiteOverlapBarsFromSite,
+  getSiteSubstagesSnapshot,
+  resolveSiteSubstages,
+  subscribeSiteSubstages,
+} from "@/lib/projects/mock-execution";
 import {
   GANTT_PHASES,
   CLIENT_GANTT_PHASES,
-  EXECUTION_OVERLAP_BARS,
   MATERIAL_ITEMS,
   MILESTONES,
   PROJECT_END,
@@ -14,8 +24,22 @@ import {
   TOTAL_WEEKS,
   type GanttPhase,
   type MaterialItem,
-  type Milestone,
 } from "@/lib/timeline/mock-timeline";
+import {
+  downloadMaterialsExcel,
+  downloadMilestonesExcel,
+  downloadTimelinePhasesExcel,
+  slugForFilename,
+} from "@/lib/timeline/timeline-export";
+import type { SiteSubStageStatus } from "@/types/execution";
+
+function useSiteSubstages() {
+  return useSyncExternalStore(
+    subscribeSiteSubstages,
+    getSiteSubstagesSnapshot,
+    getSiteSubstagesSnapshot,
+  );
+}
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -227,6 +251,9 @@ function GanttChart() {
   const [phases, setPhases] = useState(GANTT_PHASES);
   const [fridaySent, setFridaySent] = useState<string | null>("15 Aug 2026");
   const [copied, setCopied] = useState(false);
+  const siteStages = useSiteSubstages();
+  const keyDates = getClientKeyDatesFromSite(siteStages);
+  const overlapBars = getSiteOverlapBarsFromSite(resolveSiteSubstages(siteStages));
 
   const nudge = (id: number, delta: number) => {
     setPhases((prev) =>
@@ -362,7 +389,31 @@ function GanttChart() {
               </button>
             ))}
           </div>
-          <GradBtn label="Export PDF" icon="picture_as_pdf" small />
+          <GradBtn
+            label="Export PDF"
+            icon="picture_as_pdf"
+            small
+            onClick={() => {
+              const opened = openTimelinePrintWindow(phases, MILESTONES);
+              if (!opened) {
+                toast.error("Allow pop-ups to export the PDF");
+                return;
+              }
+              toast.success("Print dialog opened — choose Save as PDF");
+            }}
+          />
+          <GradBtn
+            label="Export Excel"
+            icon="table_view"
+            small
+            onClick={() => {
+              downloadTimelinePhasesExcel(
+                phases,
+                `${slugForFilename(PROJECT_NAME)}-timeline.csv`,
+              );
+              toast.success("Excel file downloaded");
+            }}
+          />
           <GradBtn
             label={copied ? "Link copied" : fridaySent ? `Friday update · ${fridaySent}` : "Send Friday update"}
             icon="send"
@@ -456,6 +507,106 @@ function GanttChart() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Site execution key dates — synced with Execution workspace */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: 14,
+          marginBottom: 20,
+        }}
+      >
+        {keyDates.map((kd) => {
+          const statusLabel =
+            kd.status === "completed"
+              ? "Completed"
+              : kd.status === "active"
+                ? "In progress"
+                : "Upcoming";
+          const statusColor =
+            kd.status === "completed"
+              ? T.success
+              : kd.status === "active"
+                ? T.teal
+                : T.gray500;
+          const statusBg =
+            kd.status === "completed"
+              ? "#DCFCE7"
+              : kd.status === "active"
+                ? `${T.teal}14`
+                : T.gray100;
+          return (
+            <div
+              key={kd.id}
+              style={{
+                background: T.white,
+                borderRadius: 16,
+                padding: "18px 20px",
+                boxShadow: S.card,
+                display: "flex",
+                gap: 14,
+                alignItems: "flex-start",
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 11,
+                  background: `${T.teal}14`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  boxShadow: S.inset,
+                }}
+              >
+                <span
+                  className="material-icons-outlined"
+                  style={{ fontSize: 20, color: T.teal }}
+                >
+                  {kd.icon}
+                </span>
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: T.gray500,
+                    marginBottom: 4,
+                  }}
+                >
+                  {kd.label}
+                </div>
+                <div
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 700,
+                    color: T.navy,
+                    marginBottom: 6,
+                  }}
+                >
+                  {kd.date}
+                </div>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: "2px 8px",
+                    borderRadius: 8,
+                    color: statusColor,
+                    background: statusBg,
+                  }}
+                >
+                  {statusLabel}
+                </span>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Gantt chart */}
@@ -794,9 +945,9 @@ function GanttChart() {
             minWidth: 900,
           }}
         >
-          Execution sub-stages (overlapping)
+          Execution sub-stages (overlapping) · synced from Site Execution
         </div>
-        {EXECUTION_OVERLAP_BARS.map((bar) => (
+        {overlapBars.map((bar) => (
           <div key={bar.id} style={{ display: "flex", minWidth: 900, borderBottom: `1px solid ${T.border}` }}>
             <div
               style={{
@@ -819,9 +970,16 @@ function GanttChart() {
                   top: 6,
                   height: 16,
                   borderRadius: 8,
-                  background: bar.color,
-                  opacity: 0.85,
+                  background:
+                    bar.status === "blocked" ? "#FCA5A5" : bar.color,
+                  opacity:
+                    bar.status === "upcoming"
+                      ? 0.35
+                      : bar.status === "complete"
+                        ? 0.55
+                        : 0.9,
                 }}
+                title={`${bar.name} · ${bar.status}`}
               />
             </div>
           </div>
@@ -896,7 +1054,21 @@ function MilestonesView() {
           </p>
           <DemoCaption className="mt-1" />
         </div>
-        <GradBtn label="Add Milestone" icon="add" small />
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <GradBtn
+            label="Export Excel"
+            icon="table_view"
+            small
+            onClick={() => {
+              downloadMilestonesExcel(
+                MILESTONES,
+                `${slugForFilename(PROJECT_NAME)}-milestones.csv`,
+              );
+              toast.success("Excel file downloaded");
+            }}
+          />
+          <GradBtn label="Add Milestone" icon="add" small />
+        </div>
       </div>
 
       {/* Timeline vertical */}
@@ -1072,10 +1244,31 @@ function MilestonesView() {
 }
 
 // ── CLIENT VIEW ───────────────────────────────────────────────────────────────
+const SITE_STATUS_UI: Record<
+  SiteSubStageStatus,
+  { label: string; color: string; bg: string }
+> = {
+  complete: { label: "Complete", color: "#3FA66B", bg: "#DCFCE7" },
+  "in-progress": { label: "In Progress", color: "#0E7C86", bg: "#CCFBF1" },
+  upcoming: { label: "Upcoming", color: "#9CA3AF", bg: "#F3F4F6" },
+  blocked: { label: "Blocked", color: "#EF4444", bg: "#FEE2E2" },
+};
+
 function ClientView() {
-  // Simplified phase stepper for client consumption
-  const phases = CLIENT_GANTT_PHASES;
-  const activeIdx = phases.findIndex((p) => p.status === "active");
+  const siteStages = useSiteSubstages();
+  const resolvedSite = resolveSiteSubstages(siteStages);
+  const keyDates = getClientKeyDatesFromSite(resolvedSite);
+  const siteProgress = getSiteExecutionProgress(resolvedSite);
+
+  const phases = CLIENT_GANTT_PHASES.map((p) =>
+    p.name === "Site Execution"
+      ? {
+          ...p,
+          progress: siteProgress.progress,
+          status: siteProgress.status,
+        }
+      : p,
+  );
 
   return (
     <div style={{ padding: "28px 40px" }}>
@@ -1100,18 +1293,134 @@ function ClientView() {
             Client-Facing Timeline
           </h1>
           <p style={{ fontSize: 12, color: T.gray500, margin: 0 }}>
-            Independent client timeline · edit without changing the internal Gantt
+            Site Execution mirrors internal Execution updates · key dates and sub-stages stay in sync
           </p>
           <DemoCaption className="mt-1" />
         </div>
-        <GradBtn
-          label="Share with Client"
-          icon="share"
-          small
-          onClick={() => {
-            void navigator.clipboard?.writeText(`${window.location.origin}/portal/marchetti-villa`);
-          }}
-        />
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <GradBtn
+            label="Export Excel"
+            icon="table_view"
+            small
+            onClick={() => {
+              downloadTimelinePhasesExcel(
+                phases,
+                `${slugForFilename(PROJECT_NAME)}-client-timeline.csv`,
+              );
+              toast.success("Excel file downloaded");
+            }}
+          />
+          <GradBtn
+            label="Share with Client"
+            icon="share"
+            small
+            onClick={() => {
+              void navigator.clipboard?.writeText(
+                `${window.location.origin}/portal/marchetti-villa`,
+              );
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Site execution key dates — derived from Execution substages */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: 14,
+          marginBottom: 20,
+        }}
+      >
+        {keyDates.map((kd) => {
+          const statusLabel =
+            kd.status === "completed"
+              ? "Completed"
+              : kd.status === "active"
+                ? "In progress"
+                : "Upcoming";
+          const statusColor =
+            kd.status === "completed"
+              ? T.success
+              : kd.status === "active"
+                ? T.teal
+                : T.gray500;
+          const statusBg =
+            kd.status === "completed"
+              ? "#DCFCE7"
+              : kd.status === "active"
+                ? `${T.teal}14`
+                : T.gray100;
+          return (
+            <div
+              key={kd.id}
+              style={{
+                background: T.white,
+                borderRadius: 16,
+                padding: "18px 20px",
+                boxShadow: S.card,
+                display: "flex",
+                gap: 14,
+                alignItems: "flex-start",
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 11,
+                  background: `${T.teal}14`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  boxShadow: S.inset,
+                }}
+              >
+                <span
+                  className="material-icons-outlined"
+                  style={{ fontSize: 20, color: T.teal }}
+                >
+                  {kd.icon}
+                </span>
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: T.gray500,
+                    marginBottom: 4,
+                  }}
+                >
+                  {kd.label}
+                </div>
+                <div
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 700,
+                    color: T.navy,
+                    marginBottom: 6,
+                  }}
+                >
+                  {kd.date}
+                </div>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: "2px 8px",
+                    borderRadius: 8,
+                    color: statusColor,
+                    background: statusBg,
+                  }}
+                >
+                  {statusLabel}
+                </span>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Project progress bar */}
@@ -1178,6 +1487,7 @@ function ClientView() {
           borderRadius: 16,
           padding: "22px 24px",
           boxShadow: S.card,
+          marginBottom: 20,
         }}
       >
         <div
@@ -1193,6 +1503,8 @@ function ClientView() {
         {phases.map((phase, idx) => {
           const isCurrent = phase.status === "active";
           const isDone = phase.status === "completed";
+          const isSite = phase.name === "Site Execution";
+          const showProgress = isCurrent || (isSite && phase.progress > 0);
           return (
             <div
               key={phase.id}
@@ -1200,10 +1512,8 @@ function ClientView() {
                 display: "flex",
                 gap: 16,
                 alignItems: "flex-start",
-                marginBottom: idx < phases.length - 1 ? 0 : 0,
               }}
             >
-              {/* Connector */}
               <div
                 style={{
                   display: "flex",
@@ -1220,12 +1530,12 @@ function ClientView() {
                     background: isDone
                       ? T.success
                       : isCurrent
-                      ? `linear-gradient(135deg, ${T.navy}, ${T.teal})`
-                      : T.gray200,
+                        ? `linear-gradient(135deg, ${T.navy}, ${T.teal})`
+                        : T.gray200,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    boxShadow: (isDone || isCurrent) ? S.raised : "none",
+                    boxShadow: isDone || isCurrent ? S.raised : "none",
                   }}
                 >
                   {isDone ? (
@@ -1259,16 +1569,13 @@ function ClientView() {
                     style={{
                       width: 2,
                       height: 28,
-                      background: isDone
-                        ? T.success
-                        : T.border,
+                      background: isDone ? T.success : T.border,
                       margin: "3px 0",
                     }}
                   />
                 )}
               </div>
 
-              {/* Content */}
               <div
                 style={{
                   flex: 1,
@@ -1280,14 +1587,18 @@ function ClientView() {
                     display: "flex",
                     alignItems: "center",
                     gap: 10,
-                    marginBottom: isCurrent ? 8 : 0,
+                    marginBottom: showProgress ? 8 : 0,
                   }}
                 >
                   <span
                     style={{
                       fontSize: 13,
                       fontWeight: isCurrent ? 700 : 600,
-                      color: isCurrent ? T.navy : isDone ? T.success : T.gray500,
+                      color: isCurrent
+                        ? T.navy
+                        : isDone
+                          ? T.success
+                          : T.gray500,
                     }}
                   >
                     {phase.name}
@@ -1307,10 +1618,8 @@ function ClientView() {
                     </span>
                   )}
                 </div>
-                {isCurrent && (
-                  <div
-                    style={{ marginBottom: 20 }}
-                  >
+                {showProgress && (
+                  <div style={{ marginBottom: isSite ? 8 : 20 }}>
                     <div
                       style={{
                         height: 6,
@@ -1331,7 +1640,12 @@ function ClientView() {
                       />
                     </div>
                     <span
-                      style={{ fontSize: 10, color: T.gray400, marginTop: 3, display: "block" }}
+                      style={{
+                        fontSize: 10,
+                        color: T.gray400,
+                        marginTop: 3,
+                        display: "block",
+                      }}
                     >
                       {phase.progress}% complete
                     </span>
@@ -1341,6 +1655,154 @@ function ClientView() {
             </div>
           );
         })}
+      </div>
+
+      {/* Site sub-stages — same grid format as key dates / Execution */}
+      <div
+        style={{
+          background: T.white,
+          borderRadius: 16,
+          padding: "22px 24px",
+          boxShadow: S.card,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            justifyContent: "space-between",
+            gap: 12,
+            marginBottom: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.navy }}>
+              Site Execution · Sub-stages
+            </div>
+            <div style={{ fontSize: 11, color: T.gray500, marginTop: 2 }}>
+              Live from internal Execution · {siteProgress.progress}% site complete
+            </div>
+          </div>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: 14,
+          }}
+        >
+          {resolvedSite.map((s) => {
+            const sc = SITE_STATUS_UI[s.status];
+            return (
+              <div
+                key={s.id}
+                style={{
+                  background: T.gray50,
+                  borderRadius: 14,
+                  padding: "16px 18px",
+                  boxShadow: S.inset,
+                  borderLeft: `3px solid ${s.checkpoint ? T.alert : sc.color}`,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
+                      background: sc.bg,
+                      color: sc.color,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      fontSize: 11,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {s.number}
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: T.navy,
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {s.name}
+                    </div>
+                    {s.checkpoint && (
+                      <span
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          color: T.alert,
+                          marginTop: 2,
+                          display: "inline-block",
+                        }}
+                      >
+                        Checkpoint
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: T.gray500,
+                    lineHeight: 1.4,
+                    flex: 1,
+                  }}
+                >
+                  {s.detail}
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: T.navy,
+                    }}
+                  >
+                    {formatSiteDayDate(s.startDay)}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      padding: "2px 8px",
+                      borderRadius: 8,
+                      color: sc.color,
+                      background: sc.bg,
+                    }}
+                  >
+                    {sc.label}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -1400,7 +1862,21 @@ function MaterialsView() {
           </p>
           <DemoCaption className="mt-1" />
         </div>
-        <GradBtn label="Add Item" icon="add" small />
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <GradBtn
+            label="Export Excel"
+            icon="table_view"
+            small
+            onClick={() => {
+              downloadMaterialsExcel(
+                filtered,
+                `${slugForFilename(PROJECT_NAME)}-materials.csv`,
+              );
+              toast.success("Excel file downloaded");
+            }}
+          />
+          <GradBtn label="Add Item" icon="add" small />
+        </div>
       </div>
 
       {/* Status filter pills */}

@@ -121,6 +121,23 @@ export function getPageMeta(pathname: string): PageMeta {
         breadcrumb: ["Projects", project?.name ?? "Overview"],
       };
     }
+    const tabMatch = pathname.match(
+      /^\/projects\/([^/]+)\/(files|tasks|minutes|timeline|links|hold-requests)$/,
+    );
+    if (tabMatch) {
+      const project = getActiveProject(tabMatch[1]!);
+      const name = project?.name ?? "Project";
+      const titles: Record<string, string> = {
+        files: "Documents",
+        tasks: "Tasks",
+        minutes: "Minutes",
+        timeline: "Timeline",
+        links: "Suppliers & Clients",
+        "hold-requests": "Hold Requests",
+      };
+      const title = titles[tabMatch[2]!] ?? "Detail";
+      return { title, breadcrumb: ["Projects", name, title] };
+    }
     return { title: "Project Detail", breadcrumb: ["Projects", "Overview"] };
   }
 

@@ -16,20 +16,57 @@ export interface DocFile {
   size: string;
   date: string;
   folder: FolderType;
+  projectId: string;
   uploader: { initials: string; color: string };
   url?: string;
 }
 
+export const GALLERY_CATEGORIES = ["site", "underway", "completion"] as const;
+export type GalleryPhotoCategory = (typeof GALLERY_CATEGORIES)[number];
+
+export const GALLERY_CATEGORY_META: Record<
+  GalleryPhotoCategory,
+  { label: string; badge: string; badgeBg: string }
+> = {
+  site: {
+    label: "Site Pictures",
+    badge: "Before",
+    badgeBg: "rgba(27,42,74,0.8)",
+  },
+  underway: {
+    label: "Underway",
+    badge: "WIP",
+    badgeBg: "rgba(217,119,6,0.9)",
+  },
+  completion: {
+    label: "Completion",
+    badge: "After",
+    badgeBg: "rgba(14,124,134,0.9)",
+  },
+};
+
 export interface GalleryPhoto {
   id: number;
   url: string;
-  category: "moodboards" | "swatches" | "site" | "before-after";
-  stage?: "before" | "after";
+  category: GalleryPhotoCategory;
   uploaderName: string;
   uploaderInitials: string;
   uploaderColor: string;
   date: string;
   month: string;
+  projectId: string;
+}
+
+export type MeetingAttachmentKind = "pdf" | "word";
+
+export interface MeetingAttachment {
+  id: string;
+  name: string;
+  kind: MeetingAttachmentKind;
+  size?: string;
+  url?: string;
+  /** upload = local file; import = linked from project files */
+  source: "upload" | "import";
 }
 
 export interface MeetingMinute {
@@ -37,9 +74,11 @@ export interface MeetingMinute {
   title: string;
   date: string;
   attendees: { initials: string; color: string; name: string }[];
-  type: "typed" | "pdf" | "audio";
+  type: "typed" | "pdf" | "audio" | "word";
   preview: string;
   keyDecisions: string;
+  projectId: string;
+  attachments?: MeetingAttachment[];
 }
 
 export const FOLDER_TREE: FolderNode[] = [
@@ -114,21 +153,88 @@ export const FOLDER_TREE: FolderNode[] = [
   },
 ];
 
-function flattenFolders(nodes: FolderNode[]): FolderNode[] {
+export function flattenFolders(nodes: FolderNode[]): FolderNode[] {
   return nodes.flatMap((n) => [n, ...(n.children ? flattenFolders(n.children) : [])]);
 }
 
-export const FOLDER_CFG: Record<string, { label: string; icon: string; color: string; bg: string }> =
-  Object.fromEntries(
-    flattenFolders(FOLDER_TREE).map((n) => [n.id, { label: n.label, icon: n.icon, color: n.color, bg: n.bg }]),
+export type FolderCfg = { label: string; icon: string; color: string; bg: string };
+
+export function folderCfgFromTree(nodes: FolderNode[]): Record<string, FolderCfg> {
+  return Object.fromEntries(
+    flattenFolders(nodes).map((n) => [n.id, { label: n.label, icon: n.icon, color: n.color, bg: n.bg }]),
   );
+}
+
+export const FOLDER_CFG: Record<string, FolderCfg> = folderCfgFromTree(FOLDER_TREE);
+
+export function cloneFolderTree(nodes: FolderNode[] = FOLDER_TREE): FolderNode[] {
+  return nodes.map((n) => ({
+    ...n,
+    children: n.children ? cloneFolderTree(n.children) : undefined,
+  }));
+}
+
+export function slugFolderId(name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || "folder";
+}
+
+const NEW_FOLDER_STYLE: Omit<FolderNode, "id" | "label" | "children"> = {
+  icon: "folder",
+  color: "#0E7C86",
+  bg: "#CCFBF1",
+};
+
+function uniqueChildId(desired: string, siblings: FolderNode[]): string {
+  const taken = new Set(siblings.map((s) => s.id));
+  if (!taken.has(desired)) return desired;
+  let i = 2;
+  while (taken.has(`${desired}-${i}`)) i += 1;
+  return `${desired}-${i}`;
+}
+
+export function insertFolderNode(
+  nodes: FolderNode[],
+  parentId: string | null,
+  name: string,
+): FolderNode[] {
+  const label = name.trim();
+  const slug = slugFolderId(label);
+
+  if (parentId === null) {
+    const id = uniqueChildId(slug, nodes);
+    return [...nodes, { id, label, ...NEW_FOLDER_STYLE }];
+  }
+
+  return nodes.map((n) => {
+    if (n.id === parentId) {
+      const children = n.children ?? [];
+      const id = uniqueChildId(`${parentId}/${slug}`, children);
+      return {
+        ...n,
+        children: [
+          ...children,
+          { id, label, icon: n.icon, color: n.color, bg: n.bg },
+        ],
+      };
+    }
+    if (n.children?.length) {
+      return { ...n, children: insertFolderNode(n.children, parentId, name) };
+    }
+    return n;
+  });
+}
 
 export function folderMatches(fileFolder: string, active: string | "all"): boolean {
   if (active === "all") return true;
   return fileFolder === active || fileFolder.startsWith(`${active}/`);
 }
 
-export const MOCK_FILES: DocFile[] = [
+const MARCHETTI_FILES: Omit<DocFile, "projectId">[] = [
   {
     id: 1,
     name: "Lobby_Space_Plan_v2.pdf",
@@ -196,7 +302,7 @@ export const MOCK_FILES: DocFile[] = [
   },
   {
     id: 14,
-    name: "Concept_Lobby_NonRender.pdf",
+    name: "Concept_Lobby_Option_C.pdf",
     type: "pdf",
     size: "6.1 MB",
     date: "12 Jul 2026",
@@ -353,39 +459,86 @@ export const MOCK_FILES: DocFile[] = [
   },
 ];
 
-export const GALLERY_PHOTOS: GalleryPhoto[] = [
+const BIANCHI_FILES: Omit<DocFile, "projectId">[] = [
+  {
+    id: 101,
+    name: "Penthouse_Floor_Plan_v3.pdf",
+    type: "pdf",
+    size: "5.2 MB",
+    date: "19 Jul 2026",
+    folder: "drawings/space-plans",
+    uploader: { initials: "CG", color: "#BE185D" },
+  },
+  {
+    id: 102,
+    name: "Feature_Wall_3D.jpg",
+    type: "img",
+    size: "6.8 MB",
+    date: "20 Jul 2026",
+    folder: "designs/3ds",
+    uploader: { initials: "AP", color: "#0891B2" },
+    url: "https://images.unsplash.com/photo-1614267861476-0d129972a0f4?w=300&h=200&fit=crop",
+  },
+  {
+    id: 103,
+    name: "Lighting_Scheme.pdf",
+    type: "pdf",
+    size: "2.4 MB",
+    date: "18 Jul 2026",
+    folder: "designs/concepts",
+    uploader: { initials: "DS", color: "#D97706" },
+  },
+  {
+    id: 104,
+    name: "Joinery_Quote_Jul26.pdf",
+    type: "pdf",
+    size: "0.9 MB",
+    date: "21 Jul 2026",
+    folder: "admin/supplier-quotes",
+    uploader: { initials: "RF", color: "#059669" },
+  },
+];
+
+const ROMANO_FILES: Omit<DocFile, "projectId">[] = [
+  {
+    id: 201,
+    name: "Kitchen_Elevation_A.pdf",
+    type: "pdf",
+    size: "3.6 MB",
+    date: "16 Jul 2026",
+    folder: "drawings/elevation-drawings",
+    uploader: { initials: "CG", color: "#BE185D" },
+  },
+  {
+    id: 202,
+    name: "Dining_Material_Board.jpg",
+    type: "img",
+    size: "2.1 MB",
+    date: "15 Jul 2026",
+    folder: "designs/material-boards",
+    uploader: { initials: "PN", color: "#7C3AED" },
+    url: "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=300&h=200&fit=crop",
+  },
+  {
+    id: 203,
+    name: "Kitchen_BOQ_v2.xlsx",
+    type: "xls",
+    size: "1.1 MB",
+    date: "17 Jul 2026",
+    folder: "admin/boqs",
+    uploader: { initials: "NJ", color: "#0284C7" },
+  },
+];
+
+export const MOCK_FILES: DocFile[] = [
+  ...MARCHETTI_FILES.map((f) => ({ ...f, projectId: "mock-1" })),
+  ...BIANCHI_FILES.map((f) => ({ ...f, projectId: "mock-2" })),
+  ...ROMANO_FILES.map((f) => ({ ...f, projectId: "mock-3" })),
+];
+
+const MARCHETTI_PHOTOS: Omit<GalleryPhoto, "projectId">[] = [
   {
     id: 1,
-    url: "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&h=300&fit=crop",
-    category: "moodboards",
-    uploaderName: "Dilani Silva",
-    uploaderInitials: "DS",
-    uploaderColor: "#D97706",
-    date: "18 Jul 2026",
-    month: "July 2026",
-  },
-  {
-    id: 2,
-    url: "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=400&h=500&fit=crop",
-    category: "moodboards",
-    uploaderName: "Priya Nair",
-    uploaderInitials: "PN",
-    uploaderColor: "#7C3AED",
-    date: "18 Jul 2026",
-    month: "July 2026",
-  },
-  {
-    id: 3,
-    url: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=400&h=260&fit=crop",
-    category: "swatches",
-    uploaderName: "Priya Nair",
-    uploaderInitials: "PN",
-    uploaderColor: "#7C3AED",
-    date: "20 Jul 2026",
-    month: "July 2026",
-  },
-  {
-    id: 4,
     url: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=340&fit=crop",
     category: "site",
     uploaderName: "Ashan Perera",
@@ -395,7 +548,7 @@ export const GALLERY_PHOTOS: GalleryPhoto[] = [
     month: "July 2026",
   },
   {
-    id: 5,
+    id: 2,
     url: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&h=280&fit=crop",
     category: "site",
     uploaderName: "Ashan Perera",
@@ -405,40 +558,9 @@ export const GALLERY_PHOTOS: GalleryPhoto[] = [
     month: "July 2026",
   },
   {
-    id: 6,
-    url: "https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=400&h=460&fit=crop",
-    category: "site",
-    uploaderName: "Ashan Perera",
-    uploaderInitials: "AP",
-    uploaderColor: "#0891B2",
-    date: "24 Jul 2026",
-    month: "July 2026",
-  },
-  {
-    id: 7,
-    url: "https://images.unsplash.com/photo-1614267861476-0d129972a0f4?w=400&h=300&fit=crop",
-    category: "moodboards",
-    uploaderName: "Dilani Silva",
-    uploaderInitials: "DS",
-    uploaderColor: "#D97706",
-    date: "15 Jun 2026",
-    month: "June 2026",
-  },
-  {
-    id: 8,
-    url: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400&h=340&fit=crop",
-    category: "swatches",
-    uploaderName: "Priya Nair",
-    uploaderInitials: "PN",
-    uploaderColor: "#7C3AED",
-    date: "15 Jun 2026",
-    month: "June 2026",
-  },
-  {
-    id: 9,
+    id: 3,
     url: "https://images.unsplash.com/photo-1484154214963-4c675539affa?w=400&h=300&fit=crop",
-    category: "before-after",
-    stage: "before",
+    category: "site",
     uploaderName: "Social Media Admin",
     uploaderInitials: "SM",
     uploaderColor: "#EC4899",
@@ -446,10 +568,69 @@ export const GALLERY_PHOTOS: GalleryPhoto[] = [
     month: "January 2026",
   },
   {
+    id: 4,
+    url: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400&h=300&fit=crop",
+    category: "underway",
+    uploaderName: "Ashan Perera",
+    uploaderInitials: "AP",
+    uploaderColor: "#0891B2",
+    date: "24 Jul 2026",
+    month: "July 2026",
+  },
+  {
+    id: 5,
+    url: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=400&h=460&fit=crop",
+    category: "underway",
+    uploaderName: "Ashan Perera",
+    uploaderInitials: "AP",
+    uploaderColor: "#0891B2",
+    date: "24 Jul 2026",
+    month: "July 2026",
+  },
+  {
+    id: 6,
+    url: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=400&h=340&fit=crop",
+    category: "underway",
+    uploaderName: "Priya Nair",
+    uploaderInitials: "PN",
+    uploaderColor: "#7C3AED",
+    date: "15 Jun 2026",
+    month: "June 2026",
+  },
+  {
+    id: 7,
+    url: "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&h=300&fit=crop",
+    category: "completion",
+    uploaderName: "Dilani Silva",
+    uploaderInitials: "DS",
+    uploaderColor: "#D97706",
+    date: "18 Jul 2026",
+    month: "July 2026",
+  },
+  {
+    id: 8,
+    url: "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=400&h=500&fit=crop",
+    category: "completion",
+    uploaderName: "Priya Nair",
+    uploaderInitials: "PN",
+    uploaderColor: "#7C3AED",
+    date: "18 Jul 2026",
+    month: "July 2026",
+  },
+  {
+    id: 9,
+    url: "https://images.unsplash.com/photo-1614267861476-0d129972a0f4?w=400&h=300&fit=crop",
+    category: "completion",
+    uploaderName: "Dilani Silva",
+    uploaderInitials: "DS",
+    uploaderColor: "#D97706",
+    date: "15 Jun 2026",
+    month: "June 2026",
+  },
+  {
     id: 10,
     url: "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=400&h=300&fit=crop",
-    category: "before-after",
-    stage: "after",
+    category: "completion",
     uploaderName: "Social Media Admin",
     uploaderInitials: "SM",
     uploaderColor: "#EC4899",
@@ -458,7 +639,69 @@ export const GALLERY_PHOTOS: GalleryPhoto[] = [
   },
 ];
 
-export const MOCK_MEETINGS: MeetingMinute[] = [
+const BIANCHI_PHOTOS: Omit<GalleryPhoto, "projectId">[] = [
+  {
+    id: 101,
+    url: "https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=400&h=340&fit=crop",
+    category: "site",
+    uploaderName: "Ashan Perera",
+    uploaderInitials: "AP",
+    uploaderColor: "#0891B2",
+    date: "21 Jul 2026",
+    month: "July 2026",
+  },
+  {
+    id: 102,
+    url: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400&h=300&fit=crop",
+    category: "underway",
+    uploaderName: "Ashan Perera",
+    uploaderInitials: "AP",
+    uploaderColor: "#0891B2",
+    date: "21 Jul 2026",
+    month: "July 2026",
+  },
+  {
+    id: 103,
+    url: "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=400&h=300&fit=crop",
+    category: "completion",
+    uploaderName: "Dilani Silva",
+    uploaderInitials: "DS",
+    uploaderColor: "#D97706",
+    date: "19 Jul 2026",
+    month: "July 2026",
+  },
+];
+
+const ROMANO_PHOTOS: Omit<GalleryPhoto, "projectId">[] = [
+  {
+    id: 201,
+    url: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=400&h=260&fit=crop",
+    category: "site",
+    uploaderName: "Priya Nair",
+    uploaderInitials: "PN",
+    uploaderColor: "#7C3AED",
+    date: "16 Jul 2026",
+    month: "July 2026",
+  },
+  {
+    id: 202,
+    url: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400&h=300&fit=crop",
+    category: "underway",
+    uploaderName: "Priya Nair",
+    uploaderInitials: "PN",
+    uploaderColor: "#7C3AED",
+    date: "16 Jul 2026",
+    month: "July 2026",
+  },
+];
+
+export const GALLERY_PHOTOS: GalleryPhoto[] = [
+  ...MARCHETTI_PHOTOS.map((p) => ({ ...p, projectId: "mock-1" })),
+  ...BIANCHI_PHOTOS.map((p) => ({ ...p, projectId: "mock-2" })),
+  ...ROMANO_PHOTOS.map((p) => ({ ...p, projectId: "mock-3" })),
+];
+
+const MARCHETTI_MEETINGS: Omit<MeetingMinute, "projectId">[] = [
   {
     id: 1,
     title: "Concept Design Review — Lobby",
@@ -502,5 +745,41 @@ export const MOCK_MEETINGS: MeetingMinute[] = [
       "Client vision: contemporary Italian, warm neutrals, statement lighting. Budget confirmed at LKR 24.8M.",
     keyDecisions:
       "Paid consultation confirmed. Full inventory list included. Preferred start September 2026.",
+  },
+];
+
+export const MOCK_MEETINGS: MeetingMinute[] = [
+  ...MARCHETTI_MEETINGS.map((m) => ({ ...m, projectId: "mock-1" })),
+  {
+    id: 101,
+    title: "3D Design Review — Penthouse",
+    date: "20 Jul 2026",
+    attendees: [
+      { initials: "PN", color: "#7C3AED", name: "Priya Nair" },
+      { initials: "AP", color: "#0891B2", name: "Ashan Perera" },
+      { initials: "FB", color: "#0E7C86", name: "Federico Bianchi" },
+    ],
+    type: "typed",
+    preview:
+      "Client requested a warmer palette on the feature wall and a revised lighting cluster over the dining table.",
+    keyDecisions:
+      "Proceed with render revision 2. Feature wall stone swapped to honed travertine.",
+    projectId: "mock-2",
+  },
+  {
+    id: 201,
+    title: "Kitchen Layout Sign-off",
+    date: "14 Jul 2026",
+    attendees: [
+      { initials: "DS", color: "#D97706", name: "Dilani Silva" },
+      { initials: "CG", color: "#BE185D", name: "Chamari Gunasena" },
+      { initials: "LR", color: "#1B2A4A", name: "Luca Romano" },
+    ],
+    type: "pdf",
+    preview:
+      "Island width confirmed. Appliance package locked. Client requested extra drawer stack on the pantry wall.",
+    keyDecisions:
+      "Island at 2800mm. Wolf range confirmed. Extra 600mm drawer stack added to pantry elevation.",
+    projectId: "mock-3",
   },
 ];

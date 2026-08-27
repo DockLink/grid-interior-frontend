@@ -104,6 +104,7 @@ export type ProjectTab =
   | "tasks"
   | "minutes"
   | "timeline"
+  | "links"
   | "hold-requests";
 
 export const PROJECT_TABS: { key: ProjectTab; label: string; adminOnly?: boolean }[] = [
@@ -112,6 +113,7 @@ export const PROJECT_TABS: { key: ProjectTab; label: string; adminOnly?: boolean
   { key: "tasks", label: "Tasks" },
   { key: "minutes", label: "Minutes" },
   { key: "timeline", label: "Timeline" },
+  { key: "links", label: "Suppliers & Clients" },
   { key: "hold-requests", label: "Hold Requests", adminOnly: true },
 ];
 

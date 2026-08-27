@@ -8,10 +8,12 @@ import type {
   AttentionItem,
   ProjectOverviewItem,
   StatItem,
+  TodaysTaskItem,
 } from "@/components/dashboard/studio/demo-data";
 import { FileActivityPanel } from "@/components/dashboard/studio/file-activity-panel";
 import { ProjectsOverview } from "@/components/dashboard/studio/projects-overview";
 import { StatCard, StatCardSkeleton } from "@/components/dashboard/studio/stat-card";
+import { TodaysTasksPanel } from "@/components/dashboard/studio/todays-tasks-panel";
 
 export function RoleDashboard({
   stats,
@@ -20,6 +22,9 @@ export function RoleDashboard({
   projects,
   projectsTitle,
   activityTitle,
+  todaysTasks,
+  todaysTasksTitle,
+  showTodaysTasks = true,
   showActions = true,
 }: {
   stats: StatItem[];
@@ -28,6 +33,9 @@ export function RoleDashboard({
   projects?: ProjectOverviewItem[];
   projectsTitle?: string;
   activityTitle?: string;
+  todaysTasks?: TodaysTaskItem[];
+  todaysTasksTitle?: string;
+  showTodaysTasks?: boolean;
   showActions?: boolean;
 }) {
   const { user } = useAuth();
@@ -73,11 +81,14 @@ export function RoleDashboard({
             <StatCardSkeleton key={i} />
           ))}
         </div>
+        <div className="mb-6 h-60 animate-pulse rounded-2xl border border-[#E4E9F0] bg-white" />
+        {showTodaysTasks ? (
+          <div className="mb-6 h-72 animate-pulse rounded-2xl border border-[#E4E9F0] bg-white" />
+        ) : null}
         <div className="mb-6 grid gap-5 lg:grid-cols-[1.65fr_1fr]">
           <div className="h-80 animate-pulse rounded-2xl border border-[#E4E9F0] bg-white" />
           <div className="h-80 animate-pulse rounded-2xl border border-[#E4E9F0] bg-white" />
         </div>
-        <div className="h-60 animate-pulse rounded-2xl border border-[#E4E9F0] bg-white" />
       </div>
     );
   }
@@ -96,7 +107,17 @@ export function RoleDashboard({
         ))}
       </div>
 
-      <div className="mb-6 grid gap-5 lg:grid-cols-[1.65fr_1fr]">
+      <div className="mb-6">
+        <ProjectsOverview items={projects} title={projectsTitle} />
+      </div>
+
+      {showTodaysTasks ? (
+        <div className="mb-6">
+          <TodaysTasksPanel items={todaysTasks} title={todaysTasksTitle} />
+        </div>
+      ) : null}
+
+      <div className="grid gap-5 lg:grid-cols-[1.65fr_1fr]">
         <AttentionPanel
           items={attentionItems}
           title={attentionTitle}
@@ -104,8 +125,6 @@ export function RoleDashboard({
         />
         <FileActivityPanel title={activityTitle} />
       </div>
-
-      <ProjectsOverview items={projects} title={projectsTitle} />
     </div>
   );
 }

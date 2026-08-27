@@ -30,6 +30,7 @@ import {
 const PER_PAGE = 8;
 
 type ListTab = "active" | "historical";
+type ViewMode = "list" | "card";
 
 function EmptyState({ label, onAdd }: { label: string; onAdd: () => void }) {
   return (
@@ -162,12 +163,96 @@ function ActiveProjectRow({
   );
 }
 
+function ActiveProjectCard({
+  project,
+  onClick,
+}: {
+  project: ActiveProjectView;
+  onClick: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  const progressColor =
+    project.status === "Overdue" || project.status === "At Risk" ? "#F26D6D" : "var(--figma-teal)";
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => e.key === "Enter" && onClick()}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="cursor-pointer rounded-2xl bg-white px-4 pt-3.5 pb-4 transition-all duration-220"
+      style={{
+        boxShadow: hover ? "var(--neu-card-hover)" : "var(--neu-card)",
+        transform: hover ? "translateY(-3px)" : "none",
+      }}
+    >
+      <div className="mb-0.5 text-sm leading-snug font-bold text-[var(--figma-navy)]">{project.name}</div>
+      <div className="mb-1 text-[11px] text-[var(--figma-gray500)]">{project.projectType}</div>
+      <div className="mb-3 text-xs font-medium text-[var(--figma-teal)]">{project.clientName}</div>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <PhaseBadge phase={project.phase} />
+        <StatusBadge status={project.status} />
+      </div>
+      <div className="mb-3">
+        <HubProgressBar value={project.progress} color={progressColor} />
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] text-[var(--figma-gray400)]">{project.nextDeadline}</span>
+        <AvatarStack teamIds={project.teamIds} />
+      </div>
+    </div>
+  );
+}
+
+function HistoricalProjectRow({
+  project,
+  onClick,
+}: {
+  project: HistoricalProjectView;
+  onClick: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+
+  return (
+    <TableRow
+      className="cursor-pointer border-[var(--figma-border)]"
+      style={{ background: hover ? "rgba(14,124,134,0.03)" : "#fff" }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={onClick}
+    >
+      <TableCell className="px-4 py-3.5">
+        <div className="mb-0.5 text-[13px] font-semibold text-[var(--figma-navy)]">{project.name}</div>
+        <div className="line-clamp-1 text-[11px] text-[var(--figma-gray500)]">{project.description}</div>
+      </TableCell>
+      <TableCell className="px-4 py-3.5">
+        <span className="text-[13px] font-medium text-[var(--figma-teal)]">{project.clientName}</span>
+      </TableCell>
+      <TableCell className="px-4 py-3.5 text-xs whitespace-nowrap text-[var(--figma-gray500)]">
+        {project.startDate} — {project.completionDate}
+      </TableCell>
+      <TableCell className="px-4 py-3.5">
+        <span className="rounded-[10px] bg-[#E0F2FE] px-2 py-0.5 text-[10px] font-semibold text-[#0284C7]">
+          {project.type}
+        </span>
+      </TableCell>
+      <TableCell className="px-4 py-3.5 text-xs text-[var(--figma-gray500)]">{project.year}</TableCell>
+      <TableCell className="px-2 py-3.5">
+        <MaterialIcon name="chevron_right" outlined size={18} className="text-[var(--figma-gray400)]" />
+      </TableCell>
+    </TableRow>
+  );
+}
+
 export function ProjectsListPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab") === "historical" ? "historical" : "active";
 
   const [tab, setTab] = useState<ListTab>(initialTab);
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [phaseFilter, setPhaseFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [yearFilter, setYearFilter] = useState("All");
@@ -291,10 +376,20 @@ export function ProjectsListPage() {
           />
         )}
 
-        <div className="ml-auto flex items-center text-xs text-[var(--figma-gray400)]">
-          {tab === "active" ? filteredActive.length : filteredHistorical.length} result
-          {(tab === "active" ? filteredActive.length : filteredHistorical.length) !== 1 ? "s" : ""}
-          {tab === "active" && activeCount > 0 ? ` · ${activeCount} active` : ""}
+        <div className="ml-auto flex flex-wrap items-center gap-3">
+          <NeuTabToggle
+            tabs={[
+              { id: "list" as ViewMode, label: "List", icon: "list" },
+              { id: "card" as ViewMode, label: "Cards", icon: "grid_view" },
+            ]}
+            value={viewMode}
+            onChange={setViewMode}
+          />
+          <div className="text-xs text-[var(--figma-gray400)]">
+            {tab === "active" ? filteredActive.length : filteredHistorical.length} result
+            {(tab === "active" ? filteredActive.length : filteredHistorical.length) !== 1 ? "s" : ""}
+            {tab === "active" && activeCount > 0 ? ` · ${activeCount} active` : ""}
+          </div>
         </div>
       </div>
 
@@ -302,7 +397,7 @@ export function ProjectsListPage() {
         <>
           {filteredActive.length === 0 ? (
             <EmptyState label="Create your first project to get started." onAdd={() => setShowNewProject(true)} />
-          ) : (
+          ) : viewMode === "list" ? (
             <div className="overflow-hidden rounded-2xl bg-white neu-card">
               <Table>
                 <TableHeader>
@@ -336,6 +431,26 @@ export function ProjectsListPage() {
               </Table>
               <HubPagination page={page} totalPages={totalPages} onPageChange={setPage} />
             </div>
+          ) : (
+            <div>
+              <div
+                className="grid gap-5"
+                style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}
+              >
+                {pageSlice.map((project) => (
+                  <ActiveProjectCard
+                    key={project.id}
+                    project={project}
+                    onClick={() => router.push(`/projects/${project.id}`)}
+                  />
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <div className="mt-5 overflow-hidden rounded-2xl bg-white neu-card">
+                  <HubPagination page={page} totalPages={totalPages} onPageChange={setPage} />
+                </div>
+              )}
+            </div>
           )}
         </>
       )}
@@ -347,7 +462,7 @@ export function ProjectsListPage() {
               label="No historical projects found for the selected filters."
               onAdd={() => setShowNewProject(true)}
             />
-          ) : (
+          ) : viewMode === "card" ? (
             <div
               className="grid gap-5"
               style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}
@@ -359,6 +474,32 @@ export function ProjectsListPage() {
                   onClick={() => router.push(`/projects/historical/${project.id}`)}
                 />
               ))}
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-2xl bg-white neu-card">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-[var(--figma-border)] bg-[var(--figma-gray50)] hover:bg-[var(--figma-gray50)]">
+                    {["Project", "Client", "Dates", "Type", "Year", ""].map((col) => (
+                      <TableHead
+                        key={col || "actions"}
+                        className="px-4 py-3 text-xs font-semibold tracking-wide whitespace-nowrap text-[var(--figma-navy)]"
+                      >
+                        {col}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredHistorical.map((project) => (
+                    <HistoricalProjectRow
+                      key={project.id}
+                      project={project}
+                      onClick={() => router.push(`/projects/historical/${project.id}`)}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
         </>

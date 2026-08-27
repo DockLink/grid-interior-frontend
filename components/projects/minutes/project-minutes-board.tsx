@@ -265,8 +265,17 @@ export function ProjectMinutesBoard({ projectId }: { projectId: string }) {
   }
 
   async function handlePdfUpload(file: File) {
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-      toast.error("Please choose a PDF file");
+    const name = file.name.toLowerCase();
+    const isPdf =
+      file.type === "application/pdf" || name.endsWith(".pdf");
+    const isWord =
+      file.type === "application/msword" ||
+      file.type ===
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      name.endsWith(".doc") ||
+      name.endsWith(".docx");
+    if (!isPdf && !isWord) {
+      toast.error("Please choose a PDF or Word file (.pdf, .doc, .docx)");
       return;
     }
     setUploadingPdf(true);
@@ -281,7 +290,7 @@ export function ProjectMinutesBoard({ projectId }: { projectId: string }) {
         },
       ]);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "PDF upload failed");
+      toast.error(err instanceof Error ? err.message : "Document upload failed");
     } finally {
       setUploadingPdf(false);
     }
@@ -590,7 +599,7 @@ function DetailView({
       {pdfFiles.length > 0 && (
         <div style={{ marginBottom: "24px" }}>
           <div style={{ fontSize: "12px", fontWeight: 500, color: "var(--ds-secondary-label)", marginBottom: "8px" }}>
-            PDF documents
+            Documents
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {pdfFiles.map((pdf) => (
@@ -635,10 +644,10 @@ function DetailView({
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {attachmentNameFromUrl(pdf.url, "Document.pdf")}
+                    {attachmentNameFromUrl(pdf.url, "Document")}
                   </div>
                   <div style={{ fontSize: "11px", color: "var(--ds-secondary-label)", marginTop: "2px" }}>
-                    Open PDF
+                    Open document
                   </div>
                 </div>
               </a>
@@ -1092,7 +1101,7 @@ function EditorView({
         </div>
 
         <div style={{ marginBottom: "14px" }}>
-          <label style={{ ...labelStyle, marginBottom: "6px" }}>PDF Documents (Optional)</label>
+          <label style={{ ...labelStyle, marginBottom: "6px" }}>Documents (Optional)</label>
 
           {pdfs.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "8px" }}>
@@ -1135,7 +1144,7 @@ function EditorView({
                         {pdf.name}
                       </div>
                       <div style={{ fontSize: "11px", color: "var(--ds-secondary-label)", marginTop: "2px" }}>
-                        PDF attached
+                        Document attached
                       </div>
                     </div>
                     <button
@@ -1162,7 +1171,7 @@ function EditorView({
           <input
             ref={pdfInputRef}
             type="file"
-            accept="application/pdf,.pdf"
+            accept="application/pdf,.pdf,application/msword,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) onPdfUpload(file);
@@ -1189,7 +1198,7 @@ function EditorView({
             }}
           >
             <Upload size={18} />
-            {uploadingPdf ? "Uploading…" : "Click to upload PDF (add multiple if needed)"}
+            {uploadingPdf ? "Uploading…" : "Click to upload PDF or Word (add multiple if needed)"}
           </button>
         </div>
 

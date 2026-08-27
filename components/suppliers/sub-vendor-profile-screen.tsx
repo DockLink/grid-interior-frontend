@@ -11,6 +11,7 @@ import {
   CategoryBadge,
   StatusPill,
 } from "@/components/suppliers/supplier-ui";
+import { VendorTasksTab } from "@/components/suppliers/vendor-tasks-tab";
 import {
   AVAILABILITY_CFG,
   CATEGORY_CFG,
@@ -26,12 +27,13 @@ import {
 import { NAV_ROUTES } from "@/types/navigation";
 import { cn } from "@/lib/utils";
 
-type Tab = "overview" | "history" | "payments";
+type Tab = "overview" | "history" | "payments" | "tasks";
 
 const TABS = [
   { id: "overview" as Tab, label: "Overview", icon: "person" },
   { id: "history" as Tab, label: "Availability & History", icon: "history" },
   { id: "payments" as Tab, label: "Payment Records", icon: "receipt_long" },
+  { id: "tasks" as Tab, label: "Tasks & Deadlines", icon: "task_alt" },
 ];
 
 const COMPLETION_CFG: Record<string, { color: string; bg: string }> = {
@@ -407,6 +409,7 @@ export function SubVendorProfileScreen({ vendorId }: { vendorId: number }) {
       {tab === "overview" && <OverviewTab vendor={vendor} />}
       {tab === "history" && <HistoryTab vendorId={vendorId} />}
       {tab === "payments" && <PaymentsTab vendorId={vendorId} />}
+      {tab === "tasks" && <VendorTasksTab partyKind="subvendor" partyId={vendorId} />}
     </div>
   );
 }

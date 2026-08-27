@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import { DemoCaption } from "@/components/demo/demo-caption";
 import {
   MOCK_TASKS,
@@ -45,6 +45,44 @@ const S = {
   dropdown:
     "12px 12px 30px rgba(163,177,198,0.40), -8px -8px 20px rgba(255,255,255,0.95)",
 };
+
+const CREATE_PROJECTS = [
+  "Marchetti Villa",
+  "Bianchi Office",
+  "Romano Penthouse",
+  "De Luca Townhouse",
+  "Visconti Showroom",
+] as const;
+
+const PROJECT_COLORS: Record<string, string> = {
+  "Marchetti Villa": "#0E7C86",
+  "Bianchi Office": "#0891B2",
+  "Romano Penthouse": "#8B5CF6",
+  "De Luca Townhouse": "#059669",
+  "Visconti Showroom": "#EC4899",
+};
+
+const DEFAULT_ASSIGNEE = {
+  initials: "PN",
+  color: "#7C3AED",
+  name: "Priya Nair",
+};
+
+function formatDisplayDate(isoDate: string): string {
+  const d = new Date(`${isoDate}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return isoDate;
+  return d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function isOverdue(isoDate: string): boolean {
+  const due = new Date(`${isoDate}T23:59:59`);
+  if (Number.isNaN(due.getTime())) return false;
+  return due < new Date();
+}
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
 function GradBtn({
@@ -853,15 +891,302 @@ function TaskDetailModal({
   );
 }
 
+// ── TASK CREATE MODAL ─────────────────────────────────────────────────────────
+function TaskCreateModal({
+  onClose,
+  onCreate,
+}: {
+  onClose: () => void;
+  onCreate: (task: MockTask) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [project, setProject] = useState<string>(CREATE_PROJECTS[0]);
+  const [priority, setPriority] = useState<MockPriority>("medium");
+  const [status, setStatus] = useState<MockTaskStatus>("todo");
+  const [dueDate, setDueDate] = useState(new Date().toISOString().slice(0, 10));
+  const [titleFocused, setTitleFocused] = useState(false);
+  const [descFocused, setDescFocused] = useState(false);
+
+  const canSubmit = title.trim().length > 0;
+
+  const submit = () => {
+    if (!canSubmit) return;
+    onCreate({
+      id: Date.now(),
+      title: title.trim(),
+      project,
+      projectColor: PROJECT_COLORS[project] ?? T.teal,
+      priority,
+      dueDate: formatDisplayDate(dueDate),
+      overdue: isOverdue(dueDate),
+      status,
+      assignee: DEFAULT_ASSIGNEE,
+      description: description.trim(),
+      comments: [],
+    });
+    onClose();
+  };
+
+  const fieldLabelStyle = {
+    fontSize: 10,
+    color: T.gray400,
+    fontWeight: 600 as const,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.06em",
+  };
+
+  const inputStyle = {
+    width: "100%" as const,
+    padding: "9px 12px",
+    borderRadius: 9,
+    border: `1.5px solid ${T.border}`,
+    background: T.gray50,
+    boxShadow: S.inset,
+    fontFamily: "inherit",
+    fontSize: 13,
+    color: T.navy,
+    outline: "none",
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 400,
+        background: "rgba(27,42,74,0.28)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backdropFilter: "blur(4px)",
+        padding: 32,
+      }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <style>{`@keyframes modalIn{from{opacity:0;transform:scale(0.97) translateY(8px)}to{opacity:1;transform:none}}`}</style>
+      <div
+        style={{
+          background: T.white,
+          borderRadius: 18,
+          width: "100%",
+          maxWidth: 520,
+          boxShadow: S.modal,
+          display: "flex",
+          flexDirection: "column",
+          maxHeight: "88vh",
+          animation: "modalIn 200ms ease-out",
+        }}
+      >
+        <div
+          style={{
+            padding: "22px 26px 18px",
+            borderBottom: `1px solid ${T.border}`,
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: 11,
+                color: T.teal,
+                fontWeight: 600,
+                marginBottom: 6,
+              }}
+            >
+              Create task
+            </div>
+            <h2
+              style={{
+                fontSize: 19,
+                fontWeight: 700,
+                color: T.navy,
+                margin: 0,
+              }}
+            >
+              New Task
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 9,
+              border: "none",
+              background: T.gray100,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <span
+              className="material-icons-outlined"
+              style={{ fontSize: 17, color: T.gray500 }}
+            >
+              close
+            </span>
+          </button>
+        </div>
+
+        <div
+          style={{
+            padding: "20px 26px",
+            overflowY: "auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={fieldLabelStyle}>Title</span>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onFocus={() => setTitleFocused(true)}
+              onBlur={() => setTitleFocused(false)}
+              placeholder="What needs to be done?"
+              style={{
+                ...inputStyle,
+                borderColor: titleFocused ? T.teal : T.border,
+              }}
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={fieldLabelStyle}>Project</span>
+            <select
+              value={project}
+              onChange={(e) => setProject(e.target.value)}
+              style={{ ...inputStyle, cursor: "pointer" }}
+            >
+              {CREATE_PROJECTS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 12,
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={fieldLabelStyle}>Priority</span>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as MockPriority)}
+                style={{ ...inputStyle, cursor: "pointer" }}
+              >
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={fieldLabelStyle}>Status</span>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as MockTaskStatus)}
+                style={{ ...inputStyle, cursor: "pointer" }}
+              >
+                {STATUS_ORDER.map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_CFG[s].label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={fieldLabelStyle}>Due date</span>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              style={{ ...inputStyle, cursor: "pointer" }}
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={fieldLabelStyle}>Description</span>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              onFocus={() => setDescFocused(true)}
+              onBlur={() => setDescFocused(false)}
+              placeholder="Optional details…"
+              rows={3}
+              style={{
+                ...inputStyle,
+                resize: "vertical",
+                borderColor: descFocused ? T.teal : T.border,
+                minHeight: 72,
+              }}
+            />
+          </div>
+        </div>
+
+        <div
+          style={{
+            padding: "14px 26px 20px",
+            borderTop: `1px solid ${T.border}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: 10,
+          }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: 13,
+              color: T.gray500,
+              fontWeight: 500,
+              padding: "8px 14px",
+            }}
+          >
+            Cancel
+          </button>
+          <GradBtn
+            label="Create Task"
+            icon="add"
+            onClick={canSubmit ? submit : undefined}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── MY TASKS LIST ─────────────────────────────────────────────────────────────
 function MyTasksList({
-  tasks: propTasks,
+  tasks,
+  setTasks,
   onOpenTask,
+  onOpenCreate,
 }: {
-  tasks?: MockTask[];
+  tasks: MockTask[];
+  setTasks: Dispatch<SetStateAction<MockTask[]>>;
   onOpenTask: (t: MockTask) => void;
+  onOpenCreate: () => void;
 }) {
-  const [tasks, setTasks] = useState<MockTask[]>(propTasks ?? MOCK_TASKS);
   const [search, setSearch] = useState("");
   const [priorityFilter, setPriorityFilter] = useState<
     MockPriority | "all"
@@ -958,7 +1283,7 @@ function MyTasksList({
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <ViewToggle view="list" setView={() => {}} />
-          <GradBtn label="New Task" icon="add" small />
+          <GradBtn label="New Task" icon="add" small onClick={onOpenCreate} />
         </div>
       </div>
 
@@ -1189,7 +1514,7 @@ function MyTasksList({
               Try adjusting filters or create a new task.
             </div>
           </div>
-          <GradBtn label="Create Task" icon="add" />
+          <GradBtn label="Create Task" icon="add" onClick={onOpenCreate} />
         </div>
       ) : (
         <div
@@ -1380,24 +1705,20 @@ function TaskRow({
 
 // ── TASK BOARD (KANBAN) ───────────────────────────────────────────────────────
 function TaskBoard({
-  tasks: propTasks,
+  tasks,
+  setTasks,
   onOpenTask,
+  onOpenCreate,
 }: {
-  tasks?: MockTask[];
+  tasks: MockTask[];
+  setTasks: Dispatch<SetStateAction<MockTask[]>>;
   onOpenTask: (t: MockTask) => void;
+  onOpenCreate: () => void;
 }) {
-  const [tasks, setTasks] = useState<MockTask[]>(propTasks ?? MOCK_TASKS);
   const [project, setProject] = useState("All Projects");
   const [projOpen, setProjOpen] = useState(false);
 
-  const projects = [
-    "All Projects",
-    "Marchetti Villa",
-    "Bianchi Office",
-    "Romano Penthouse",
-    "De Luca Townhouse",
-    "Visconti Showroom",
-  ];
+  const projects = ["All Projects", ...CREATE_PROJECTS];
 
   const filtered =
     project === "All Projects"
@@ -1529,7 +1850,7 @@ function TaskBoard({
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <ViewToggle view="board" setView={() => {}} />
-          <GradBtn label="New Task" icon="add" small />
+          <GradBtn label="New Task" icon="add" small onClick={onOpenCreate} />
         </div>
       </div>
 
@@ -1837,15 +2158,18 @@ function KanbanCard({
 // ── MAIN EXPORT ───────────────────────────────────────────────────────────────
 export function TasksWorkspace({
   initialView = "list",
-  tasks,
+  tasks: initialTasks,
 }: {
   initialView?: "list" | "board";
   tasks?: MockTask[];
 }) {
   const [view, setView] = useState<"list" | "board">(initialView);
+  const [tasks, setTasks] = useState<MockTask[]>(initialTasks ?? MOCK_TASKS);
   const [selectedTask, setSelectedTask] = useState<MockTask | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   const handleSetView = (v: "list" | "board") => setView(v);
+  const openCreate = () => setShowCreate(true);
 
   return (
     <div style={{ position: "relative" }}>
@@ -1859,19 +2183,29 @@ export function TasksWorkspace({
       {view === "list" && (
         <MyTasksList
           tasks={tasks}
+          setTasks={setTasks}
           onOpenTask={(t) => setSelectedTask(t)}
+          onOpenCreate={openCreate}
         />
       )}
       {view === "board" && (
         <TaskBoard
           tasks={tasks}
+          setTasks={setTasks}
           onOpenTask={(t) => setSelectedTask(t)}
+          onOpenCreate={openCreate}
         />
       )}
       {selectedTask && (
         <TaskDetailModal
           task={selectedTask}
           onClose={() => setSelectedTask(null)}
+        />
+      )}
+      {showCreate && (
+        <TaskCreateModal
+          onClose={() => setShowCreate(false)}
+          onCreate={(task) => setTasks((prev) => [task, ...prev])}
         />
       )}
     </div>

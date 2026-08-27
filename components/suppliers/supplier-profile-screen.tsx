@@ -12,6 +12,8 @@ import {
   StatusPill,
   StatusToggle,
 } from "@/components/suppliers/supplier-ui";
+import { VendorTasksTab } from "@/components/suppliers/vendor-tasks-tab";
+import { getSupplierLinkedProjects, type SupplierLinkedProject } from "@/lib/projects/mock-project-links";
 import {
   CATEGORY_CFG,
   DELIVERY_STATUS_CFG,
@@ -23,23 +25,17 @@ import {
   type SupplierOrder,
   type SupplierRate,
 } from "@/lib/suppliers/mock-suppliers";
-import { NAV_ROUTES } from "@/types/navigation";
+import { NAV_ROUTES, projectRoute } from "@/types/navigation";
 import { cn } from "@/lib/utils";
 
-type Tab = "overview" | "rates" | "orders" | "projects";
+type Tab = "overview" | "rates" | "orders" | "projects" | "tasks";
 
 const TABS = [
   { id: "overview" as Tab, label: "Overview", icon: "business" },
   { id: "rates" as Tab, label: "Rates & Terms", icon: "price_change" },
   { id: "orders" as Tab, label: "Order History", icon: "local_shipping" },
   { id: "projects" as Tab, label: "Linked Projects", icon: "folder_open" },
-];
-
-const LINKED_PROJECTS = [
-  { name: "Marchetti Residence", phase: "Design Development", status: "on-track", role: "Kitchen & wardrobe supply" },
-  { name: "Ferretti Villa", phase: "Installation", status: "on-track", role: "Custom furniture suite" },
-  { name: "Bianchi Penthouse", phase: "Procurement", status: "at-risk", role: "Bedroom furniture" },
-  { name: "Romano Gallery", phase: "Concept Design", status: "on-track", role: "Display cabinetry" },
+  { id: "tasks" as Tab, label: "Tasks & Deadlines", icon: "task_alt" },
 ];
 
 const PROJECT_STATUS_CFG: Record<string, { label: string; color: string; bg: string }> = {
@@ -330,12 +326,22 @@ function OrdersTab({ supplierId }: { supplierId: number }) {
   );
 }
 
-function ProjectsTab() {
+function ProjectsTab({ supplierId }: { supplierId: number }) {
+  const projects = getSupplierLinkedProjects(supplierId);
+
+  if (projects.length === 0) {
+    return (
+      <div className="rounded-[14px] border border-dashed border-[var(--figma-border)] bg-white px-4 py-8 text-center text-[13px] text-[var(--figma-gray400)]">
+        No projects linked to this supplier.
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3">
-      {LINKED_PROJECTS.map((p) => {
+      {projects.map((p) => {
         const s = PROJECT_STATUS_CFG[p.status]!;
-        return <LinkedProjectCard key={p.name} project={p} statusCfg={s} />;
+        return <LinkedProjectCard key={p.projectId} project={p} statusCfg={s} />;
       })}
     </div>
   );
@@ -345,17 +351,18 @@ function LinkedProjectCard({
   project: p,
   statusCfg: s,
 }: {
-  project: (typeof LINKED_PROJECTS)[0];
+  project: SupplierLinkedProject;
   statusCfg: { label: string; color: string; bg: string };
 }) {
   const [hov, setHov] = useState(false);
 
   return (
-    <div
+    <Link
+      href={projectRoute(p.projectId)}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       className={cn(
-        "flex cursor-pointer items-center gap-4 rounded-[14px] bg-white p-4 transition-all duration-200 neu-card",
+        "flex cursor-pointer items-center gap-4 rounded-[14px] bg-white p-4 no-underline transition-all duration-200 neu-card",
         hov && "neu-card-hover -translate-y-px",
       )}
     >
@@ -370,7 +377,7 @@ function LinkedProjectCard({
       </div>
       <StatusPill label={s.label} color={s.color} bg={s.bg} />
       <MaterialIcon name="chevron_right" outlined size={18} className="text-[var(--figma-gray400)]" />
-    </div>
+    </Link>
   );
 }
 
@@ -458,7 +465,8 @@ export function SupplierProfileScreen({ supplierId }: { supplierId: number }) {
       {tab === "overview" && <OverviewTab supplier={supplier} />}
       {tab === "rates" && <RatesTab supplierId={supplierId} />}
       {tab === "orders" && <OrdersTab supplierId={supplierId} />}
-      {tab === "projects" && <ProjectsTab />}
+      {tab === "projects" && <ProjectsTab supplierId={supplierId} />}
+      {tab === "tasks" && <VendorTasksTab partyKind="supplier" partyId={supplierId} />}
     </div>
   );
 }

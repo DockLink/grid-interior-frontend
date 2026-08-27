@@ -3,6 +3,7 @@ import type {
   BoqLineItem,
   ExecutionStage,
   SiteSubStage,
+  SiteSubStageStatus,
   SupplierQuote,
 } from "@/types/execution";
 
@@ -30,7 +31,8 @@ export const EXECUTION_STAGES: ExecutionStage[] = [
   {
     id: 1,
     name: "BOQ Development",
-    detail: "Bill of Quantities built from confirmed detail drawings. Connected to the supplier module. Up to 3 quotations per line item.",
+    detail:
+      "Bill of Quantities built from confirmed detail drawings and sent to the client. Connected to the supplier module — up to 3 quotations per line item. BOQ development is a paid service when the deal is given.",
     status: "complete",
     icon: "receipt_long",
   },
@@ -862,3 +864,182 @@ export const SITE_SUBSTAGES: SiteSubStage[] = [
 ];
 
 export const SITE_TOTAL_DAYS = 52;
+
+/** Calendar start for site day 1 — aligns Client View key dates with Execution. */
+export const SITE_EXECUTION_START_ISO = "2026-10-01";
+
+/** Client Gantt week where site day 1 begins (Site Execution phase). */
+export const SITE_EXECUTION_GANTT_START_WEEK = 14;
+
+let siteSubstages: SiteSubStage[] = SITE_SUBSTAGES.map((s) => ({ ...s }));
+const siteListeners = new Set<() => void>();
+
+function emitSiteSubstages() {
+  for (const listener of siteListeners) listener();
+}
+
+export function subscribeSiteSubstages(listener: () => void): () => void {
+  siteListeners.add(listener);
+  return () => {
+    siteListeners.delete(listener);
+  };
+}
+
+export function getSiteSubstagesSnapshot(): SiteSubStage[] {
+  return siteSubstages;
+}
+
+function canMarkComplete(stage: SiteSubStage, all: SiteSubStage[]): boolean {
+  if (!stage.blockedBy) return true;
+  const gate = all.find((s) => s.id === stage.blockedBy);
+  return gate?.status === "complete";
+}
+
+export function resolveSiteSubstages(stages: SiteSubStage[]): SiteSubStage[] {
+  return stages.map((s) => {
+    if (s.blockedBy && !canMarkComplete(s, stages) && s.status !== "complete") {
+      return { ...s, status: "blocked" as const };
+    }
+    if (s.blockedBy && canMarkComplete(s, stages) && s.status === "blocked") {
+      return { ...s, status: "upcoming" as const };
+    }
+    return s;
+  });
+}
+
+export function cycleSiteSubstageStatus(id: string): void {
+  siteSubstages = resolveSiteSubstages(
+    siteSubstages.map((s) => {
+      if (s.id !== id) return s;
+      if (s.status === "blocked" && !canMarkComplete(s, siteSubstages)) return s;
+      if (s.status === "complete") {
+        const next: SiteSubStageStatus = s.blockedBy ? "blocked" : "upcoming";
+        return { ...s, status: next };
+      }
+      if (s.status === "upcoming" || s.status === "blocked") {
+        return { ...s, status: "in-progress" };
+      }
+      return { ...s, status: "complete" };
+    }),
+  );
+  emitSiteSubstages();
+}
+
+export function formatSiteDayDate(startDay: number): string {
+  const base = new Date(`${SITE_EXECUTION_START_ISO}T00:00:00`);
+  base.setDate(base.getDate() + startDay - 1);
+  return base.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+export type ClientSiteKeyDateStatus = "upcoming" | "completed" | "active";
+
+export interface ClientSiteKeyDate {
+  id: string;
+  label: string;
+  date: string;
+  icon: string;
+  status: ClientSiteKeyDateStatus;
+  stageId: string;
+}
+
+function mapSiteStatusToKeyDate(
+  status: SiteSubStageStatus,
+): ClientSiteKeyDateStatus {
+  if (status === "complete") return "completed";
+  if (status === "in-progress") return "active";
+  return "upcoming";
+}
+
+const KEY_DATE_STAGE_MAP: {
+  id: string;
+  label: string;
+  icon: string;
+  stageId: string;
+}[] = [
+  {
+    id: "furniture",
+    label: "Furniture delivery",
+    icon: "weekend",
+    stageId: "6.9",
+  },
+  { id: "start", label: "Project start", icon: "flag", stageId: "6.1" },
+  {
+    id: "handover",
+    label: "Handover",
+    icon: "handshake",
+    stageId: "6.13",
+  },
+];
+
+/** Derive Client View key dates from live site substages (internal → client sync). */
+export function getClientKeyDatesFromSite(
+  stages: SiteSubStage[] = getSiteSubstagesSnapshot(),
+): ClientSiteKeyDate[] {
+  const byId = new Map(stages.map((s) => [s.id, s]));
+  return KEY_DATE_STAGE_MAP.map((m) => {
+    const stage = byId.get(m.stageId);
+    return {
+      id: m.id,
+      label: m.label,
+      date: stage ? formatSiteDayDate(stage.startDay) : "—",
+      icon: m.icon,
+      status: stage ? mapSiteStatusToKeyDate(stage.status) : "upcoming",
+      stageId: m.stageId,
+    };
+  });
+}
+
+export function getSiteExecutionProgress(
+  stages: SiteSubStage[] = getSiteSubstagesSnapshot(),
+): { progress: number; status: "completed" | "active" | "upcoming" } {
+  const total = stages.length || 1;
+  const complete = stages.filter((s) => s.status === "complete").length;
+  const inProgress = stages.some((s) => s.status === "in-progress");
+  const progress = Math.round((complete / total) * 100);
+  if (complete === total) return { progress: 100, status: "completed" };
+  if (inProgress || complete > 0) return { progress, status: "active" };
+  return { progress: 0, status: "upcoming" };
+}
+
+export interface SiteOverlapBar {
+  id: string;
+  name: string;
+  startWeek: number;
+  durationWeeks: number;
+  color: string;
+  status: SiteSubStageStatus;
+}
+
+const OVERLAP_COLORS = [
+  "#1B2A4A",
+  "#0E7C86",
+  "#7C3AED",
+  "#D97706",
+  "#0891B2",
+  "#BE185D",
+  "#EF4444",
+  "#8B5CF6",
+  "#3FA66B",
+  "#F59E0B",
+  "#0284C7",
+  "#64748B",
+  "#0E7C86",
+];
+
+/** Map site substages onto the internal Gantt week axis for Timeline. */
+export function getSiteOverlapBarsFromSite(
+  stages: SiteSubStage[] = getSiteSubstagesSnapshot(),
+): SiteOverlapBar[] {
+  return stages.map((s, i) => ({
+    id: s.number,
+    name: s.name,
+    startWeek: SITE_EXECUTION_GANTT_START_WEEK + (s.startDay - 1) / 7,
+    durationWeeks: Math.max(s.durationDays / 7, 0.35),
+    color: OVERLAP_COLORS[i % OVERLAP_COLORS.length],
+    status: s.status,
+  }));
+}

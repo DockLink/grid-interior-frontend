@@ -3,10 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 
+import {
+  CommLogAttachmentChips,
+  CommLogAttachmentPicker,
+  currentCommLogTime,
+  formatCommLogDate,
+  revokeAttachmentUrls,
+} from "@/components/clients/comm-log-attachments";
 import { DemoCaption } from "@/components/demo/demo-caption";
 import { GradientButton, OutlineButton } from "@/components/clients/client-ui";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
-import { CLIENTS, COMM_LOG } from "@/lib/clients/mock-clients";
+import { CLIENTS, COMM_LOG, type CommLogAttachment, type CommLogEntry } from "@/lib/clients/mock-clients";
 import { clientRoute } from "@/types/navigation";
 import { cn } from "@/lib/utils";
 
@@ -25,18 +32,27 @@ const FILTER_CHIPS: { id: LogType; label: string; icon: string }[] = [
   { id: "meeting", label: "Meetings", icon: "groups" },
 ];
 
+const MEMBER_INITIALS: Record<string, string> = {
+  "Sofia Marchetti": "SM",
+  "Chiara Romano": "CR",
+  "Lorenzo Pieri": "LP",
+};
+
+const TYPE_MAP = { Call: "call", Email: "email", Meeting: "meeting" } as const;
+
 export function CommLogScreen({ clientId }: { clientId: number }) {
   const [filter, setFilter] = useState<LogType>("all");
   const [showModal, setShowModal] = useState(false);
+  const [entries, setEntries] = useState<CommLogEntry[]>(COMM_LOG);
   const client = CLIENTS.find((c) => c.id === clientId) ?? CLIENTS[0];
 
-  const filtered = COMM_LOG.filter((e) => filter === "all" || e.type === filter);
+  const filtered = entries.filter((e) => filter === "all" || e.type === filter);
 
   const counts = {
-    all: COMM_LOG.length,
-    call: COMM_LOG.filter((e) => e.type === "call").length,
-    email: COMM_LOG.filter((e) => e.type === "email").length,
-    meeting: COMM_LOG.filter((e) => e.type === "meeting").length,
+    all: entries.length,
+    call: entries.filter((e) => e.type === "call").length,
+    email: entries.filter((e) => e.type === "email").length,
+    meeting: entries.filter((e) => e.type === "meeting").length,
   };
 
   return (
@@ -131,7 +147,17 @@ export function CommLogScreen({ clientId }: { clientId: number }) {
       </div>
 
       {showModal ? (
-        <LogCommModal onClose={() => setShowModal(false)} clientName={client.name} clientInitials={client.initials} clientColor={client.color} />
+        <LogCommModal
+          onClose={() => setShowModal(false)}
+          onSave={(entry) => {
+            setEntries((prev) => [entry, ...prev]);
+            setShowModal(false);
+          }}
+          nextId={Math.max(0, ...entries.map((e) => e.id)) + 1}
+          clientName={client.name}
+          clientInitials={client.initials}
+          clientColor={client.color}
+        />
       ) : null}
     </div>
   );
@@ -141,7 +167,7 @@ function TimelineEntry({
   entry,
   isLast,
 }: {
-  entry: (typeof COMM_LOG)[0];
+  entry: CommLogEntry;
   isLast: boolean;
 }) {
   const cfg = TYPE_CFG[entry.type];
@@ -197,7 +223,14 @@ function TimelineEntry({
             </button>
           </div>
         </div>
-        <p className="m-0 text-[13px] leading-relaxed text-[var(--figma-gray500)]">{entry.note}</p>
+        {entry.note ? (
+          <p className="m-0 text-[13px] leading-relaxed text-[var(--figma-gray500)]">{entry.note}</p>
+        ) : null}
+        {entry.attachments?.length ? (
+          <div className={entry.note ? "mt-3" : undefined}>
+            <CommLogAttachmentChips attachments={entry.attachments} />
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -205,19 +238,25 @@ function TimelineEntry({
 
 function LogCommModal({
   onClose,
+  onSave,
+  nextId,
   clientName,
   clientInitials,
   clientColor,
 }: {
   onClose: () => void;
+  onSave: (entry: CommLogEntry) => void;
+  nextId: number;
   clientName: string;
   clientInitials: string;
   clientColor: string;
 }) {
   const [type, setType] = useState<"Call" | "Email" | "Meeting">("Call");
   const [date, setDate] = useState("2025-07-31");
+  const [member, setMember] = useState("Sofia Marchetti");
   const [notes, setNotes] = useState("");
   const [notesFocus, setNotesFocus] = useState(false);
+  const [attachments, setAttachments] = useState<CommLogAttachment[]>([]);
 
   const TYPE_ICONS = {
     Call: { icon: "phone", color: "var(--figma-success)" },
@@ -225,13 +264,34 @@ function LogCommModal({
     Meeting: { icon: "groups", color: "var(--figma-navy)" },
   };
 
+  const discardAndClose = () => {
+    revokeAttachmentUrls(attachments);
+    onClose();
+  };
+
+  const handleSave = () => {
+    onSave({
+      id: nextId,
+      type: TYPE_MAP[type],
+      date: formatCommLogDate(date),
+      time: currentCommLogTime(),
+      member,
+      initials: MEMBER_INITIALS[member] ?? member.slice(0, 2).toUpperCase(),
+      note: notes,
+      attachments: attachments.length > 0 ? attachments : undefined,
+    });
+  };
+
   return (
     <div
       className="fixed inset-0 z-[300] flex items-center justify-center bg-[rgba(27,42,74,0.22)] backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onClick={(e) => e.target === e.currentTarget && discardAndClose()}
     >
-      <div className="hub-modal-in relative w-full max-w-[500px] rounded-[20px] bg-white px-9 py-8" style={{ boxShadow: "var(--neu-modal)" }}>
-        <div className="mb-6 flex items-start justify-between">
+      <div
+        className="hub-modal-in relative flex max-h-[90vh] w-full max-w-[500px] flex-col overflow-hidden rounded-[20px] bg-white px-9 py-8"
+        style={{ boxShadow: "var(--neu-modal)" }}
+      >
+        <div className="mb-6 flex shrink-0 items-start justify-between">
           <div>
             <h2 className="mb-1 text-lg font-semibold text-[var(--figma-navy)]">Log Communication</h2>
             <div className="flex items-center gap-2">
@@ -246,14 +306,14 @@ function LogCommModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={discardAndClose}
             className="flex size-8 items-center justify-center rounded-lg border-none bg-[var(--figma-gray100)]"
           >
             <MaterialIcon name="close" outlined size={18} className="text-[var(--figma-gray500)]" />
           </button>
         </div>
 
-        <div className="flex flex-col gap-5">
+        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto pr-1">
           <div>
             <label className="mb-2 block text-[13px] font-medium text-[var(--figma-navy)]">Communication Type</label>
             <div className="flex gap-2">
@@ -311,7 +371,11 @@ function LogCommModal({
             <div className="flex flex-col gap-1.5">
               <label className="text-[13px] font-medium text-[var(--figma-navy)]">Assigned Team Member</label>
               <div className="relative">
-                <select className="w-full cursor-pointer appearance-none rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white py-2.5 pl-3 pr-8 text-[13px] text-[var(--figma-navy)] outline-none neu-inset">
+                <select
+                  value={member}
+                  onChange={(e) => setMember(e.target.value)}
+                  className="w-full cursor-pointer appearance-none rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white py-2.5 pl-3 pr-8 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
+                >
                   <option>Sofia Marchetti</option>
                   <option>Chiara Romano</option>
                   <option>Lorenzo Pieri</option>
@@ -344,13 +408,15 @@ function LogCommModal({
             />
             <span className="text-right text-[11px] text-[var(--figma-gray400)]">{notes.length} chars</span>
           </div>
+
+          <CommLogAttachmentPicker files={attachments} onChange={setAttachments} />
         </div>
 
-        <div className="mt-6 flex gap-2.5">
-          <OutlineButton onClick={onClose} className="flex-1">
+        <div className="mt-6 flex shrink-0 gap-2.5">
+          <OutlineButton onClick={discardAndClose} className="flex-1">
             Cancel
           </OutlineButton>
-          <GradientButton icon="save" onClick={onClose} className="flex-[2]">
+          <GradientButton icon="save" onClick={handleSave} className="flex-[2]">
             Save Log Entry
           </GradientButton>
         </div>
