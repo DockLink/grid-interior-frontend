@@ -7,6 +7,7 @@ import {
   FileText,
   FolderOpen,
   Home,
+  Layers,
   LogOut,
   Settings,
   Shield,
@@ -16,21 +17,16 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { LOGIN_T } from "@/components/auth/login-tokens";
 import { useAuth } from "@/hooks/use-auth";
 import { useLastProjectId } from "@/hooks/use-last-project-id";
 import { useUserPreferences } from "@/components/providers/user-preferences-provider";
-import { BRAND_WORDMARK } from "@/lib/constants";
 import {
   isProjectNavActive,
   resolveProjectNavHref,
 } from "@/lib/navigation/last-project";
-import {
-  ROLE_LABEL,
-  toSidebarRole,
-  type SidebarRole,
-} from "@/lib/navigation/sidebar-role";
+import { toSidebarRole, type SidebarRole } from "@/lib/navigation/sidebar-role";
 import { resolveHomeRoute } from "@/lib/navigation/home-route";
-import { getUserDisplayName, getUserInitials } from "@/lib/user/display";
 import { NAV_ROUTES } from "@/types/navigation";
 import {
   Sidebar,
@@ -130,7 +126,11 @@ function buildFigmaNav(
     title: "Timeline & Reports",
     href: resolveProjectNavHref("timeline", lastProjectId),
     icon: Timeline,
-    isActive: (pathname) => isProjectNavActive(pathname, "timeline"),
+    isActive: (pathname) =>
+      isProjectNavActive(pathname, "timeline") ||
+      isProjectNavActive(pathname, "milestones") ||
+      isProjectNavActive(pathname, "client-view") ||
+      isProjectNavActive(pathname, "materials"),
   });
 
   if (role === "admin" || role === "superadmin") {
@@ -212,8 +212,6 @@ export function AppSidebar({
   const sidebarRole = toSidebarRole(primaryRole);
   const homePage = resolveHomeRoute(primaryRole, preferences);
   const navItems = buildFigmaNav(sidebarRole, homePage, lastProjectId);
-  const displayName = getUserDisplayName(user);
-  const initials = getUserInitials(user);
 
   const secondary: NavItem[] = [
     {
@@ -232,39 +230,20 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
-      <SidebarHeader className="gap-4 border-b border-white/8 px-4 py-5">
-        <div className="flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-[#0FA8A0] text-[13px] font-bold text-white">
-            GI
+      <SidebarHeader className="border-b border-white/8 px-4 py-5">
+        <Link href={homePage} className="flex items-center gap-2.5">
+          <div
+            className="flex size-8 shrink-0 items-center justify-center rounded-lg"
+            style={{
+              background: `linear-gradient(135deg, ${LOGIN_T.teal}, ${LOGIN_T.navy})`,
+            }}
+          >
+            <Layers className="size-4 text-white" aria-hidden />
           </div>
-          <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-            <div className="truncate text-[15px] font-semibold text-white">
-              {BRAND_WORDMARK}
-            </div>
-            <div className="text-[11px] tracking-wide text-white/45">Studio OS</div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#0FA8A0] to-[#0B2545] text-[11px] font-semibold text-white">
-            {initials}
-          </div>
-          <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-            <div className="truncate text-[13px] font-medium text-white">{displayName}</div>
-            <div className="truncate text-[11px] text-white/45">{ROLE_LABEL[sidebarRole]}</div>
-          </div>
-          <span className="rounded-full bg-[rgba(15,168,160,0.18)] px-2 py-0.5 text-[10px] font-semibold text-[#0FA8A0] group-data-[collapsible=icon]:hidden">
-            {sidebarRole === "superadmin"
-              ? "Super"
-              : sidebarRole === "admin"
-                ? "Admin"
-                : sidebarRole === "lead"
-                  ? "Lead"
-                  : sidebarRole === "guest"
-                    ? "Guest"
-                    : "Member"}
+          <span className="truncate text-[15px] font-semibold text-white group-data-[collapsible=icon]:hidden">
+            Grid Interior
           </span>
-        </div>
+        </Link>
       </SidebarHeader>
 
       <SidebarContent className="gap-1 py-2">

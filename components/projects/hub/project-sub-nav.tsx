@@ -13,6 +13,9 @@ const FIGMA_TABS: { key: ProjectTab; label: string; icon: string }[] = [
   { key: "tasks", label: "Tasks", icon: "task_alt" },
   { key: "files", label: "Documents", icon: "description" },
   { key: "timeline", label: "Timeline", icon: "timeline" },
+  { key: "milestones", label: "Milestones", icon: "flag" },
+  { key: "client-view", label: "Client View", icon: "person_outline" },
+  { key: "materials", label: "Materials", icon: "inventory_2" },
   { key: "links", label: "Suppliers & Clients", icon: "handshake" },
 ];
 

@@ -8,13 +8,35 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
 import { DemoCaption } from "@/components/demo/demo-caption";
+import { MilestoneManagementModal } from "@/components/projects/milestone-management-modal";
+import { AddMaterialItemDialog } from "@/components/timeline/add-material-item-dialog";
 import { openTimelinePrintWindow } from "@/components/timeline/timeline-print";
 import { useActiveProjectView } from "@/hooks/use-active-project-view";
+import { useProjectLinks } from "@/hooks/use-project-links";
+import { useProjectTaskables } from "@/hooks/use-project-taskables";
 import { useProjectTimeline } from "@/hooks/use-project-timeline";
+import { useVendorTasks } from "@/hooks/use-vendor-tasks";
+import { handleApiError } from "@/lib/api/handle-api-error";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import {
+  averagePhaseProgress,
+  findSiteExecutionStage,
+  isSiteExecutionPhase,
+  mapClientKeyDates,
+  mapSiteSubstageCards,
+  siteProgressFromCards,
+  type ClientKeyDateCard,
+  type ClientSubStageCard,
+} from "@/lib/timeline/map-client-view";
+import {
+  mapVendorTasksToMaterialItems,
+  materialItemsHaveNumericValue,
+  sumMaterialValues,
+} from "@/lib/timeline/map-materials";
 import {
   formatSiteDayDate,
   getClientKeyDatesFromSite,
@@ -81,7 +103,7 @@ const S = {
     "16px 16px 40px rgba(163,177,198,0.45), -10px -10px 28px rgba(255,255,255,0.95)",
 };
 
-type TimelineView = "gantt" | "milestones" | "client" | "materials";
+export type TimelineView = "gantt" | "milestones" | "client" | "materials";
 
 interface TimelineLiveData {
   phases: GanttPhase[];
@@ -215,83 +237,6 @@ function Avatar({
       <span style={{ fontSize: size * 0.36, fontWeight: 700, color: T.white }}>
         {initials}
       </span>
-    </div>
-  );
-}
-
-// ── TAB BAR ───────────────────────────────────────────────────────────────────
-const TABS = [
-  { id: "gantt" as TimelineView, label: "Timeline", icon: "timeline" },
-  {
-    id: "milestones" as TimelineView,
-    label: "Milestones",
-    icon: "flag",
-  },
-  {
-    id: "client" as TimelineView,
-    label: "Client View",
-    icon: "person_outline",
-  },
-  {
-    id: "materials" as TimelineView,
-    label: "Materials",
-    icon: "inventory_2",
-  },
-];
-
-function TabBar({
-  view,
-  setView,
-}: {
-  view: TimelineView;
-  setView: (v: TimelineView) => void;
-}) {
-  return (
-    <div
-      style={{
-        background: T.white,
-        borderBottom: `1px solid ${T.border}`,
-        padding: "0 40px",
-        display: "flex",
-        gap: 2,
-        flexShrink: 0,
-      }}
-    >
-      {TABS.map((tab) => {
-        const active = view === tab.id;
-        return (
-          <button
-            key={tab.id}
-            onClick={() => setView(tab.id)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 7,
-              padding: "13px 18px",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontFamily: "inherit",
-              borderBottom: active
-                ? `2.5px solid ${T.teal}`
-                : "2.5px solid transparent",
-              color: active ? T.teal : T.gray500,
-              fontWeight: active ? 700 : 400,
-              fontSize: 13,
-              transition: "all 150ms",
-              marginBottom: -1,
-            }}
-          >
-            <span
-              className="material-icons-outlined"
-              style={{ fontSize: 16 }}
-            >
-              {tab.icon}
-            </span>
-            {tab.label}
-          </button>
-        );
-      })}
     </div>
   );
 }
@@ -1139,10 +1084,21 @@ function GanttChart() {
 
 // ── MILESTONES ────────────────────────────────────────────────────────────────
 function MilestonesView() {
+  const params = useParams();
+  const projectId = typeof params.projectId === "string" ? params.projectId : "";
   const projectName = useTimelineProjectName();
   const live = useTimelineLive();
   const authDisabled = isAuthDisabled();
+  const queryClient = useQueryClient();
+  const [showMilestoneManagement, setShowMilestoneManagement] = useState(false);
   const milestones = live.milestones;
+
+  async function refreshMilestones() {
+    await queryClient.invalidateQueries({
+      queryKey: ["projects", "taskables", projectId, "MILESTONE"],
+    });
+  }
+
   return (
     <div style={{ padding: "28px 40px" }}>
       <div
@@ -1183,7 +1139,18 @@ function MilestonesView() {
               toast.success("Excel file downloaded");
             }}
           />
-          <GradBtn label="Add Milestone" icon="add" small />
+          <GradBtn
+            label="Add Milestone"
+            icon="add"
+            small
+            onClick={() => {
+              if (authDisabled) {
+                toast.message("Connect auth to add milestones");
+                return;
+              }
+              setShowMilestoneManagement(true);
+            }}
+          />
         </div>
       </div>
 
@@ -1209,7 +1176,7 @@ function MilestonesView() {
 
         {milestones.length === 0 ? (
           <div style={{ padding: "12px 0", color: T.gray500, fontSize: 13 }}>
-            No milestones yet. Create milestones under a stage from the Tasks board.
+            No milestones yet. Click Add Milestone to create one under a stage.
           </div>
         ) : null}
 
@@ -1361,6 +1328,13 @@ function MilestonesView() {
           );
         })}
       </div>
+      {showMilestoneManagement && (
+        <MilestoneManagementModal
+          projectId={projectId}
+          onClose={() => setShowMilestoneManagement(false)}
+          onUpdated={() => void refreshMilestones()}
+        />
+      )}
     </div>
   );
 }
@@ -1377,22 +1351,62 @@ const SITE_STATUS_UI: Record<
 };
 
 function ClientView() {
+  const params = useParams();
+  const projectId = typeof params.projectId === "string" ? params.projectId : "";
   const projectName = useTimelineProjectName();
   const authDisabled = isAuthDisabled();
+  const live = useTimelineLive();
+  const { tasks: projectTasks, isLoading: tasksLoading } = useProjectTaskables(
+    projectId,
+    "TASK",
+    { limit: 200 },
+  );
   const siteStages = useSiteSubstages();
   const resolvedSite = resolveSiteSubstages(siteStages);
-  const keyDates = getClientKeyDatesFromSite(resolvedSite);
-  const siteProgress = getSiteExecutionProgress(resolvedSite);
+  const mockKeyDates = getClientKeyDatesFromSite(resolvedSite);
+  const mockSiteProgress = getSiteExecutionProgress(resolvedSite);
 
-  const phases = CLIENT_GANTT_PHASES.map((p) =>
+  const mockPhases = CLIENT_GANTT_PHASES.map((p) =>
     p.name === "Site Execution"
       ? {
           ...p,
-          progress: siteProgress.progress,
-          status: siteProgress.status,
+          progress: mockSiteProgress.progress,
+          status: mockSiteProgress.status,
         }
       : p,
   );
+
+  const mockSiteCards: ClientSubStageCard[] = resolvedSite.map((s) => ({
+    id: s.id,
+    number: s.number,
+    name: s.name,
+    detail: s.detail,
+    status: s.status,
+    dateLabel: formatSiteDayDate(s.startDay),
+    checkpoint: s.checkpoint,
+  }));
+
+  const liveSiteStage = findSiteExecutionStage(live.phases);
+  const liveSiteCards = liveSiteStage
+    ? mapSiteSubstageCards(projectTasks, liveSiteStage.stageId ?? "")
+    : [];
+  const liveSiteProgress = siteProgressFromCards(liveSiteCards);
+  const liveKeyDates = mapClientKeyDates({
+    projectStartIso: live.projectStartIso,
+    projectEndIso: live.projectEndIso,
+    projectStartLabel: live.projectStartLabel,
+    projectEndLabel: live.projectEndLabel,
+    milestones: live.milestones,
+  });
+
+  const phases = authDisabled ? mockPhases : live.phases;
+  const keyDates: ClientKeyDateCard[] = authDisabled ? mockKeyDates : liveKeyDates;
+  const siteCards = authDisabled ? mockSiteCards : liveSiteCards;
+  const siteProgress = authDisabled ? mockSiteProgress : liveSiteProgress;
+  const overallProgress = authDisabled ? 38 : averagePhaseProgress(phases);
+  const startLabel = authDisabled ? PROJECT_START : live.projectStartLabel;
+  const endLabel = authDisabled ? PROJECT_END : live.projectEndLabel;
+  const showSiteSection = authDisabled || Boolean(liveSiteStage);
 
   return (
     <div style={{ padding: "28px 40px" }}>
@@ -1568,7 +1582,7 @@ function ClientView() {
             Overall Project Progress
           </span>
           <span style={{ fontSize: 13, fontWeight: 700, color: T.teal }}>
-            38%
+            {overallProgress}%
           </span>
         </div>
         <div
@@ -1583,7 +1597,7 @@ function ClientView() {
           <div
             style={{
               height: "100%",
-              width: "38%",
+              width: `${overallProgress}%`,
               borderRadius: 5,
               background: `linear-gradient(90deg, ${T.navy}, ${T.teal})`,
               transition: "width 600ms ease",
@@ -1599,8 +1613,8 @@ function ClientView() {
             color: T.gray400,
           }}
         >
-          <span>{PROJECT_START}</span>
-          <span>{PROJECT_END}</span>
+          <span>{startLabel}</span>
+          <span>{endLabel}</span>
         </div>
       </div>
 
@@ -1624,10 +1638,15 @@ function ClientView() {
         >
           Project Phases
         </div>
+        {phases.length === 0 && (
+          <div style={{ fontSize: 13, color: T.gray500 }}>
+            No stages yet for this project.
+          </div>
+        )}
         {phases.map((phase, idx) => {
           const isCurrent = phase.status === "active";
           const isDone = phase.status === "completed";
-          const isSite = phase.name === "Site Execution";
+          const isSite = isSiteExecutionPhase(phase.name);
           const showProgress = isCurrent || (isSite && phase.progress > 0);
           return (
             <div
@@ -1781,7 +1800,7 @@ function ClientView() {
         })}
       </div>
 
-      {/* Site sub-stages — same grid format as key dates / Execution */}
+      {showSiteSection && (
       <div
         style={{
           background: T.white,
@@ -1805,10 +1824,17 @@ function ClientView() {
               Site Execution · Sub-stages
             </div>
             <div style={{ fontSize: 11, color: T.gray500, marginTop: 2 }}>
-              Live from internal Execution · {siteProgress.progress}% site complete
+              Live from project tasks · {siteProgress.progress}% site complete
             </div>
           </div>
         </div>
+        {!authDisabled && tasksLoading ? (
+          <div style={{ fontSize: 13, color: T.gray500 }}>Loading sub-stages…</div>
+        ) : siteCards.length === 0 ? (
+          <div style={{ fontSize: 13, color: T.gray500 }}>
+            No tasks under the Site / Execution stage yet.
+          </div>
+        ) : (
         <div
           style={{
             display: "grid",
@@ -1816,7 +1842,7 @@ function ClientView() {
             gap: 14,
           }}
         >
-          {resolvedSite.map((s) => {
+          {siteCards.map((s) => {
             const sc = SITE_STATUS_UI[s.status];
             return (
               <div
@@ -1908,7 +1934,7 @@ function ClientView() {
                       color: T.navy,
                     }}
                   >
-                    {formatSiteDayDate(s.startDay)}
+                    {s.dateLabel}
                   </span>
                   <span
                     style={{
@@ -1927,37 +1953,62 @@ function ClientView() {
             );
           })}
         </div>
+        )}
       </div>
+      )}
     </div>
   );
 }
 
 // ── MATERIALS TRACKER ─────────────────────────────────────────────────────────
 function MaterialsView() {
+  const params = useParams();
+  const projectId = typeof params.projectId === "string" ? params.projectId : "";
   const projectName = useTimelineProjectName();
   const authDisabled = isAuthDisabled();
   const [statusFilter, setStatusFilter] = useState<
     "all" | MaterialItem["status"]
   >("all");
   const [categoryOpen, setCategoryOpen] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
-  const categories = [
-    ...new Set(MATERIAL_ITEMS.map((m) => m.category)),
-  ];
+  const { tasks: vendorTasks, isLoading: vendorLoading, createTask, isCreating } =
+    useVendorTasks({ project_id: projectId });
+  const { links } = useProjectLinks(projectId);
 
-  const filtered = MATERIAL_ITEMS.filter(
-    (m) => statusFilter === "all" || m.status === statusFilter
+  const liveItems = useMemo(
+    () => mapVendorTasksToMaterialItems(vendorTasks, links),
+    [vendorTasks, links],
   );
+  const items = authDisabled ? MATERIAL_ITEMS : liveItems;
 
-  const grouped = categories.map((cat) => ({
-    category: cat,
-    items: filtered.filter((m) => m.category === cat),
-  })).filter((g) => g.items.length > 0);
+  const categories = [...new Set(items.map((m) => m.category))];
+  const filtered = items.filter(
+    (m) => statusFilter === "all" || m.status === statusFilter,
+  );
+  const grouped = categories
+    .map((cat) => ({
+      category: cat,
+      items: filtered.filter((m) => m.category === cat),
+    }))
+    .filter((g) => g.items.length > 0);
 
-  const totalValue = MATERIAL_ITEMS.reduce(
-    (sum, m) =>
-      sum + parseInt(m.value.replace(/[^0-9]/g, ""), 10),
-    0
+  const showValue = materialItemsHaveNumericValue(items);
+  const totalValue = sumMaterialValues(items);
+  const partyOptions = useMemo(
+    () => [
+      ...links.suppliers.map((s) => ({
+        partyKind: "supplier" as const,
+        partyId: s.id,
+        label: s.name,
+      })),
+      ...links.subVendors.map((s) => ({
+        partyKind: "subvendor" as const,
+        partyId: s.id,
+        label: s.name,
+      })),
+    ],
+    [links],
   );
 
   return (
@@ -1984,7 +2035,9 @@ function MaterialsView() {
             Materials & Procurement
           </h1>
           <p style={{ fontSize: 12, color: T.gray500, margin: 0 }}>
-            {projectName} · Total value: AED {totalValue.toLocaleString()}
+            {showValue
+              ? `${projectName} · Total value: AED ${totalValue.toLocaleString()}`
+              : `${projectName} · ${items.length} item${items.length === 1 ? "" : "s"}`}
           </p>
           {authDisabled && <DemoCaption className="mt-1" />}
         </div>
@@ -2001,7 +2054,18 @@ function MaterialsView() {
               toast.success("Excel file downloaded");
             }}
           />
-          <GradBtn label="Add Item" icon="add" small />
+          <GradBtn
+            label="Add Item"
+            icon="add"
+            small
+            onClick={() => {
+              if (authDisabled) {
+                toast.message("Connect auth to add procurement items");
+                return;
+              }
+              setAddOpen(true);
+            }}
+          />
         </div>
       </div>
 
@@ -2044,6 +2108,24 @@ function MaterialsView() {
       </div>
 
       {/* Grouped items */}
+      {!authDisabled && vendorLoading ? (
+        <div style={{ fontSize: 13, color: T.gray500 }}>Loading materials…</div>
+      ) : grouped.length === 0 ? (
+        <div
+          style={{
+            background: T.white,
+            borderRadius: 16,
+            padding: "28px 24px",
+            boxShadow: S.card,
+            fontSize: 13,
+            color: T.gray500,
+          }}
+        >
+          {items.length === 0
+            ? "No procurement items yet. Add a vendor task or link a supplier on Suppliers & Clients."
+            : "No items match this filter."}
+        </div>
+      ) : (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {grouped.map((group) => {
           const open = categoryOpen === null || categoryOpen === group.category;
@@ -2206,6 +2288,31 @@ function MaterialsView() {
           );
         })}
       </div>
+      )}
+      <AddMaterialItemDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        projectId={projectId}
+        partyOptions={partyOptions}
+        isSubmitting={isCreating}
+        onSubmit={async (input) => {
+          try {
+            await createTask({
+              party_kind: input.partyKind,
+              party_id: input.partyId,
+              project_id: projectId,
+              title: input.title,
+              description: input.notes,
+              due_date: input.dueDate,
+              status: "todo",
+            });
+            toast.success("Material item added");
+            setAddOpen(false);
+          } catch (err) {
+            handleApiError(err, { toast: true });
+          }
+        }}
+      />
     </div>
   );
 }
@@ -2249,14 +2356,13 @@ function StatusReportPanel() {
   );
 }
 
-export function ProjectTimelineTab() {
+export function ProjectTimelineTab({ view }: { view: TimelineView }) {
   const params = useParams();
   const projectId = typeof params.projectId === "string" ? params.projectId : "";
   const authDisabled = isAuthDisabled();
   const { project, isLoading: projectLoading, error: projectError } =
     useActiveProjectView(projectId);
   const timeline = useProjectTimeline(projectId);
-  const [view, setView] = useState<TimelineView>("gantt");
 
   const projectName = project?.name ?? PROJECT_NAME;
   const isLoading = projectLoading || timeline.isLoading;
@@ -2314,7 +2420,6 @@ export function ProjectTimelineTab() {
             fontFamily: "inherit",
           }}
         >
-          <TabBar view={view} setView={setView} />
           <div style={{ flex: 1 }}>
             {view === "gantt" && (
               <>

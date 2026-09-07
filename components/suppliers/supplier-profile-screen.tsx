@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { NeuTabToggle } from "@/components/projects/hub/neu-tab-toggle";
 import { AddSupplierModal } from "@/components/suppliers/add-supplier-modal";
+import { LinkSupplierProjectModal } from "@/components/suppliers/link-supplier-project-modal";
 import {
   CategoryBadge,
   GradientButton,
@@ -17,6 +18,7 @@ import {
 import { VendorTasksTab } from "@/components/suppliers/vendor-tasks-tab";
 import { useProjects } from "@/hooks/use-projects";
 import { useSupplier } from "@/hooks/use-supplier";
+import { useSupplierLinkedFromProjectLinks } from "@/hooks/use-supplier-linked-from-project-links";
 import { useVendorTasks } from "@/hooks/use-vendor-tasks";
 import { handleApiError } from "@/lib/api/handle-api-error";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
@@ -308,22 +310,37 @@ function OrdersTab() {
   );
 }
 
-function ProjectsTab({ projects }: { projects: SupplierLinkedProject[] }) {
-  if (projects.length === 0) {
-    return (
-      <div className="rounded-[14px] border border-dashed border-[var(--figma-border)] bg-white px-4 py-8 text-center text-[13px] text-[var(--figma-gray400)]">
-        No projects linked to this supplier yet. Link this supplier from a project&apos;s Links screen, or
-        assign a task under Tasks &amp; Deadlines.
-      </div>
-    );
-  }
-
+function ProjectsTab({
+  projects,
+  isLoading,
+  onLinkClick,
+}: {
+  projects: SupplierLinkedProject[];
+  isLoading?: boolean;
+  onLinkClick: () => void;
+}) {
   return (
     <div className="flex flex-col gap-3">
-      {projects.map((p) => {
-        const s = PROJECT_STATUS_CFG[p.status]!;
-        return <LinkedProjectCard key={p.projectId} project={p} statusCfg={s} />;
-      })}
+      <div className="flex justify-end">
+        <GradientButton onClick={onLinkClick} className="px-4 py-2 text-[13px]">
+          <MaterialIcon name="link" outlined size={16} />
+          Link Project
+        </GradientButton>
+      </div>
+      {isLoading ? (
+        <div className="rounded-[14px] border border-dashed border-[var(--figma-border)] bg-white px-4 py-8 text-center text-[13px] text-[var(--figma-gray400)]">
+          Loading linked projects…
+        </div>
+      ) : projects.length === 0 ? (
+        <div className="rounded-[14px] border border-dashed border-[var(--figma-border)] bg-white px-4 py-8 text-center text-[13px] text-[var(--figma-gray400)]">
+          No projects linked to this supplier yet. Use Link Project to attach an existing project.
+        </div>
+      ) : (
+        projects.map((p) => {
+          const s = PROJECT_STATUS_CFG[p.status]!;
+          return <LinkedProjectCard key={p.projectId} project={p} statusCfg={s} />;
+        })
+      )}
     </div>
   );
 }
@@ -394,6 +411,7 @@ export function SupplierProfileScreen({ supplierId }: { supplierId: string }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
   const [editOpen, setEditOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
   const {
     supplier,
     isLoading,
@@ -405,8 +423,12 @@ export function SupplierProfileScreen({ supplierId }: { supplierId: string }) {
   } = useSupplier(supplierId);
   const { tasks: vendorTasks } = useVendorTasks({ party_id: supplierId, party_kind: "supplier" });
   const { projects } = useProjects({ page: 1, limit: 100 });
+  const { linkedFromProjectLinks, isLoading: projectLinksLoading } =
+    useSupplierLinkedFromProjectLinks(supplierId, projects, {
+      enabled: !authDisabled && tab === "projects",
+    });
 
-  const linkedProjects = useMemo(() => {
+  const linkedFromTasks = useMemo(() => {
     const byId = new Map(projects.map((p) => [p.id, p]));
     const seen = new Set<string>();
     return vendorTasks
@@ -428,6 +450,19 @@ export function SupplierProfileScreen({ supplierId }: { supplierId: string }) {
         } satisfies SupplierLinkedProject;
       });
   }, [vendorTasks, projects]);
+
+  const linkedProjects = useMemo(() => {
+    const byId = new Map<string, SupplierLinkedProject>();
+    for (const project of linkedFromTasks) byId.set(project.projectId, project);
+    for (const project of linkedFromProjectLinks) {
+      const existing = byId.get(project.projectId);
+      byId.set(
+        project.projectId,
+        existing ? { ...existing, role: project.role || existing.role } : project,
+      );
+    }
+    return [...byId.values()];
+  }, [linkedFromTasks, linkedFromProjectLinks]);
 
   if (authDisabled) {
     return (
@@ -544,8 +579,24 @@ export function SupplierProfileScreen({ supplierId }: { supplierId: string }) {
         />
       )}
       {tab === "orders" && <OrdersTab />}
-      {tab === "projects" && <ProjectsTab projects={linkedProjects} />}
+      {tab === "projects" && (
+        <ProjectsTab
+          projects={linkedProjects}
+          isLoading={projectLinksLoading}
+          onLinkClick={() => setLinkOpen(true)}
+        />
+      )}
       {tab === "tasks" && <VendorTasksTab partyKind="supplier" partyId={supplierId} />}
+
+      {linkOpen && (
+        <LinkSupplierProjectModal
+          supplierId={supplier.id}
+          supplierName={supplier.name}
+          role={supplier.category}
+          linkedProjectIds={linkedProjects.map((p) => p.projectId)}
+          onClose={() => setLinkOpen(false)}
+        />
+      )}
 
       <AddSupplierModal
         open={editOpen}

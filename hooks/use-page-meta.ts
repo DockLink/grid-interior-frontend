@@ -93,7 +93,7 @@ function resolveLiveMeta(pathname: string, qc: ReturnType<typeof useQueryClient>
       return { title: name, breadcrumb: ["Projects", name] };
     }
     const tabMatch = pathname.match(
-      /^\/projects\/([^/]+)\/(files|tasks|minutes|timeline|links|hold-requests)$/,
+      /^\/projects\/([^/]+)\/(files|tasks|minutes|timeline|milestones|client-view|materials|links|hold-requests)$/,
     );
     if (tabMatch) {
       const name = projectNameFromCache(qc, tabMatch[1]!) ?? "Project";
@@ -102,6 +102,9 @@ function resolveLiveMeta(pathname: string, qc: ReturnType<typeof useQueryClient>
         tasks: "Tasks",
         minutes: "Minutes",
         timeline: "Timeline",
+        milestones: "Milestones",
+        "client-view": "Client View",
+        materials: "Materials",
         links: "Suppliers & Clients",
         "hold-requests": "Hold Requests",
       };

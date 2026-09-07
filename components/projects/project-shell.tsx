@@ -13,7 +13,7 @@ export function ProjectShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const isWorkspaceRoute = /\/(consultation|concept|layout|threed|detail|timeline)$/.test(pathname);
+  const isWorkspaceRoute = /\/(consultation|concept|layout|threed|detail)$/.test(pathname);
 
   if (isWorkspaceRoute) {
     return (

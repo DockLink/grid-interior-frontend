@@ -94,7 +94,7 @@ export function getPageMeta(
         return { title: "Project Overview", breadcrumb: ["Projects", "Overview"] };
       }
       const tabMatch = pathname.match(
-        /^\/projects\/([^/]+)\/(files|tasks|minutes|timeline|links|hold-requests)$/,
+        /^\/projects\/([^/]+)\/(files|tasks|minutes|timeline|milestones|client-view|materials|links|hold-requests)$/,
       );
       if (tabMatch) {
         const titles: Record<string, string> = {
@@ -102,6 +102,9 @@ export function getPageMeta(
           tasks: "Tasks",
           minutes: "Minutes",
           timeline: "Timeline",
+          milestones: "Milestones",
+          "client-view": "Client View",
+          materials: "Materials",
           links: "Suppliers & Clients",
           "hold-requests": "Hold Requests",
         };

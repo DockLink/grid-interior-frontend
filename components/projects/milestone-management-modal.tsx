@@ -6,9 +6,11 @@ import { ProjectMilestonesEditor } from "@/components/projects/project-milestone
 export function MilestoneManagementModal({
   projectId,
   onClose,
+  onUpdated,
 }: {
   projectId: string;
   onClose: () => void;
+  onUpdated?: () => void | Promise<void>;
 }) {
   return (
     <HubModal
@@ -18,7 +20,7 @@ export function MilestoneManagementModal({
       icon="flag"
       maxWidth={560}
     >
-      <ProjectMilestonesEditor projectId={projectId} />
+      <ProjectMilestonesEditor projectId={projectId} onUpdated={onUpdated} />
     </HubModal>
   );
 }
