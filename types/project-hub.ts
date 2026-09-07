@@ -27,6 +27,8 @@ export interface ActiveProjectView {
   nextDeadline: string;
   teamIds: number[];
   startDate: string;
+  /** Formatted project end date when known */
+  endDate?: string;
   location: string;
   distanceKm: number;
   projectType: string;

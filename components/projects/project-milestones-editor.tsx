@@ -258,18 +258,18 @@ export function ProjectMilestonesEditor({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Flag size={15} className="text-[var(--ds-accent-hover)]" />
-          <span className="text-[13px] font-semibold text-[var(--ds-label)]">Timeline milestones</span>
+          <Flag size={15} className="text-[var(--figma-teal)]" />
+          <span className="text-[13px] font-semibold text-[var(--figma-navy)]">Timeline milestones</span>
         </div>
-        <span className="text-[11px] text-[var(--ds-secondary-label)]">
+        <span className="text-[11px] text-[var(--figma-gray500)]">
           {milestones.length} milestone{milestones.length === 1 ? "" : "s"}
         </span>
       </div>
 
       {stageViews.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-[rgba(90,60,30,0.20)] bg-[var(--ds-bg)]/40 px-4 py-6 text-center">
-          <p className="text-[13px] font-medium text-[var(--ds-secondary-label)]">No stages yet</p>
-          <p className="text-[12px] text-[var(--ds-secondary-label)]">Add stages above before creating milestones.</p>
+        <div className="rounded-xl border border-dashed border-[var(--figma-border)] bg-[var(--figma-gray50)] px-4 py-6 text-center">
+          <p className="text-[13px] font-medium text-[var(--figma-gray500)]">No stages yet</p>
+          <p className="text-[12px] text-[var(--figma-gray500)]">Add stages above before creating milestones.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -281,10 +281,10 @@ export function ProjectMilestonesEditor({
                   <div key={s.id}>
                     <div className="mb-2 flex items-center gap-2">
                       <span
-                        className={`size-1.5 rounded-full ${s.isCompleted ? "bg-[#3D8B5E]" : "bg-[var(--ds-accent)]"}`}
+                        className={`size-1.5 rounded-full ${s.isCompleted ? "bg-[var(--figma-success)]" : "bg-[var(--figma-teal)]"}`}
                       />
-                      <span className="text-[12px] font-semibold text-[var(--ds-secondary-label)]">{s.name}</span>
-                      <span className="text-[11px] text-[#C4B5A5]">
+                      <span className="text-[12px] font-semibold text-[var(--figma-gray500)]">{s.name}</span>
+                      <span className="text-[11px] text-[var(--figma-gray400)]">
                         {items?.length ?? 0} milestone{(items?.length ?? 0) === 1 ? "" : "s"}
                       </span>
                     </div>
@@ -316,7 +316,7 @@ export function ProjectMilestonesEditor({
                         ))}
                       </div>
                     ) : (
-                      <div className="rounded-lg border border-dashed border-[rgba(90,60,30,0.14)] px-3 py-2 text-[12px] text-[#C4B5A5]">
+                      <div className="rounded-lg border border-dashed border-[var(--figma-border)] px-3 py-2 text-[12px] text-[var(--figma-gray400)]">
                         No milestones
                       </div>
                     )}
@@ -327,8 +327,8 @@ export function ProjectMilestonesEditor({
               {grouped.unassigned.length > 0 && (
                 <div>
                   <div className="mb-2 flex items-center gap-2">
-                    <span className="size-1.5 rounded-full bg-[#C4B5A5]" />
-                    <span className="text-[12px] font-semibold text-[var(--ds-secondary-label)]">Unassigned</span>
+                    <span className="size-1.5 rounded-full bg-[var(--figma-gray400)]" />
+                    <span className="text-[12px] font-semibold text-[var(--figma-gray500)]">Unassigned</span>
                   </div>
                   <div className="space-y-1.5">
                     {grouped.unassigned.map((m) => (
@@ -359,19 +359,19 @@ export function ProjectMilestonesEditor({
             </div>
       )}
 
-      <div className="rounded-xl border border-[rgba(90,60,30,0.10)] bg-[var(--ds-bg)]/30 p-3.5">
-          <div className="mb-2.5 text-[12px] font-semibold uppercase tracking-wide text-[var(--ds-secondary-label)]">
+      <div className="rounded-[14px] border border-[var(--figma-border)] bg-[var(--figma-gray50)] p-3.5">
+          <div className="mb-2.5 text-[12px] font-semibold uppercase tracking-wide text-[var(--figma-gray500)]">
             Add milestone
           </div>
           {stageViews.length === 0 ? (
-            <p className="text-[12px] text-[var(--ds-secondary-label)]">Add a stage first to create milestones.</p>
+            <p className="text-[12px] text-[var(--figma-gray500)]">Add a stage first to create milestones.</p>
           ) : (
             <>
               <div className="mb-2.5 flex gap-2.5">
                 <select
                   value={stageId || stageViews[0]?.id}
                   onChange={(e) => setStageId(e.target.value)}
-                  className="h-9 flex-1 rounded-lg border border-[rgba(90,60,30,0.18)] bg-[var(--ds-bg)]/50 px-3 text-[13px] text-[var(--ds-label)] outline-none focus:border-[var(--ds-accent)] focus:bg-white"
+                  className="hub-input-focus h-9 flex-1 cursor-pointer appearance-none rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
                 >
                   {stageViews.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -384,34 +384,34 @@ export function ProjectMilestonesEditor({
                 placeholder="Milestone name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mb-2.5 h-9 w-full rounded-lg border border-[rgba(90,60,30,0.18)] bg-[var(--ds-bg)]/50 px-3 text-[13px] text-[var(--ds-label)] outline-none placeholder:text-[#C4B5A5] focus:border-[var(--ds-accent)] focus:bg-white"
+                className="hub-input-focus mb-2.5 h-9 w-full rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 text-[13px] text-[var(--figma-navy)] outline-none placeholder:text-[var(--figma-gray400)] neu-inset"
               />
               <div className="flex gap-2.5">
                 <label className="flex-1">
-                  <span className="mb-1 block text-[11px] text-[var(--ds-secondary-label)]">Start date</span>
+                  <span className="mb-1 block text-[11px] text-[var(--figma-gray500)]">Start date</span>
                   <input
                     type="date"
                     value={start}
                     min={stageStart}
                     max={stageEnd}
                     onChange={(e) => setStart(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-[rgba(90,60,30,0.18)] bg-[var(--ds-bg)]/50 px-3 text-[13px] text-[var(--ds-label)] outline-none focus:border-[var(--ds-accent)] focus:bg-white"
+                    className="hub-input-focus h-9 w-full rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
                   />
                 </label>
                 <label className="flex-1">
-                  <span className="mb-1 block text-[11px] text-[var(--ds-secondary-label)]">End date</span>
+                  <span className="mb-1 block text-[11px] text-[var(--figma-gray500)]">End date</span>
                   <input
                     type="date"
                     value={end}
                     min={start || stageStart}
                     max={stageEnd}
                     onChange={(e) => setEnd(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-[rgba(90,60,30,0.18)] bg-[var(--ds-bg)]/50 px-3 text-[13px] text-[var(--ds-label)] outline-none focus:border-[var(--ds-accent)] focus:bg-white"
+                    className="hub-input-focus h-9 w-full rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
                   />
                 </label>
               </div>
               {stageStart && stageEnd && (
-                <p className="mt-2 text-[11px] text-[var(--ds-secondary-label)]">
+                <p className="mt-2 text-[11px] text-[var(--figma-gray500)]">
                   Must fall within the stage period: {new Date(stageStart).toLocaleDateString()} –{" "}
                   {new Date(stageEnd).toLocaleDateString()}
                 </p>
@@ -420,7 +420,7 @@ export function ProjectMilestonesEditor({
                 type="button"
                 onClick={() => void handleCreateMilestone()}
                 disabled={!canSubmit}
-                className="mt-3 flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--ds-accent)] text-[13px] font-semibold text-white transition-colors hover:bg-[var(--ds-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="gi-gradient-cta mt-3 flex h-10 w-full cursor-pointer items-center justify-center gap-1.5 rounded-[24px] text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus size={15} />
                 {isSaving ? "Creating…" : "Add milestone"}
@@ -474,12 +474,12 @@ function MilestoneRow({
 }) {
   if (isEditing) {
     return (
-      <div className="flex flex-col gap-2 rounded-xl border border-[var(--ds-accent)]/45 bg-[#F5E6D0]/25 p-3">
+      <div className="flex flex-col gap-2 rounded-[14px] border border-[var(--figma-teal)]/40 bg-[rgba(14,124,134,0.06)] p-3">
         <input
           value={editName}
           onChange={(e) => onChangeName(e.target.value)}
           placeholder="Milestone name"
-          className="h-9 rounded-lg border border-[rgba(90,60,30,0.18)] bg-white px-3 text-[13px] text-[var(--ds-label)] outline-none focus:border-[var(--ds-accent)]"
+          className="hub-input-focus h-9 rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
         />
         <div className="flex gap-2">
           <input
@@ -488,7 +488,7 @@ function MilestoneRow({
             min={stageStart}
             max={stageEnd}
             onChange={(e) => onChangeStart(e.target.value)}
-            className="h-9 flex-1 rounded-lg border border-[rgba(90,60,30,0.18)] bg-white px-3 text-[13px] text-[var(--ds-label)] outline-none focus:border-[var(--ds-accent)]"
+            className="hub-input-focus h-9 flex-1 rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
           />
           <input
             type="date"
@@ -496,11 +496,11 @@ function MilestoneRow({
             min={editStart || stageStart}
             max={stageEnd}
             onChange={(e) => onChangeEnd(e.target.value)}
-            className="h-9 flex-1 rounded-lg border border-[rgba(90,60,30,0.18)] bg-white px-3 text-[13px] text-[var(--ds-label)] outline-none focus:border-[var(--ds-accent)]"
+            className="hub-input-focus h-9 flex-1 rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
           />
         </div>
         {stageStart && stageEnd && (
-          <p className="text-[11px] text-[var(--ds-secondary-label)]">
+          <p className="text-[11px] text-[var(--figma-gray500)]">
             Within stage: {new Date(stageStart).toLocaleDateString()} –{" "}
             {new Date(stageEnd).toLocaleDateString()}
           </p>
@@ -510,7 +510,7 @@ function MilestoneRow({
             type="button"
             onClick={onSave}
             disabled={isSaving}
-            className="h-8 flex-1 rounded-lg bg-[var(--ds-accent)] text-[12.5px] font-semibold text-white transition-colors hover:bg-[var(--ds-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="gi-gradient-cta h-8 flex-1 rounded-[20px] text-[12.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSaving ? "Saving…" : "Save"}
           </button>
@@ -518,7 +518,7 @@ function MilestoneRow({
             type="button"
             onClick={onCancel}
             disabled={isSaving}
-            className="h-8 flex-1 rounded-lg border border-[rgba(90,60,30,0.18)] bg-white text-[12.5px] font-medium text-[var(--ds-secondary-label)] transition-colors hover:bg-[var(--ds-bg)]"
+            className="h-8 flex-1 rounded-[20px] border-[1.5px] border-[var(--figma-border)] bg-white text-[12.5px] font-medium text-[var(--figma-gray500)] transition-colors hover:bg-[var(--figma-gray50)]"
           >
             Cancel
           </button>
@@ -533,11 +533,11 @@ function MilestoneRow({
   const isCompleted = task?.status === "COMPLETED";
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-[rgba(90,60,30,0.10)] bg-white px-3.5 py-2.5 shadow-sm">
+    <div className="flex items-center justify-between gap-3 rounded-[14px] border border-[var(--figma-border)] bg-white px-3.5 py-2.5 neu-raised">
       <div className="flex min-w-0 items-center gap-2.5">
         <span
           className={`flex size-6 shrink-0 items-center justify-center rounded-full ${
-            isCompleted ? "bg-[#3D8B5E] text-white" : "bg-[#F5E6D0] text-[var(--ds-accent-hover)]"
+            isCompleted ? "bg-[var(--figma-success)] text-white" : "bg-[rgba(14,124,134,0.12)] text-[var(--figma-teal)]"
           }`}
         >
           <Flag size={11} />
@@ -545,12 +545,12 @@ function MilestoneRow({
         <div className="min-w-0">
           <div
             className={`truncate text-[13px] font-medium ${
-              isCompleted ? "text-[#248A3D]" : "text-[var(--ds-label)]"
+              isCompleted ? "text-[var(--figma-success)]" : "text-[var(--figma-navy)]"
             }`}
           >
             {name}
           </div>
-          {range && <div className="text-[11px] text-[var(--ds-secondary-label)]">{range}</div>}
+          {range && <div className="text-[11px] text-[var(--figma-gray500)]">{range}</div>}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
@@ -560,7 +560,7 @@ function MilestoneRow({
             onClick={onReopen}
             disabled={busy}
             title="Reopen milestone"
-            className="flex items-center gap-1 rounded-lg border border-[rgba(90,60,30,0.22)] bg-white px-2 py-1.5 text-[11px] font-medium text-[var(--ds-secondary-label)] transition-colors hover:bg-[var(--ds-bg)] disabled:opacity-50"
+            className="flex items-center gap-1 rounded-lg border border-[var(--figma-border)] bg-white px-2 py-1.5 text-[11px] font-medium text-[var(--figma-gray500)] transition-colors hover:bg-[var(--figma-gray50)] disabled:opacity-50"
           >
             <RotateCcw size={11} /> Reopen
           </button>
@@ -570,7 +570,7 @@ function MilestoneRow({
             onClick={onComplete}
             disabled={busy}
             title="Mark milestone complete"
-            className="flex items-center gap-1 rounded-lg border border-[#3D8B5E]/30 bg-[#3D8B5E]/8 px-2 py-1.5 text-[11px] font-medium text-[#248A3D] transition-colors hover:bg-[#3D8B5E]/15 disabled:opacity-50"
+            className="flex items-center gap-1 rounded-lg border border-[var(--figma-success)]/30 bg-[var(--figma-success)]/8 px-2 py-1.5 text-[11px] font-medium text-[var(--figma-success)] transition-colors hover:bg-[var(--figma-success)]/15 disabled:opacity-50"
           >
             <Check size={11} /> Complete
           </button>
@@ -579,7 +579,7 @@ function MilestoneRow({
           type="button"
           onClick={onEdit}
           title="Edit milestone"
-          className="flex size-8 items-center justify-center rounded-lg text-[var(--ds-accent-hover)] transition-colors hover:bg-[var(--ds-bg)]"
+          className="flex size-8 items-center justify-center rounded-lg text-[var(--figma-teal)] transition-colors hover:bg-[var(--figma-gray50)]"
         >
           <Pencil size={13} />
         </button>

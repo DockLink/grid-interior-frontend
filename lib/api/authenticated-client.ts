@@ -1,4 +1,5 @@
 import { apiClient } from "@/lib/api/client";
+import { handleApiError } from "@/lib/api/handle-api-error";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import {
   ensureFreshToken,
@@ -30,6 +31,9 @@ export async function authApiClient<T>(
   // never even see a 401.
   const token = await ensureFreshToken();
   if (!token) {
+    handleApiError(new ApiError(401, { message: "Unauthorized", statusCode: 401 }), {
+      redirectOn401: true,
+    });
     throw new ApiError(401, { message: "Unauthorized", statusCode: 401 });
   }
 
@@ -47,7 +51,14 @@ export async function authApiClient<T>(
       if (newToken) {
         return await apiClient<T>(path, withAuth(init, newToken));
       }
-      // Refresh failed → session is gone. Surface a clean, user-friendly error.
+      // Refresh failed → session is gone.
+      handleApiError(
+        new ApiError(401, {
+          message: "Session expired, please log in",
+          statusCode: 401,
+        }),
+        { redirectOn401: true },
+      );
       throw new ApiError(401, {
         message: "Session expired, please log in",
         statusCode: 401,

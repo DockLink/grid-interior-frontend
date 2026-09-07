@@ -13,7 +13,7 @@ import {
 } from "@/components/projects/hub/consultation/consultation-ui";
 import { TimelineWidget } from "@/components/projects/hub/shared/timeline-widget";
 import { CONCEPT_AREAS, CONCEPT_CARDS, CONCEPT_RENDER_GALLERY } from "@/lib/projects/mock-concept";
-import { TEAM_MEMBERS } from "@/lib/projects/mock-projects";
+import { useHubTeam } from "@/lib/projects/hub-team-context";
 import type { ConceptRenderImage } from "@/types/concept";
 
 function RenderThumb({
@@ -88,6 +88,7 @@ export function ConceptRenderScreen({
   onBack: () => void;
   onOpenWalkthrough: () => void;
 }) {
+  const teamMembers = useHubTeam();
   const concept = CONCEPT_CARDS.find((c) => c.id === conceptId) ?? CONCEPT_CARDS[0];
   const area = CONCEPT_AREAS.find((a) => a.id === concept.areaId) ?? CONCEPT_AREAS[0];
   const [gallery, setGallery] = useState(CONCEPT_RENDER_GALLERY);
@@ -184,7 +185,7 @@ export function ConceptRenderScreen({
       <SectionCard className="px-5 py-4">
         <SectionTitle icon="group" title="Team Assignment" />
         <div className="flex flex-wrap items-center gap-2">
-          {TEAM_MEMBERS.slice(0, 3).map((member) => (
+          {teamMembers.slice(0, 3).map((member) => (
             <div
               key={member.id}
               className="flex items-center gap-[7px] rounded-[20px] border-[1.5px] border-[var(--figma-border)] bg-[var(--figma-gray50)] py-1.5 pl-1.5 pr-3 neu-inset"

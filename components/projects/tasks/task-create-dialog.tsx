@@ -1,29 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogBody,
-  DialogCloseButton,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+  HubField,
+  HubModal,
+  hubHintClass,
+  hubInputClass,
+  hubLabelClass,
+  hubSelectClass,
+} from "@/components/projects/hub/hub-modal";
+import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import {
   BOARD_COLUMNS,
   apiStatusFromBoard,
+  formatBoardDate,
   type BoardColumnId,
 } from "@/lib/tasks/task-board";
 import type { ProjectMilestoneView, ProjectStageView } from "@/lib/projects/map-stages";
-import { formatBoardDate } from "@/lib/tasks/task-board";
+import { cn } from "@/lib/utils";
 import type { TaskablePriority } from "@/types/tasks";
 import type { User } from "@/types/users";
 
@@ -34,10 +30,12 @@ function memberLabel(m: User): string {
 }
 
 function memberInitials(m: User): string {
-  return `${m.first_name?.[0] ?? ""}${m.last_name?.[0] ?? ""}`.toUpperCase() || (m.email[0]?.toUpperCase() ?? "?");
+  return (
+    `${m.first_name?.[0] ?? ""}${m.last_name?.[0] ?? ""}`.toUpperCase() ||
+    (m.email[0]?.toUpperCase() ?? "?")
+  );
 }
 
-/** Dropdown to pick assignees; selected members shown as removable chips. */
 function AssigneePicker({
   members,
   selectedIds,
@@ -60,11 +58,9 @@ function AssigneePicker({
           if (e.target.value) onChange([...selectedIds, e.target.value]);
         }}
         disabled={available.length === 0}
-        className="h-9 w-full rounded-lg border border-input bg-[var(--ds-bg)] px-3 text-sm disabled:opacity-50"
+        className={hubSelectClass}
       >
-        <option value="">
-          {available.length === 0 ? "All members added" : placeholder}
-        </option>
+        <option value="">{available.length === 0 ? "All members added" : placeholder}</option>
         {available.map((m) => (
           <option key={m.id} value={m.id}>
             {memberLabel(m)}
@@ -76,16 +72,17 @@ function AssigneePicker({
           {selected.map((m) => (
             <span
               key={m.id}
-              className="flex items-center gap-1.5 rounded-md border border-[var(--ds-accent)] bg-[#F5E6D0] px-2 py-1 text-xs"
+              className="flex items-center gap-1.5 rounded-[10px] border border-[var(--figma-teal)] bg-[rgba(14,124,134,0.08)] px-2 py-1 text-xs text-[var(--figma-navy)]"
             >
               <TaskUserAvatar initials={memberInitials(m)} size={16} />
               {memberLabel(m)}
               <button
                 type="button"
                 onClick={() => onChange(selectedIds.filter((id) => id !== m.id))}
-                className="text-[var(--ds-secondary-label)] hover:text-[var(--ds-secondary-label)]"
+                className="text-[var(--figma-gray500)] hover:text-[var(--figma-navy)]"
+                aria-label={`Remove ${memberLabel(m)}`}
               >
-                <X className="size-3" />
+                <MaterialIcon name="close" outlined size={14} />
               </button>
             </span>
           ))}
@@ -142,14 +139,12 @@ export function TaskCreateDialog({
 
   const stageMilestones = useMemo(
     () => milestones.filter((m) => milestoneParents[m.id]?.stageId === stageId),
-    [milestones, milestoneParents, stageId]
+    [milestones, milestoneParents, stageId],
   );
 
-  // A task must fall within its parent milestone's window (or the stage's
-  // window when no milestone is selected).
   const selectedMilestone = useMemo(
     () => milestones.find((m) => m.id === milestoneId),
-    [milestones, milestoneId]
+    [milestones, milestoneId],
   );
   const selectedStage = useMemo(() => stages.find((s) => s.id === stageId), [stages, stageId]);
 
@@ -165,12 +160,15 @@ export function TaskCreateDialog({
       : undefined;
   const rangeLabel = selectedMilestone ? "milestone" : "stage";
 
-  // Keep the due date inside the active range as the parent selection changes.
   useEffect(() => {
     if (rangeStart && dueDate < rangeStart) setDueDate(rangeStart);
     else if (rangeEnd && dueDate > rangeEnd) setDueDate(rangeEnd);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rangeStart, rangeEnd]);
+
+  useEffect(() => {
+    if (open) setStatus(defaultStatus);
+  }, [open, defaultStatus]);
 
   function addSubtaskRow() {
     setSubtasks((prev) => [...prev, { title: "", assigneeIds: [] }]);
@@ -191,11 +189,15 @@ export function TaskCreateDialog({
     setSubtasks([]);
   }
 
+  function handleClose() {
+    onOpenChange(false);
+  }
+
   async function submit() {
     if (!title.trim()) return;
     if (rangeStart && rangeEnd && (dueDate < rangeStart || dueDate > rangeEnd)) {
       toast.error(
-        `Task due date must fall within the ${rangeLabel} period (${formatBoardDate(rangeStart)} – ${formatBoardDate(rangeEnd)})`
+        `Task due date must fall within the ${rangeLabel} period (${formatBoardDate(rangeStart)} – ${formatBoardDate(rangeEnd)})`,
       );
       return;
     }
@@ -224,168 +226,227 @@ export function TaskCreateDialog({
     }
   }
 
+  if (!open) return null;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogCloseButton onClick={() => onOpenChange(false)} />
-        <DialogHeader>
-          <DialogTitle>New task</DialogTitle>
-        </DialogHeader>
-        <DialogBody className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="task-title">Title</Label>
-            <Input id="task-title" value={title} onChange={(e) => setTitle(e.target.value)} className="bg-[var(--ds-bg)]" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="task-desc">Description</Label>
-            <Textarea id="task-desc" value={description} onChange={(e) => setDescription(e.target.value)} className="bg-[var(--ds-bg)]" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Stage</Label>
-              <select
-                value={stageId}
-                onChange={(e) => {
-                  setStageId(e.target.value);
-                  setMilestoneId("");
-                }}
-                className="h-9 w-full rounded-lg border border-input bg-[var(--ds-bg)] px-3 text-sm"
-              >
-                {stages.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Milestone</Label>
-              <select
-                value={milestoneId}
-                onChange={(e) => setMilestoneId(e.target.value)}
-                className="h-9 w-full rounded-lg border border-input bg-[var(--ds-bg)] px-3 text-sm"
-                disabled={stageMilestones.length === 0}
-              >
-                <option value="">{stageMilestones.length === 0 ? "None — attach to stage" : "Optional"}</option>
-                {stageMilestones.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-              {stageMilestones.length === 0 && (
-                <p className="text-[11px] text-[var(--ds-secondary-label)]">
-                  No milestones in this stage. Add them in Manage Milestones or the Timeline tab.
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Due date</Label>
-              <Input
-                type="date"
-                value={dueDate}
-                min={rangeStart}
-                max={rangeEnd}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="bg-[var(--ds-bg)]"
-              />
-              {rangeStart && rangeEnd && (
-                <p className="text-[11px] text-[var(--ds-secondary-label)]">
-                  Within {rangeLabel}: {formatBoardDate(rangeStart)} – {formatBoardDate(rangeEnd)}
-                </p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label>Column</Label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as BoardColumnId)}
-                className="h-9 w-full rounded-lg border border-input bg-[var(--ds-bg)] px-3 text-sm"
-              >
-                {BOARD_COLUMNS.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Priority</Label>
-            <div className="flex gap-2">
-              {(["LOW", "MEDIUM", "HIGH"] as TaskablePriority[]).map((p) => (
-                <Button
+    <HubModal
+      onClose={handleClose}
+      title="New task"
+      subtitle="Add a task to this project's board"
+      icon="add_task"
+      maxWidth={560}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={handleClose}
+            className="flex cursor-pointer items-center gap-1 border-none bg-transparent p-2 font-[inherit] text-[13px] text-[var(--figma-gray500)] transition-colors hover:text-[var(--figma-navy)]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={!title.trim() || isSaving}
+            className="gi-gradient-cta flex cursor-pointer items-center gap-2 rounded-[24px] px-7 py-[11px] text-sm font-semibold disabled:cursor-default disabled:opacity-70"
+          >
+            {isSaving ? (
+              <>
+                <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-white/35 border-t-white" />
+                Creating…
+              </>
+            ) : (
+              <>
+                <MaterialIcon name="add" outlined size={16} />
+                Add task
+              </>
+            )}
+          </button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-[18px] pr-1">
+        <HubField label="Title">
+          <input
+            id="task-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Prepare concept mood boards"
+            className={hubInputClass}
+          />
+        </HubField>
+
+        <HubField label="Description">
+          <textarea
+            id="task-desc"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            placeholder="Optional details…"
+            className={cn(hubInputClass, "resize-y leading-relaxed")}
+          />
+        </HubField>
+
+        <div className="grid grid-cols-2 gap-3">
+          <HubField label="Stage">
+            <select
+              value={stageId}
+              onChange={(e) => {
+                setStageId(e.target.value);
+                setMilestoneId("");
+              }}
+              className={hubSelectClass}
+            >
+              {stages.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </HubField>
+          <HubField
+            label="Milestone"
+            hint={
+              stageMilestones.length === 0
+                ? "No milestones in this stage. Add them in Manage Milestones."
+                : undefined
+            }
+          >
+            <select
+              value={milestoneId}
+              onChange={(e) => setMilestoneId(e.target.value)}
+              className={hubSelectClass}
+              disabled={stageMilestones.length === 0}
+            >
+              <option value="">
+                {stageMilestones.length === 0 ? "None — attach to stage" : "Optional"}
+              </option>
+              {stageMilestones.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </HubField>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <HubField
+            label="Due date"
+            hint={
+              rangeStart && rangeEnd
+                ? `Within ${rangeLabel}: ${formatBoardDate(rangeStart)} – ${formatBoardDate(rangeEnd)}`
+                : undefined
+            }
+          >
+            <input
+              type="date"
+              value={dueDate}
+              min={rangeStart}
+              max={rangeEnd}
+              onChange={(e) => setDueDate(e.target.value)}
+              className={hubInputClass}
+            />
+          </HubField>
+          <HubField label="Column">
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as BoardColumnId)}
+              className={hubSelectClass}
+            >
+              {BOARD_COLUMNS.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </HubField>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className={hubLabelClass}>Priority</span>
+          <div
+            className="inline-flex gap-0.5 rounded-[14px] p-1 neu-inset"
+            style={{ background: "var(--figma-gray100)" }}
+          >
+            {(["LOW", "MEDIUM", "HIGH"] as TaskablePriority[]).map((p) => {
+              const active = priority === p;
+              return (
+                <button
                   key={p}
                   type="button"
-                  size="sm"
-                  variant={priority === p ? "default" : "outline"}
                   onClick={() => setPriority(p)}
+                  className="min-w-[64px] cursor-pointer rounded-[10px] border-none px-3 py-2 text-[13px] transition-all duration-180"
+                  style={{
+                    background: active ? "#fff" : "transparent",
+                    color: active ? "var(--figma-navy)" : "var(--figma-gray500)",
+                    fontWeight: active ? 600 : 400,
+                    boxShadow: active ? "var(--neu-raised)" : "none",
+                  }}
                 >
-                  {p[0]}
-                </Button>
+                  {p[0] + p.slice(1).toLowerCase()}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <HubField label="Assignees">
+          <AssigneePicker members={members} selectedIds={assigneeIds} onChange={setAssigneeIds} />
+        </HubField>
+
+        <div className="space-y-2 rounded-[14px] border border-dashed border-[var(--figma-border)] bg-[var(--figma-gray50)] p-3.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className={hubLabelClass}>Subtasks (optional)</span>
+            <button
+              type="button"
+              onClick={addSubtaskRow}
+              className="inline-flex cursor-pointer items-center gap-1 rounded-[20px] border-[1.5px] border-[var(--figma-teal)] bg-white px-3 py-1.5 text-[12px] font-semibold text-[var(--figma-teal)] transition-all neu-raised"
+            >
+              <MaterialIcon name="add" outlined size={14} />
+              Add subtask
+            </button>
+          </div>
+          {subtasks.length === 0 ? (
+            <p className={hubHintClass}>
+              Break this task into subtasks. Each can have its own assignees; the task completes when
+              all subtasks are done.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {subtasks.map((st, i) => (
+                <div
+                  key={i}
+                  className="space-y-1.5 rounded-[12px] border border-[var(--figma-border)] bg-white p-2.5"
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={st.title}
+                      placeholder={`Subtask ${i + 1} title`}
+                      onChange={(e) => updateSubtask(i, { title: e.target.value })}
+                      className={cn(hubInputClass, "py-2")}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeSubtask(i)}
+                      className="flex size-8 shrink-0 items-center justify-center rounded-lg text-[var(--figma-gray500)] hover:bg-[var(--figma-gray100)] hover:text-[var(--figma-alert)]"
+                      aria-label="Remove subtask"
+                    >
+                      <MaterialIcon name="close" outlined size={16} />
+                    </button>
+                  </div>
+                  <AssigneePicker
+                    members={members}
+                    selectedIds={st.assigneeIds}
+                    onChange={(ids) => updateSubtask(i, { assigneeIds: ids })}
+                    placeholder="Assign subtask to…"
+                  />
+                </div>
               ))}
             </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Assignees</Label>
-            <AssigneePicker members={members} selectedIds={assigneeIds} onChange={setAssigneeIds} />
-          </div>
-
-          <div className="space-y-2 rounded-lg border border-dashed border-[rgba(90,60,30,0.22)] p-3">
-            <div className="flex items-center justify-between">
-              <Label>Subtasks (optional)</Label>
-              <Button type="button" size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={addSubtaskRow}>
-                <Plus className="size-3" /> Add subtask
-              </Button>
-            </div>
-            {subtasks.length === 0 ? (
-              <p className="text-[11px] text-[var(--ds-secondary-label)]">
-                Break this task into subtasks. Each can have its own assignees; the task completes
-                when all subtasks are done.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {subtasks.map((st, i) => (
-                  <div key={i} className="space-y-1.5 rounded-md bg-[var(--ds-bg)]/60 p-2">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={st.title}
-                        placeholder={`Subtask ${i + 1} title`}
-                        onChange={(e) => updateSubtask(i, { title: e.target.value })}
-                        className="h-8 bg-white"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeSubtask(i)}
-                        className="text-[var(--ds-secondary-label)] hover:text-red-600"
-                        aria-label="Remove subtask"
-                      >
-                        <X className="size-4" />
-                      </button>
-                    </div>
-                    <AssigneePicker
-                      members={members}
-                      selectedIds={st.assigneeIds}
-                      onChange={(ids) => updateSubtask(i, { assigneeIds: ids })}
-                      placeholder="Assign subtask to…"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </DialogBody>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={() => void submit()} disabled={!title.trim() || isSaving}>
-            {isSaving ? "Creating…" : "Add task"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          )}
+        </div>
+      </div>
+    </HubModal>
   );
 }

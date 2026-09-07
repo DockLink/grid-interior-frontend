@@ -1,44 +1,48 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Settings } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
 import { useCommandPalette } from "@/components/layout/command-palette";
+import { useNotifications } from "@/hooks/use-notifications";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
-import { getPageMeta } from "@/lib/navigation/page-meta";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import {
   ROLE_LABEL,
   toSidebarRole,
 } from "@/lib/navigation/sidebar-role";
+import { mapAppNotificationToRow } from "@/lib/notifications/map-notification-ui";
 import { getUserDisplayName, getUserInitials } from "@/lib/user/display";
 import { NAV_ROUTES } from "@/types/navigation";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { MOCK_HEADER_NOTIFICATIONS } from "@/lib/notifications/mock-notifications";
-
-const NOTIF_ICON: Record<string, { icon: string; color: string; bg: string }> = {
-  task: { icon: "task_alt", color: "var(--figma-navy)", bg: "rgba(27,42,74,0.09)" },
-  file: { icon: "upload_file", color: "var(--figma-teal)", bg: "rgba(14,124,134,0.09)" },
-  deadline: { icon: "alarm", color: "var(--figma-alert)", bg: "rgba(242,109,109,0.09)" },
-};
 
 export function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, primaryRole } = useAuth();
   const { setOpen: setCommandPaletteOpen } = useCommandPalette();
-  const meta = getPageMeta(pathname);
+  const {
+    notifications,
+    unreadCount,
+    markAllRead,
+    markRead,
+    isUnread,
+  } = useNotifications();
+  const meta = usePageMeta();
   const sidebarRole = primaryRole ? toSidebarRole(primaryRole) : null;
 
   const [showNotifs, setShowNotifs] = useState(false);
-  const [notifs, setNotifs] = useState(MOCK_HEADER_NOTIFICATIONS);
   const [searchFocus, setSearchFocus] = useState(false);
   const [searchVal, setSearchVal] = useState("");
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const unread = notifs.filter((n) => !n.read).length;
+  const headerNotifs = useMemo(
+    () => notifications.slice(0, 8).map(mapAppNotificationToRow),
+    [notifications],
+  );
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -140,9 +144,9 @@ export function AppHeader() {
             }`}
           >
             <MaterialIcon name="notifications" size={22} className="text-[var(--figma-gray500)]" />
-            {unread > 0 ? (
+            {unreadCount > 0 ? (
               <span className="absolute top-1 right-1 flex size-4 items-center justify-center rounded-full border-2 border-white bg-[var(--figma-alert)] text-[9px] font-bold text-white">
-                {unread}
+                {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             ) : null}
           </button>
@@ -157,61 +161,69 @@ export function AppHeader() {
                   <span className="text-[15px] font-semibold text-[var(--figma-navy)]">
                     Notifications
                   </span>
-                  {unread > 0 ? (
+                  {unreadCount > 0 ? (
                     <span className="rounded-[10px] bg-[var(--figma-alert)] px-1.5 py-0.5 text-[10px] font-bold text-white">
-                      {unread}
+                      {unreadCount}
                     </span>
                   ) : null}
                 </div>
                 <button
                   type="button"
-                  onClick={() => setNotifs((prev) => prev.map((n) => ({ ...n, read: true })))}
+                  onClick={() => markAllRead()}
                   className="border-none bg-transparent p-0 text-xs font-medium text-[var(--figma-teal)]"
                 >
                   Mark all as read
                 </button>
               </div>
 
-              {notifs.map((n, i) => {
-                const cfg = NOTIF_ICON[n.type];
-                return (
-                  <button
-                    key={n.id}
-                    type="button"
-                    onClick={() =>
-                      setNotifs((prev) =>
-                        prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)),
-                      )
-                    }
-                    className={`relative flex w-full items-start gap-3 px-[18px] py-3 text-left transition-colors hover:bg-[var(--figma-gray50)] ${
-                      i < notifs.length - 1 ? "border-b border-[var(--figma-border)]" : ""
-                    } ${n.read ? "bg-white" : "bg-[rgba(14,124,134,0.03)]"}`}
-                  >
-                    {!n.read ? (
-                      <span className="absolute top-1/2 left-1.5 size-1.5 -translate-y-1/2 rounded-full bg-[var(--figma-teal)]" />
-                    ) : null}
-                    <div
-                      className="flex size-9 shrink-0 items-center justify-center rounded-[10px]"
-                      style={{ background: cfg.bg }}
+              {headerNotifs.length === 0 ? (
+                <p className="px-[18px] py-8 text-center text-xs text-[var(--figma-gray500)]">
+                  No notifications yet.
+                </p>
+              ) : (
+                headerNotifs.map((n, i) => {
+                  const read = !isUnread(n.key);
+                  return (
+                    <button
+                      key={n.key}
+                      type="button"
+                      onClick={() => {
+                        markRead(n.key);
+                        setShowNotifs(false);
+                        router.push(n.href);
+                      }}
+                      className={`relative flex w-full items-start gap-3 px-[18px] py-3 text-left transition-colors hover:bg-[var(--figma-gray50)] ${
+                        i < headerNotifs.length - 1 ? "border-b border-[var(--figma-border)]" : ""
+                      } ${read ? "bg-white" : "bg-[rgba(14,124,134,0.03)]"}`}
                     >
-                      <MaterialIcon name={cfg.icon} size={18} style={{ color: cfg.color }} />
-                    </div>
-                    <div className="min-w-0 flex-1">
+                      {!read ? (
+                        <span className="absolute top-1/2 left-1.5 size-1.5 -translate-y-1/2 rounded-full bg-[var(--figma-teal)]" />
+                      ) : null}
                       <div
-                        className={`mb-0.5 text-[13px] leading-snug text-[var(--figma-navy)] ${
-                          n.read ? "font-normal" : "font-semibold"
-                        }`}
+                        className="flex size-9 shrink-0 items-center justify-center rounded-[10px]"
+                        style={{ background: n.iconBg }}
                       >
-                        {n.message}
+                        <MaterialIcon name={n.icon} size={18} style={{ color: n.iconColor }} />
                       </div>
-                      <div className="text-xs text-[var(--figma-gray500)]">{n.detail}</div>
-                    </div>
-                    <div className="shrink-0 pt-0.5 text-[11px] text-[var(--figma-gray400)]">
-                      {n.time}
-                    </div>
-                  </button>
-                );
-              })}
+                      <div className="min-w-0 flex-1">
+                        <div
+                          className={`mb-0.5 text-[13px] leading-snug text-[var(--figma-navy)] ${
+                            read ? "font-normal" : "font-semibold"
+                          }`}
+                        >
+                          {n.title}
+                        </div>
+                        <div className="line-clamp-2 text-xs text-[var(--figma-gray500)]">
+                          {n.body}
+                        </div>
+                      </div>
+                      <div className="shrink-0 pt-0.5 text-[11px] text-[var(--figma-gray400)]">
+                        {n.time}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
 
               <div className="border-t border-[var(--figma-border)] px-[18px] py-2.5 text-center">
                 <button

@@ -26,6 +26,8 @@ export interface Project {
   name: string;
   description?: string | null;
   start_date: string;
+  /** Present when API returns an explicit end; otherwise derive from duration. */
+  end_date?: string | null;
   duration: string;
   location: string | null;
   latitude?: number | null;
@@ -79,6 +81,12 @@ export interface ProjectCardView {
   created_at?: string;
   /** Formatted start date for list UI (e.g. "Mar 2025") */
   startDate?: string | null;
+  /** Formatted end date for list UI when known */
+  endDate?: string | null;
+  /** ISO start_date for sorting / timeline */
+  startDateIso?: string | null;
+  /** ISO end_date (or derived) for timeline */
+  endDateIso?: string | null;
   /** Formatted updated_at for list UI (e.g. "Jul 30") */
   updatedAt?: string | null;
   /** ISO updated_at for client-side sorting */

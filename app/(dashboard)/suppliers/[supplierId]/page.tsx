@@ -6,5 +6,5 @@ export default async function SupplierDetailPage({
   params: Promise<{ supplierId: string }>;
 }) {
   const { supplierId } = await params;
-  return <SupplierProfileScreen supplierId={Number(supplierId)} />;
+  return <SupplierProfileScreen supplierId={supplierId} />;
 }

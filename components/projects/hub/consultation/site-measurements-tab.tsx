@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { SAMPLE_ROOMS } from "@/lib/projects/mock-consultation";
-import { TEAM_MEMBERS } from "@/lib/projects/mock-projects";
+import { useHubTeam } from "@/lib/projects/hub-team-context";
 import type { ConsultRoom } from "@/types/consultation";
 
 import { GradientBtn, SectionCard, SectionTitle } from "./consultation-ui";
@@ -65,6 +65,7 @@ function MeasurementRow({
 }
 
 export function SiteMeasurementsTab() {
+  const teamMembers = useHubTeam();
   const [rooms, setRooms] = useState<ConsultRoom[]>(SAMPLE_ROOMS);
   const [sketchUploaded, setSketchUploaded] = useState(true);
   const [dragOver, setDragOver] = useState(false);
@@ -129,7 +130,7 @@ export function SiteMeasurementsTab() {
         <div className="mt-4">
           <div className="mb-2 text-[13px] font-medium text-[var(--figma-navy)]">Attendees</div>
           <div className="flex flex-wrap gap-2">
-            {TEAM_MEMBERS.map((m) => {
+            {teamMembers.map((m) => {
               const on = attendees.includes(m.id);
               return (
                 <button

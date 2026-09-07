@@ -11,12 +11,16 @@ import { NewProjectModal } from "@/components/projects/hub/new-project-modal";
 import { PhaseBadge } from "@/components/projects/hub/phase-badge";
 import { HubProgressBar } from "@/components/projects/hub/progress-bar";
 import { StatusBadge } from "@/components/projects/hub/status-badge";
+import { useInfiniteProjects } from "@/hooks/use-infinite-projects";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { PHASES } from "@/lib/projects/design-tokens";
 import {
-  filterActiveProjects,
-  filterHistoricalProjects,
-  getAllActiveProjects,
-} from "@/lib/projects/mock-projects";
+  filterActiveByPhase,
+  filterActiveByStatus,
+  filterHistoricalByYear,
+  mapProjectCardToActiveView,
+  mapProjectCardToHistoricalView,
+} from "@/lib/projects/map-project-hub";
 import type { ActiveProjectView, HistoricalProjectView } from "@/types/project-hub";
 import {
   Table,
@@ -154,7 +158,7 @@ function ActiveProjectRow({
         {project.nextDeadline}
       </TableCell>
       <TableCell className="px-4 py-3.5">
-        <AvatarStack teamIds={project.teamIds} />
+        <AvatarStack />
       </TableCell>
       <TableCell className="px-2 py-3.5">
         <MaterialIcon name="chevron_right" outlined size={18} className="text-[var(--figma-gray400)]" />
@@ -200,7 +204,7 @@ function ActiveProjectCard({
       </div>
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] text-[var(--figma-gray400)]">{project.nextDeadline}</span>
-        <AvatarStack teamIds={project.teamIds} />
+        <AvatarStack />
       </div>
     </div>
   );
@@ -250,6 +254,7 @@ export function ProjectsListPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab") === "historical" ? "historical" : "active";
+  const authDisabled = isAuthDisabled();
 
   const [tab, setTab] = useState<ListTab>(initialTab);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -262,23 +267,75 @@ export function ProjectsListPage() {
   const [showNewProject, setShowNewProject] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  const activeQuery = useInfiniteProjects(
+    {
+      status: "ACTIVE",
+      search: search.trim() || undefined,
+      limit: PER_PAGE,
+    },
+    { enabled: tab === "active" },
+  );
+
+  const historicalQuery = useInfiniteProjects(
+    {
+      status: "INACTIVE",
+      search: search.trim() || undefined,
+      limit: 20,
+    },
+    { enabled: tab === "historical" },
+  );
+
   useEffect(() => {
     setTab(searchParams.get("tab") === "historical" ? "historical" : "active");
   }, [searchParams]);
 
-  const filteredActive = useMemo(
-    () => filterActiveProjects({ search, phase: phaseFilter, status: statusFilter }),
-    [search, phaseFilter, statusFilter, refreshKey],
+  useEffect(() => {
+    if (tab !== "active") return;
+    const needed = page * PER_PAGE;
+    if (activeQuery.projects.length < needed && activeQuery.hasNextPage && !activeQuery.isFetchingNextPage) {
+      void activeQuery.fetchNextPage();
+    }
+  }, [
+    tab,
+    page,
+    activeQuery.projects.length,
+    activeQuery.hasNextPage,
+    activeQuery.isFetchingNextPage,
+    activeQuery.fetchNextPage,
+  ]);
+
+  const apiActiveProjects = useMemo(
+    () => activeQuery.projects.map(mapProjectCardToActiveView),
+    [activeQuery.projects],
   );
 
-  const filteredHistorical = useMemo(
-    () => filterHistoricalProjects({ search, year: yearFilter }),
-    [search, yearFilter],
+  const apiHistoricalProjects = useMemo(
+    () => historicalQuery.projects.map(mapProjectCardToHistoricalView),
+    [historicalQuery.projects],
   );
 
-  const totalPages = Math.ceil(filteredActive.length / PER_PAGE);
+  const filteredActive = useMemo(() => {
+    let list = apiActiveProjects;
+    list = filterActiveByPhase(list, phaseFilter);
+    list = filterActiveByStatus(list, statusFilter);
+    return list;
+  }, [phaseFilter, statusFilter, refreshKey, apiActiveProjects]);
+
+  const filteredHistorical = useMemo(() => {
+    return filterHistoricalByYear(apiHistoricalProjects, yearFilter);
+  }, [yearFilter, apiHistoricalProjects]);
+
+  const totalPages = Math.max(1, Math.ceil((activeQuery.total || filteredActive.length) / PER_PAGE));
+
   const pageSlice = filteredActive.slice((page - 1) * PER_PAGE, page * PER_PAGE);
-  const activeCount = getAllActiveProjects().length;
+  const activeCount = activeQuery.total;
+
+  const isLoading =
+    (tab === "active" && activeQuery.isLoading) ||
+    (tab === "historical" && historicalQuery.isLoading);
+
+  const loadError =
+    tab === "active" ? activeQuery.error : tab === "historical" ? historicalQuery.error : null;
 
   const statusOptions = ["All", "On Track", "At Risk", "Overdue", "In Progress", "Completed"];
 
@@ -393,7 +450,27 @@ export function ProjectsListPage() {
         </div>
       </div>
 
-      {tab === "active" && (
+      {authDisabled && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+          Live projects require auth. Copy <code className="font-mono">.env.local.example</code> to{" "}
+          <code className="font-mono">.env.local</code> and set{" "}
+          <code className="font-mono">NEXT_PUBLIC_ENABLE_AUTH=true</code>.
+        </div>
+      )}
+
+      {loadError && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+          {loadError}
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="flex items-center justify-center py-20 text-[13px] text-[var(--figma-gray500)]">
+          Loading projects…
+        </div>
+      )}
+
+      {!isLoading && tab === "active" && (
         <>
           {filteredActive.length === 0 ? (
             <EmptyState label="Create your first project to get started." onAdd={() => setShowNewProject(true)} />
@@ -455,7 +532,7 @@ export function ProjectsListPage() {
         </>
       )}
 
-      {tab === "historical" && (
+      {!isLoading && tab === "historical" && (
         <>
           {filteredHistorical.length === 0 ? (
             <EmptyState
@@ -513,6 +590,7 @@ export function ProjectsListPage() {
             setRefreshKey((k) => k + 1);
             setTab("active");
             setPage(1);
+            void activeQuery.refetch();
           }}
         />
       )}

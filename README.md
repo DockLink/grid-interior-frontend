@@ -2,16 +2,27 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+### Backend setup
+
+1. Copy the environment template:
 
 ```bash
-npm run dev
-# or
+cp .env.local.example .env.local
+```
+
+2. Start the NestJS backend on port **3001** (Next.js uses **3000**).
+
+3. Ensure `.env.local` contains:
+
+- `NEXT_PUBLIC_ENABLE_AUTH=true` — enables real login and API calls
+- `BACKEND_API_URL=http://localhost:3001/v2` — BFF proxy target
+
+Without `NEXT_PUBLIC_ENABLE_AUTH=true`, the app runs in UI-only mode with mock data and a dev auth bypass.
+
+### Development server
+
+```bash
 yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.

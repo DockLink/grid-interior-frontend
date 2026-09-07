@@ -5,16 +5,16 @@ import type { Task, TaskablePriority, TaskableStatus } from "@/types/tasks";
 export type BoardColumnId = "todo" | "in-progress" | "done";
 
 export const BOARD_COLUMNS: { id: BoardColumnId; label: string; accent: string }[] = [
-  { id: "todo", label: "To do", accent: "#9C8573" },
-  { id: "in-progress", label: "In progress", accent: "#D4A96A" },
-  { id: "done", label: "Done", accent: "#3D8B5E" },
+  { id: "todo", label: "To do", accent: "#6B7280" },
+  { id: "in-progress", label: "In progress", accent: "#0fa8a0" },
+  { id: "done", label: "Done", accent: "#2fbe6b" },
 ];
 
 export const PRIORITY_DOT: Record<TaskablePriority, string> = {
   CRITICAL: "#DC2626",
   HIGH: "#DC2626",
-  MEDIUM: "#D4A96A",
-  LOW: "#C4B5A5",
+  MEDIUM: "#D97706",
+  LOW: "#9CA3AF",
 };
 
 export interface TaskAssigneeView {
@@ -85,10 +85,10 @@ export function formatBoardDate(dateIso: string): string {
 }
 
 export function dueDateColor(dateIso: string, status: BoardColumnId, today = new Date().toISOString().slice(0, 10)) {
-  if (status === "done") return "#C4B5A5";
+  if (status === "done") return "#9CA3AF";
   if (dateIso < today) return "#DC2626";
-  if (dateIso === today) return "#D4A96A";
-  return "#9C8573";
+  if (dateIso === today) return "#D97706";
+  return "#6B7280";
 }
 
 

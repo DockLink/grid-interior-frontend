@@ -2,18 +2,25 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
+import { useProjectContext } from "@/components/projects/project-context";
+import { ManageTeamModal } from "@/components/projects/hub/manage-team-modal";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { PhaseStepper } from "@/components/projects/hub/phase-stepper";
 import { StatTile } from "@/components/projects/hub/stat-tile";
+import { useProjectMembers } from "@/hooks/use-project-members";
+import { useProjectTaskables } from "@/hooks/use-project-taskables";
 import {
   PHASE_WORKSPACES,
   WS_STATUS_CFG,
   type PhaseWorkspace,
 } from "@/lib/projects/design-tokens";
-import { getActiveProject, TEAM_MEMBERS } from "@/lib/projects/mock-projects";
+import { mapProjectToOverviewView } from "@/lib/projects/map-project-overview";
+import { canManageProject } from "@/lib/projects/permissions";
+import { getUserInitials, getUserListPrimaryLabel } from "@/lib/user/display";
 import type { HubActivityItem } from "@/types/project-hub";
+import type { ProjectMember } from "@/types/projects";
 import {
   projectConceptRoute,
   projectConsultationRoute,
@@ -24,10 +31,24 @@ import {
   projectThreeDRoute,
 } from "@/types/navigation";
 
-function TeamAvatar({ memberId }: { memberId: number }) {
+const MEMBER_COLORS = ["#0E7C86", "#7C3AED", "#0891B2", "#D97706", "#1B2A4A", "#BE185D"];
+
+function memberColor(userId: string): string {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i += 1) {
+    hash = (hash + userId.charCodeAt(i)) % MEMBER_COLORS.length;
+  }
+  return MEMBER_COLORS[hash] ?? MEMBER_COLORS[0];
+}
+
+function TeamAvatar({ member }: { member: ProjectMember }) {
   const [hover, setHover] = useState(false);
-  const member = TEAM_MEMBERS.find((t) => t.id === memberId);
-  if (!member) return null;
+  const user = member.assignee;
+  if (!user) return null;
+
+  const initials = getUserInitials({ ...user, email: user.email ?? "" });
+  const name = getUserListPrimaryLabel({ ...user, email: user.email ?? "" });
+  const role = member.role ?? "Member";
 
   return (
     <div className="relative">
@@ -36,19 +57,19 @@ function TeamAvatar({ memberId }: { memberId: number }) {
         onMouseLeave={() => setHover(false)}
         className="flex size-11 cursor-default items-center justify-center rounded-full border-2 border-white text-sm font-bold text-white transition-all duration-150"
         style={{
-          background: member.color,
+          background: memberColor(member.user_id),
           boxShadow: hover ? "var(--neu-raised)" : "var(--neu-card)",
         }}
       >
-        {member.initials}
+        {initials}
       </div>
       {hover && (
         <div
           className="pointer-events-none absolute bottom-[110%] left-1/2 z-10 -translate-x-1/2 rounded-lg px-2.5 py-1.5 text-[11px] font-medium whitespace-nowrap text-white"
           style={{ background: "var(--figma-navy)", boxShadow: "var(--neu-dropdown)" }}
         >
-          <div className="font-bold">{member.name}</div>
-          <div className="opacity-70">{member.role}</div>
+          <div className="font-bold">{name}</div>
+          <div className="opacity-70">{role}</div>
         </div>
       )}
     </div>
@@ -193,15 +214,38 @@ function PhaseWorkspaceCard({
   );
 }
 
-
 export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
   const router = useRouter();
-  const project = getActiveProject(projectId);
+  const { project, isLoading, error } = useProjectContext();
+  const { members, effectiveRole, isViewer } = useProjectMembers();
+  const { tasks: projectTasks, isLoading: tasksLoading } = useProjectTaskables(
+    projectId,
+    "TASK",
+    { depth: 0, limit: 200 },
+  );
+  const [showManageTeam, setShowManageTeam] = useState(false);
+  const canManageTeam = canManageProject(effectiveRole, isViewer);
 
-  if (!project) {
+  const overview = useMemo(() => {
+    if (!project) return null;
+    return mapProjectToOverviewView(project, { members, tasks: projectTasks });
+  }, [project, members, projectTasks]);
+
+  const activeMembers = useMemo(
+    () => members.filter((m) => m.status === "ACTIVE"),
+    [members],
+  );
+
+  if (isLoading || tasksLoading) {
+    return (
+      <div className="px-10 py-8 text-[var(--figma-gray500)]">Loading project overview…</div>
+    );
+  }
+
+  if (error || !project || !overview) {
     return (
       <div className="px-10 py-8 text-[var(--figma-gray500)]">
-        Project not found. Return to the projects list.
+        {error ?? "Project not found. Return to the projects list."}
       </div>
     );
   }
@@ -230,7 +274,7 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
         document.getElementById("hub-site-location")?.scrollIntoView({ behavior: "smooth" });
       },
     },
-    ...(project.phase === "Execution"
+    ...(overview.phase === "Execution"
       ? [
           {
             icon: "receipt_long",
@@ -255,50 +299,65 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
     router.push(routes[phase](projectId));
   };
 
+  const briefAttachment = project.brief_attachments?.[0];
+
   return (
     <div className="px-10 py-7">
-      <PhaseStepper currentPhaseIndex={project.phaseIndex} />
+      <PhaseStepper currentPhaseIndex={overview.phaseIndex} />
 
       <div className="mb-6 flex flex-wrap gap-4">
         <StatTile
           icon="schedule"
           label="Days Active"
-          value={String(project.daysActive)}
-          sub={`Since ${project.startDate}`}
+          value={String(overview.daysActive)}
+          sub={`Since ${overview.startDate}`}
           color="#0E7C86"
         />
         <StatTile
           icon="task_alt"
           label="Tasks Completed"
-          value={`${project.tasksDone} / ${project.tasksTotal}`}
-          sub={`${project.tasksTotal ? Math.round((project.tasksDone / project.tasksTotal) * 100) : 0}% done`}
+          value={`${overview.tasksDone} / ${overview.tasksTotal}`}
+          sub={`${overview.tasksTotal ? Math.round((overview.tasksDone / overview.tasksTotal) * 100) : 0}% done`}
           color="#3FA66B"
         />
         <StatTile
           icon="people"
           label="Team Size"
-          value={String(project.teamIds.length)}
+          value={String(activeMembers.length)}
           sub="assigned members"
           color="#7C3AED"
         />
         <StatTile
           icon="event"
           label="Next Deadline"
-          value={project.nextDeadline}
-          sub={project.status === "Overdue" ? "Overdue!" : "Upcoming"}
-          color={project.status === "Overdue" ? "#F26D6D" : "#1B2A4A"}
+          value={overview.nextDeadline}
+          sub={overview.status === "Overdue" ? "Overdue!" : "Upcoming"}
+          color={overview.status === "Overdue" ? "#F26D6D" : "#1B2A4A"}
         />
       </div>
 
       <div className="neu-card mb-6 rounded-2xl bg-white px-6 py-[18px]">
-        <div className="mb-3.5 flex items-center gap-2">
-          <MaterialIcon name="group" outlined size={18} className="text-[var(--figma-teal)]" />
-          <span className="text-sm font-semibold text-[var(--figma-navy)]">Assigned Team</span>
+        <div className="mb-3.5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <MaterialIcon name="group" outlined size={18} className="text-[var(--figma-teal)]" />
+            <span className="text-sm font-semibold text-[var(--figma-navy)]">Assigned Team</span>
+          </div>
+          {canManageTeam && (
+            <button
+              type="button"
+              onClick={() => setShowManageTeam(true)}
+              className="cursor-pointer border-0 bg-transparent text-[12px] font-medium text-[var(--figma-teal)] hover:underline"
+            >
+              Manage team
+            </button>
+          )}
         </div>
         <div className="flex flex-wrap gap-3.5">
-          {project.teamIds.map((id) => (
-            <TeamAvatar key={id} memberId={id} />
-          ))}
+          {activeMembers.length === 0 ? (
+            <span className="text-[13px] text-[var(--figma-gray500)]">No team members assigned yet.</span>
+          ) : (
+            activeMembers.map((member) => <TeamAvatar key={member.user_id} member={member} />)
+          )}
         </div>
       </div>
 
@@ -329,9 +388,11 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
               View all
             </Link>
           </div>
-          {project.activity.map((item, idx) => (
-            <ActivityRow key={idx} item={item} />
-          ))}
+          {overview.activity.length === 0 ? (
+            <p className="py-4 text-[13px] text-[var(--figma-gray500)]">No recent activity yet.</p>
+          ) : (
+            overview.activity.map((item, idx) => <ActivityRow key={idx} item={item} />)
+          )}
         </div>
 
         <div className="flex flex-col gap-4">
@@ -347,37 +408,32 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
             </div>
           </div>
           <div id="hub-site-location">
-            <MapThumbnail location={project.location} />
-            <p className="mt-2 text-[11px] text-[var(--figma-gray400)]">
-              {project.distanceKm} km from GRID Interior, Dehiwala
-              {project.distanceKm <= 10
-                ? " · eligible for free consultation"
-                : " · paid consultation only"}
-            </p>
+            <MapThumbnail location={overview.location} />
+            {overview.location && overview.location !== "—" && (
+              <p className="mt-2 text-[11px] text-[var(--figma-gray400)]">{overview.location}</p>
+            )}
           </div>
           <div className="neu-card rounded-2xl bg-white px-6 py-[18px]">
             <div className="mb-3 flex items-center gap-2">
               <MaterialIcon name="description" outlined size={18} className="text-[var(--figma-teal)]" />
               <span className="text-sm font-semibold text-[var(--figma-navy)]">Client Brief</span>
             </div>
-            <div className="flex items-center gap-2 rounded-xl border border-[var(--figma-border)] bg-[var(--figma-gray50)] px-3 py-2.5">
-              <MaterialIcon name="picture_as_pdf" outlined size={18} className="text-[#EF4444]" />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-medium text-[var(--figma-navy)]">
-                  Client_Brief_Marchetti.pdf
+            {briefAttachment ? (
+              <div className="flex items-center gap-2 rounded-xl border border-[var(--figma-border)] bg-[var(--figma-gray50)] px-3 py-2.5">
+                <MaterialIcon name="picture_as_pdf" outlined size={18} className="text-[#EF4444]" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] font-medium text-[var(--figma-navy)]">
+                    {briefAttachment.file_name ?? "Client brief"}
+                  </div>
                 </div>
-                <div className="text-[11px] text-[var(--figma-gray400)]">2.2 MB · 05 Jul 2026</div>
               </div>
-            </div>
-            <button
-              type="button"
-              className="mt-3 cursor-pointer border-none bg-transparent p-0 text-[12px] font-semibold text-[var(--figma-teal)]"
-            >
-              Upload brief document
-            </button>
+            ) : (
+              <p className="text-[13px] text-[var(--figma-gray500)]">No brief document uploaded yet.</p>
+            )}
           </div>
         </div>
       </div>
+      {showManageTeam && <ManageTeamModal onClose={() => setShowManageTeam(false)} />}
     </div>
   );
 }

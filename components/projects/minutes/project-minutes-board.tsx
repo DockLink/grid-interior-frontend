@@ -61,6 +61,7 @@ export function ProjectMinutesBoard({ projectId }: { projectId: string }) {
     updateMinute,
     removeMinute,
     setActionItemStatus,
+    actionItemUpdating,
     uploadAudio,
     uploadAttachment,
   } = useProjectMeetingMinutes(projectId);
@@ -223,7 +224,7 @@ export function ProjectMinutesBoard({ projectId }: { projectId: string }) {
   }
 
   async function toggleActionDone(action: MeetingActionItem, index: number) {
-    if (!selected) return;
+    if (!selected || !canManage) return;
     const next = action.status === "COMPLETED" ? "PENDING" : "COMPLETED";
     try {
       await setActionItemStatus(selected.id, index, next);
@@ -421,6 +422,7 @@ export function ProjectMinutesBoard({ projectId }: { projectId: string }) {
             <DetailView
               minute={selected}
               canManage={canManage}
+              actionItemUpdating={actionItemUpdating}
               onEdit={() => openEdit(selected)}
               onDelete={() => handleDelete(selected)}
               onToggleAction={toggleActionDone}
@@ -473,12 +475,14 @@ export function ProjectMinutesBoard({ projectId }: { projectId: string }) {
 function DetailView({
   minute,
   canManage,
+  actionItemUpdating,
   onEdit,
   onDelete,
   onToggleAction,
 }: {
   minute: MeetingMinute;
   canManage: boolean;
+  actionItemUpdating?: string | null;
   onEdit: () => void;
   onDelete: () => void;
   onToggleAction: (action: MeetingActionItem, index: number) => void;
@@ -678,6 +682,7 @@ function DetailView({
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {actionItems.map((action, index) => {
               const done = action.status === "COMPLETED";
+              const updating = actionItemUpdating === `${minute.id}:${index}`;
               return (
                 <div
                   key={`${action.text}-${index}`}
@@ -689,17 +694,19 @@ function DetailView({
                     borderRadius: "8px",
                     border: "1px solid rgba(90,60,30,0.10)",
                     padding: "10px 14px",
+                    opacity: updating ? 0.6 : 1,
                   }}
                 >
                   <button
-                    onClick={() => onToggleAction(action, index)}
+                    onClick={() => canManage && !updating && onToggleAction(action, index)}
+                    disabled={!canManage || updating}
                     style={{
                       width: "18px",
                       height: "18px",
                       borderRadius: "50%",
                       border: `2px solid ${done ? "var(--ds-accent)" : "rgba(90,60,30,0.25)"}`,
                       background: done ? "var(--ds-accent)" : "transparent",
-                      cursor: "pointer",
+                      cursor: canManage && !updating ? "pointer" : "default",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",

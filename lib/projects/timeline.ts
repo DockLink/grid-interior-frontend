@@ -1,4 +1,4 @@
-import { addIsoDuration } from "@/lib/projects/duration";
+import { resolveProjectEndDate } from "@/lib/projects/duration";
 import type { ProjectMilestoneView, ProjectStageView } from "@/lib/projects/map-stages";
 import type { Task, TaskableStatus } from "@/types/tasks";
 import type { Project } from "@/types/projects";
@@ -118,10 +118,9 @@ export function computeChartBounds(
   if (project?.start_date) {
     dates.push(new Date(project.start_date).getTime());
   }
-  if ((project as any)?.end_date) {
-    dates.push(new Date((project as any).end_date).getTime());
-  } else if (project?.start_date && (project as any)?.duration) {
-    dates.push(addIsoDuration(project.start_date, (project as any).duration).getTime());
+  const projectEnd = project ? resolveProjectEndDate(project) : null;
+  if (projectEnd) {
+    dates.push(new Date(projectEnd).getTime());
   }
 
   for (const s of stages) {

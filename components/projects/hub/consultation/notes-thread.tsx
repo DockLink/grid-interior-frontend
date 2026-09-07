@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { SAMPLE_COMMENTS } from "@/lib/projects/mock-consultation";
-import { TEAM_MEMBERS } from "@/lib/projects/mock-projects";
+import { useHubTeam } from "@/lib/projects/hub-team-context";
 import type { ConsultComment } from "@/types/consultation";
 
 export function NotesThread({ compact = false, section }: { compact?: boolean; section?: string }) {
+  const teamMembers = useHubTeam();
   const [comments, setComments] = useState<ConsultComment[]>(
     section ? SAMPLE_COMMENTS.slice(0, 2) : SAMPLE_COMMENTS,
   );
@@ -37,7 +38,7 @@ export function NotesThread({ compact = false, section }: { compact?: boolean; s
     <div className="flex flex-col" style={{ height: compact ? 280 : 560 }}>
       <div className="mb-4 flex-1 overflow-y-auto pr-1">
         {comments.map((c, idx) => {
-          const m = TEAM_MEMBERS.find((t) => t.id === c.memberId);
+          const m = teamMembers.find((t) => t.id === c.memberId);
           if (!m) return null;
           const isLast = idx === comments.length - 1;
 

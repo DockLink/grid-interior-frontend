@@ -1,21 +1,23 @@
 "use client";
 
 import { RoleDashboard } from "@/components/dashboard/studio/role-dashboard";
-import {
-  ATTENTION_DATA,
-  PROJECTS_OVERVIEW_DATA,
-  SUPER_ADMIN_STATS,
-} from "@/components/dashboard/studio/demo-data";
+import { useDashboardData } from "@/hooks/use-dashboard-data";
 
 export function SuperAdminDashboard() {
+  const data = useDashboardData("superadmin");
+
   return (
     <RoleDashboard
-      stats={SUPER_ADMIN_STATS}
-      attention={ATTENTION_DATA}
-      projects={PROJECTS_OVERVIEW_DATA}
+      stats={data.stats}
+      attention={data.attention}
       attentionTitle="Needs Your Attention"
+      projects={data.projects}
       projectsTitle="Projects Overview"
+      todaysTasks={data.todaysTasks}
+      fileActivity={data.fileActivity}
+      isLoading={data.isLoading}
       showActions
+      onAttentionAction={data.handleAttentionAction}
     />
   );
 }

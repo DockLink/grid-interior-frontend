@@ -3,6 +3,8 @@
 
 export interface GanttPhase {
   id: number;
+  /** Backend STAGE taskable id when live */
+  stageId?: string;
   name: string;
   color: string;
   bg: string;
@@ -16,6 +18,8 @@ export interface GanttPhase {
 
 export interface Milestone {
   id: number;
+  /** Backend MILESTONE taskable id when live */
+  milestoneId?: string;
   name: string;
   date: string;
   status: "completed" | "upcoming" | "overdue";

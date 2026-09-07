@@ -54,6 +54,16 @@ export const useAuthStore = create<AuthState>()(
           set({ session: getDevBypassSession() });
           return;
         }
+
+        const accessToken = get().session?.accessToken;
+        if (accessToken) {
+          // Best-effort Nest/Supabase session revoke; never block local clear.
+          void apiClient<{ success: boolean }>("/auth/logout", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }).catch(() => undefined);
+        }
+
         clearActivity();
         set({ session: null });
       },

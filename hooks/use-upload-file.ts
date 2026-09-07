@@ -4,10 +4,15 @@ import { useCallback } from "react";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
 
+function uploadFieldName(file: File): string {
+  if (file.type.startsWith("image/")) return "image";
+  return "file";
+}
+
 export function useUploadFile() {
   const uploadFile = useCallback(async (file: File) => {
     const formData = new FormData();
-    formData.append("image", file);
+    formData.append(uploadFieldName(file), file);
 
     const token = (await import("@/stores/auth-store")).useAuthStore.getState().session
       ?.accessToken;

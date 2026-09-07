@@ -47,13 +47,18 @@ export const TaskKanbanCard = memo(function TaskKanbanCard({
       onDragEnd={onDragEnd}
       onClick={onClick}
       className={cn(
-        "mb-2 cursor-grab rounded-[10px] border border-[rgba(90,60,30,0.10)] bg-[var(--ds-surface-elevated)] p-3 shadow-sm active:cursor-grabbing select-none transition-opacity",
+        "mb-2 cursor-grab rounded-[12px] border border-[var(--figma-border)] bg-white p-3 shadow-[var(--neu-card)] active:cursor-grabbing select-none transition-opacity",
         isDragging && "opacity-20 pointer-events-none border-dashed"
       )}
     >
       <div className="mb-2.5 flex items-start gap-2">
         <span className="mt-1.5 size-1.5 shrink-0 rounded-full" style={{ background: PRIORITY_DOT[task.priority] }} />
-        <span className={cn("text-[13px] leading-snug font-medium", isDone ? "text-[var(--ds-secondary-label)] line-through" : "text-[var(--ds-label)]")}>
+        <span
+          className={cn(
+            "text-[13px] leading-snug font-medium",
+            isDone ? "text-[var(--figma-gray500)] line-through" : "text-[var(--figma-navy)]"
+          )}
+        >
           {task.title}
         </span>
       </div>
@@ -61,17 +66,17 @@ export const TaskKanbanCard = memo(function TaskKanbanCard({
       {/* Assignees row */}
       <div className="flex items-center justify-between pl-3.5">
         {showAssigneeNames ? (
-          <div className="flex flex-col gap-1 min-w-0">
+          <div className="flex min-w-0 flex-col gap-1">
             {visibleAssignees.map((a) => (
-              <div key={a.userId} className="flex items-center gap-1.5 min-w-0">
+              <div key={a.userId} className="flex min-w-0 items-center gap-1.5">
                 <TaskUserAvatar initials={a.initials} size={16} />
-                <span className="truncate text-[11px] text-[var(--ds-secondary-label)] font-medium leading-none">
+                <span className="truncate text-[11px] font-medium leading-none text-[var(--figma-gray500)]">
                   {a.name}
                 </span>
               </div>
             ))}
             {overflow > 0 && (
-              <span className="text-[10px] text-[var(--ds-secondary-label)] pl-5">+{overflow} more</span>
+              <span className="pl-5 text-[10px] text-[var(--figma-gray400)]">+{overflow} more</span>
             )}
           </div>
         ) : (
@@ -82,7 +87,7 @@ export const TaskKanbanCard = memo(function TaskKanbanCard({
               </div>
             ))}
             {overflow > 0 && (
-              <span className="flex size-[18px] items-center justify-center rounded-full bg-[#F5E6D0] text-[9px] font-semibold text-[var(--ds-accent)]">
+              <span className="flex size-[18px] items-center justify-center rounded-full bg-[var(--ds-accent-muted)] text-[9px] font-semibold text-[var(--ds-accent)]">
                 +{overflow}
               </span>
             )}
@@ -137,11 +142,15 @@ export const TaskKanbanColumn = memo(function TaskKanbanColumn({
       <div className="mb-2.5 flex items-center justify-between px-0.5">
         <div className="flex items-center gap-2">
           <span className="size-2 rounded-full" style={{ background: column.accent }} />
-          <span className="text-[13px] font-medium">{column.label}</span>
+          <span className="text-[13px] font-medium text-[var(--figma-navy)]">{column.label}</span>
           <Badge variant="secondary">{tasks.length}</Badge>
         </div>
         {canAdd && (
-          <button type="button" onClick={() => onAddTask(columnId)} className="text-[#C4B5A5]">
+          <button
+            type="button"
+            onClick={() => onAddTask(columnId)}
+            className="text-[var(--figma-gray400)] hover:text-[var(--ds-accent)]"
+          >
             +
           </button>
         )}
@@ -156,7 +165,9 @@ export const TaskKanbanColumn = memo(function TaskKanbanColumn({
         }}
         className={cn(
           "min-h-[480px] flex-1 rounded-xl p-2",
-          isOver ? "border border-dashed border-[var(--ds-accent)]/60 bg-[var(--ds-accent)]/5" : "bg-[var(--ds-bg)]/45"
+          isOver
+            ? "border border-dashed border-[var(--ds-accent)]/60 bg-[var(--ds-accent)]/5"
+            : "bg-[var(--figma-gray50)]"
         )}
       >
         {tasks.map((task) => (
@@ -171,7 +182,9 @@ export const TaskKanbanColumn = memo(function TaskKanbanColumn({
           />
         ))}
         {tasks.length === 0 && (
-          <div className="flex h-20 items-center justify-center text-xs text-[#C4B5A5]">No tasks</div>
+          <div className="flex h-20 items-center justify-center text-xs text-[var(--figma-gray400)]">
+            No tasks
+          </div>
         )}
       </div>
     </div>

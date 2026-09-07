@@ -24,7 +24,7 @@ export function AttentionPanel({
 }: {
   items: AttentionItem[];
   title?: string;
-  onAction?: (id: number, action: "approve" | "decline") => void;
+  onAction?: (item: AttentionItem, action: "approve" | "decline") => void;
 }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-[#E4E9F0] bg-white shadow-[0px_4px_16px_rgba(11,37,69,0.06)]">
@@ -92,7 +92,7 @@ export function AttentionPanel({
                     <Button
                       size="sm"
                       className="h-7 rounded-full bg-[#E7F9EE] px-3 text-[11px] font-semibold text-[#2FBE6B] hover:bg-[#d8f5e3]"
-                      onClick={() => onAction(item.id, "approve")}
+                      onClick={() => onAction(item, "approve")}
                     >
                       Approve
                     </Button>
@@ -100,7 +100,7 @@ export function AttentionPanel({
                       size="sm"
                       variant="ghost"
                       className="h-7 rounded-full bg-[#FDECEC] px-3 text-[11px] font-semibold text-[#FF6B6B] hover:bg-[#fadada]"
-                      onClick={() => onAction(item.id, "decline")}
+                      onClick={() => onAction(item, "decline")}
                     >
                       Decline
                     </Button>

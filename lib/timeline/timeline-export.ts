@@ -25,13 +25,16 @@ function downloadCsv(header: string[], rows: string[][], filename: string): void
   URL.revokeObjectURL(url);
 }
 
-function parseProjectStart(): Date {
-  // Match Gantt chart: project starts 15 May 2026
+function parseProjectStart(projectStartIso?: string): Date {
+  if (projectStartIso) {
+    const d = new Date(`${projectStartIso.slice(0, 10)}T00:00:00`);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
   return new Date("2026-05-15");
 }
 
-export function weekToDateLabel(startWeek: number): string {
-  const d = parseProjectStart();
+export function weekToDateLabel(startWeek: number, projectStartIso?: string): string {
+  const d = parseProjectStart(projectStartIso);
   d.setDate(d.getDate() + Math.round(startWeek) * 7);
   return d.toLocaleDateString("en-GB", {
     day: "2-digit",
@@ -55,6 +58,7 @@ export function slugForFilename(value: string): string {
 export function downloadTimelinePhasesExcel(
   phases: GanttPhase[],
   filename: string,
+  projectStartIso?: string,
 ): void {
   const header = [
     "Phase",
@@ -69,8 +73,8 @@ export function downloadTimelinePhasesExcel(
   const rows = phases.map((phase) => [
     phase.name,
     statusLabel(phase.status),
-    weekToDateLabel(phase.startWeek),
-    weekToDateLabel(phase.startWeek + phase.durationWeeks),
+    weekToDateLabel(phase.startWeek, projectStartIso),
+    weekToDateLabel(phase.startWeek + phase.durationWeeks, projectStartIso),
     String(phase.durationWeeks),
     String(phase.progress),
     phase.lead.name,

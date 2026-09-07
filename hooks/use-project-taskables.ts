@@ -7,6 +7,7 @@ import { authApiClient } from "@/lib/api/authenticated-client";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { queryKeys } from "@/lib/query/keys";
 import { withTaskEndDate } from "@/lib/tasks/create-task-payload";
+import { mapTask, mapTasksList } from "@/lib/tasks/map-task";
 import { toTasksQueryString } from "@/lib/tasks/query-string";
 import type { CreateTaskRequest, Task, TaskableType, TasksListResponse, TasksQueryParams } from "@/types/tasks";
 
@@ -26,7 +27,7 @@ async function fetchTaskables(
   };
   const query = toTasksQueryString(params);
   const res = await authApiClient<TasksListResponse>(`/tasks${query}`);
-  return res.data;
+  return mapTasksList(res);
 }
 
 export function useProjectTaskables(
@@ -51,10 +52,11 @@ export function useProjectTaskables(
   const createMutation = useMutation({
     mutationFn: async (payload: CreateTaskRequest) => {
       const normalized = withTaskEndDate(payload);
-      return authApiClient<Task>("/tasks", {
+      const created = await authApiClient<Task>("/tasks", {
         method: "POST",
         body: JSON.stringify(normalized),
       });
+      return mapTask(created);
     },
     onSuccess: (created) => {
       // Optimistic insert then background revalidate.
@@ -71,11 +73,13 @@ export function useProjectTaskables(
     }: {
       taskId: string;
       payload: { title?: string; description?: string };
-    }) =>
-      authApiClient<Task>(`/tasks/${taskId}`, {
+    }) => {
+      const updated = await authApiClient<Task>(`/tasks/${taskId}`, {
         method: "PATCH",
         body: JSON.stringify(payload),
-      }),
+      });
+      return mapTask(updated);
+    },
     onSuccess: (updated) => {
       qc.setQueryData<Task[]>(qKey, (prev) =>
         prev ? prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)) : [updated]
@@ -92,11 +96,13 @@ export function useProjectTaskables(
       taskId: string;
       startDateIso: string;
       endDateIso: string;
-    }) =>
-      authApiClient<Task>(`/tasks/${taskId}/dates`, {
+    }) => {
+      const updated = await authApiClient<Task>(`/tasks/${taskId}/dates`, {
         method: "PATCH",
         body: JSON.stringify({ start_date: startDateIso, end_date: endDateIso }),
-      }),
+      });
+      return mapTask(updated);
+    },
     onSuccess: (updated) => {
       qc.setQueryData<Task[]>(qKey, (prev) =>
         prev ? prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)) : [updated]
@@ -132,11 +138,13 @@ export function useProjectTaskables(
   );
 
   const setStatusMutation = useMutation({
-    mutationFn: async ({ taskId, status }: { taskId: string; status: Task["status"] }) =>
-      authApiClient<Task>(`/tasks/${taskId}`, {
+    mutationFn: async ({ taskId, status }: { taskId: string; status: Task["status"] }) => {
+      const updated = await authApiClient<Task>(`/tasks/${taskId}`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
-      }),
+      });
+      return mapTask(updated);
+    },
     onSuccess: (updated) => {
       qc.setQueryData<Task[]>(qKey, (prev) =>
         prev ? prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)) : [updated]
@@ -153,15 +161,17 @@ export function useProjectTaskables(
       taskId: string;
       startDateIso?: string;
       endDateIso?: string;
-    }) =>
-      authApiClient<Task>(`/tasks/${taskId}/reopen`, {
+    }) => {
+      const updated = await authApiClient<Task>(`/tasks/${taskId}/reopen`, {
         method: "POST",
         body: JSON.stringify(
           startDateIso && endDateIso
             ? { start_date: startDateIso, end_date: endDateIso }
             : {}
         ),
-      }),
+      });
+      return mapTask(updated);
+    },
     onSuccess: (updated) => {
       qc.setQueryData<Task[]>(qKey, (prev) =>
         prev ? prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)) : [updated]

@@ -28,3 +28,7 @@ export function useProjectContext() {
   if (!ctx) throw new Error("useProjectContext must be used within ProjectProvider");
   return ctx;
 }
+
+export function useOptionalProjectContext(): ProjectContextValue | null {
+  return useContext(ProjectContext);
+}

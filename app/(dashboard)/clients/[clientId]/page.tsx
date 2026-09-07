@@ -6,5 +6,5 @@ export default async function ClientProfilePage({
   params: Promise<{ clientId: string }>;
 }) {
   const { clientId } = await params;
-  return <ClientProfileScreen clientId={Number(clientId)} />;
+  return <ClientProfileScreen clientId={clientId} />;
 }

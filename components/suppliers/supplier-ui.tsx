@@ -3,11 +3,9 @@
 import { useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
-import {
-  AVAILABILITY_CFG,
-  CATEGORY_CFG,
-  type AvailabilityStatus,
-} from "@/lib/suppliers/mock-suppliers";
+import { CATEGORY_CFG } from "@/lib/projects/link-categories";
+import { AVAILABILITY_CFG } from "@/lib/suppliers/map-suppliers";
+import type { AvailabilityStatus } from "@/types/suppliers";
 import { cn } from "@/lib/utils";
 
 export function CategoryBadge({ label }: { label: string }) {

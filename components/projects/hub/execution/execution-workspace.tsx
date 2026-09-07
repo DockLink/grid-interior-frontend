@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { DemoCaption } from "@/components/demo/demo-caption";
-import { DEFAULT_DEMO_PROJECT_ID, getActiveProject } from "@/lib/projects/mock-projects";
+import { useActiveProjectView } from "@/hooks/use-active-project-view";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { HubTeamProvider } from "@/lib/projects/hub-team-context";
 import type { ExecutionView } from "@/types/execution";
 
 import { BoqLineTable } from "./boq-line-table";
@@ -21,7 +23,8 @@ export function ExecutionWorkspace({
   onViewChange?: (view: ExecutionView) => void;
 }) {
   const router = useRouter();
-  const project = getActiveProject(projectId) ?? getActiveProject(DEFAULT_DEMO_PROJECT_ID)!;
+  const authDisabled = isAuthDisabled();
+  const { project, teamMembers, isLoading, error } = useActiveProjectView(projectId);
   const [view, setView] = useState<ExecutionView>(initialView);
 
   useEffect(() => {
@@ -37,21 +40,43 @@ export function ExecutionWorkspace({
     router.push(`/projects/${projectId}`);
   };
 
+  if (!authDisabled && isLoading) {
+    return (
+      <div className="px-10 py-6 text-sm text-[var(--figma-gray500)]">Loading project…</div>
+    );
+  }
+
+  if (!authDisabled && (error || !project)) {
+    return (
+      <div className="px-10 py-6 text-sm text-[var(--figma-alert)]">
+        {error ?? "Project not found"}
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="px-10 py-6 text-sm text-[var(--figma-gray500)]">Loading project…</div>
+    );
+  }
+
   return (
-    <div>
-      <DemoCaption className="mb-4 px-4 pt-6 sm:px-10" />
-      {view === "boq" ? (
-        <BoqLineTable project={project} onBack={() => navigateView("stages")} />
-      ) : view === "site" ? (
-        <SiteSubstagesScreen project={project} onBack={() => navigateView("stages")} />
-      ) : (
-        <StagesScreen
-          project={project}
-          onBack={handleBackToProject}
-          onOpenBoq={() => navigateView("boq")}
-          onOpenSite={() => navigateView("site")}
-        />
-      )}
-    </div>
+    <HubTeamProvider members={teamMembers}>
+      <div>
+        {authDisabled && <DemoCaption className="mb-4 px-4 pt-6 sm:px-10" />}
+        {view === "boq" ? (
+          <BoqLineTable project={project} onBack={() => navigateView("stages")} />
+        ) : view === "site" ? (
+          <SiteSubstagesScreen project={project} onBack={() => navigateView("stages")} />
+        ) : (
+          <StagesScreen
+            project={project}
+            onBack={handleBackToProject}
+            onOpenBoq={() => navigateView("boq")}
+            onOpenSite={() => navigateView("site")}
+          />
+        )}
+      </div>
+    </HubTeamProvider>
   );
 }

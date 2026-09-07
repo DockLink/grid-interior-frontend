@@ -7,6 +7,10 @@ import { useUploadFile } from "@/hooks/use-upload-file";
 import { authApiClient } from "@/lib/api/authenticated-client";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { canManageProject } from "@/lib/projects/permissions";
+import {
+  mapMeetingMinute,
+  mapMeetingMinutesList,
+} from "@/lib/meeting-minutes/map-meeting-minute";
 import type {
   CreateMeetingMinutePayload,
   MeetingMinute,
@@ -21,6 +25,7 @@ export function useProjectMeetingMinutes(projectId: string) {
   const [minutes, setMinutes] = useState<MeetingMinute[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionItemUpdating, setActionItemUpdating] = useState<string | null>(null);
 
   const canManage = canManageProject(effectiveRole, isViewer);
 
@@ -37,7 +42,7 @@ export function useProjectMeetingMinutes(projectId: string) {
       const res = await authApiClient<MeetingMinutesListResponse>(
         `/meeting-minutes/projects/${projectId}?page=1&limit=100`
       );
-      setMinutes(res.data ?? []);
+      setMinutes(mapMeetingMinutesList(res));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load meeting minutes");
     } finally {
@@ -56,7 +61,7 @@ export function useProjectMeetingMinutes(projectId: string) {
         { method: "POST", body: JSON.stringify(payload) }
       );
       await fetchMinutes();
-      return created;
+      return mapMeetingMinute(created);
     },
     [projectId, fetchMinutes]
   );
@@ -68,7 +73,7 @@ export function useProjectMeetingMinutes(projectId: string) {
         body: JSON.stringify(payload),
       });
       await fetchMinutes();
-      return updated;
+      return mapMeetingMinute(updated);
     },
     [fetchMinutes]
   );
@@ -83,13 +88,19 @@ export function useProjectMeetingMinutes(projectId: string) {
 
   const setActionItemStatus = useCallback(
     async (minuteId: string, index: number, status: "PENDING" | "COMPLETED") => {
-      const updated = await authApiClient<MeetingMinute>(
-        `/meeting-minutes/${minuteId}/action-items/${index}/status`,
-        { method: "PATCH", body: JSON.stringify({ status }) }
-      );
-      // Optimistically merge the returned record into the list.
-      setMinutes((prev) => prev.map((m) => (m.id === minuteId ? updated : m)));
-      return updated;
+      const key = `${minuteId}:${index}`;
+      setActionItemUpdating(key);
+      try {
+        const updated = await authApiClient<MeetingMinute>(
+          `/meeting-minutes/${minuteId}/action-items/${index}/status`,
+          { method: "PATCH", body: JSON.stringify({ status }) }
+        );
+        const mapped = mapMeetingMinute(updated);
+        setMinutes((prev) => prev.map((m) => (m.id === minuteId ? mapped : m)));
+        return mapped;
+      } finally {
+        setActionItemUpdating(null);
+      }
     },
     []
   );
@@ -113,6 +124,7 @@ export function useProjectMeetingMinutes(projectId: string) {
     updateMinute,
     removeMinute,
     setActionItemStatus,
+    actionItemUpdating,
     uploadAudio: uploadAttachment,
     uploadAttachment,
   };

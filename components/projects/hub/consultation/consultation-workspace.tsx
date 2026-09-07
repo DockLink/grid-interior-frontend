@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { DemoCaption } from "@/components/demo/demo-caption";
-import { DEFAULT_DEMO_PROJECT_ID, getActiveProject } from "@/lib/projects/mock-projects";
+import { useActiveProjectView } from "@/hooks/use-active-project-view";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { HubTeamProvider } from "@/lib/projects/hub-team-context";
 import type { ConsultType, ConsultView, ModeType } from "@/types/consultation";
 import { paidTabFromView } from "@/types/consultation";
 
@@ -22,7 +24,8 @@ export function ConsultationWorkspace({
   onViewChange?: (view: ConsultView) => void;
 }) {
   const router = useRouter();
-  const project = getActiveProject(projectId) ?? getActiveProject(DEFAULT_DEMO_PROJECT_ID)!;
+  const authDisabled = isAuthDisabled();
+  const { project, teamMembers, isLoading, error } = useActiveProjectView(projectId);
 
   const [view, setView] = useState<ConsultView>(initialView);
   const [mode, setMode] = useState<ModeType>("online");
@@ -54,39 +57,59 @@ export function ConsultationWorkspace({
     navigateView("questionnaire");
   };
 
-  if (view === "toggle") {
+  if (!authDisabled && isLoading) {
     return (
-      <div>
-        <DemoCaption className="mb-4 px-10 pt-6" />
-        <TypeToggleScreen project={project} onContinue={handleContinue} onBack={handleBack} />
+      <div className="px-10 py-6 text-sm text-[var(--figma-gray500)]">Loading project…</div>
+    );
+  }
+
+  if (!authDisabled && (error || !project)) {
+    return (
+      <div className="px-10 py-6 text-sm text-[var(--figma-alert)]">
+        {error ?? "Project not found"}
       </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="px-10 py-6 text-sm text-[var(--figma-gray500)]">Loading project…</div>
+    );
+  }
+
+  const wrap = (content: React.ReactNode) => (
+    <HubTeamProvider members={teamMembers}>
+      <div>
+        {authDisabled && <DemoCaption className="mb-4 px-10 pt-6" />}
+        {content}
+      </div>
+    </HubTeamProvider>
+  );
+
+  if (view === "toggle") {
+    return wrap(
+      <TypeToggleScreen project={project} onContinue={handleContinue} onBack={handleBack} />,
     );
   }
 
   if (view === "free") {
-    return (
-      <div>
-        <DemoCaption className="mb-4 px-10 pt-6" />
-        <FreeConsultationRecord
-          project={project}
-          mode={mode}
-          onBack={handleToggleBack}
-          onConvertToPaid={handleConvertToPaid}
-        />
-      </div>
+    return wrap(
+      <FreeConsultationRecord
+        project={project}
+        mode={mode}
+        onBack={handleToggleBack}
+        onConvertToPaid={handleConvertToPaid}
+      />,
     );
   }
 
-  return (
-    <div>
-      <DemoCaption className="mb-4 px-10 pt-6" />
-      <PaidConsultationRecord
-        project={project}
-        mode={mode}
-        initialTab={paidTabFromView(view)}
-        onBack={handleToggleBack}
-        onTabChange={navigateView}
-      />
-    </div>
+  return wrap(
+    <PaidConsultationRecord
+      project={project}
+      mode={mode}
+      initialTab={paidTabFromView(view)}
+      onBack={handleToggleBack}
+      onTabChange={navigateView}
+    />,
   );
 }

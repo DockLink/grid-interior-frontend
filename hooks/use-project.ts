@@ -12,34 +12,41 @@ import {
 import { queryKeys } from "@/lib/query/keys";
 import type { Project } from "@/types/projects";
 
-async function fetchProject(projectId: string): Promise<Project> {
+async function fetchProject(projectId: string): Promise<Project | null> {
   if (isAuthDisabled()) {
+    if (isMockProjectId(projectId)) {
+      return getMockProjectDetail(projectId) ?? null;
+    }
     return getUiOnlyProjectDetail(projectId);
   }
 
   if (isMockProjectId(projectId)) {
-    const mock = getMockProjectDetail(projectId);
-    if (mock) return mock;
+    return getMockProjectDetail(projectId) ?? null;
   }
 
   return authApiClient<Project>(`/projects/${projectId}`);
 }
 
 export function useProject(projectId: string | null) {
-  const uiOnly = isAuthDisabled();
+  const authEnabled = !isAuthDisabled();
+
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: [...queryKeys.projects.detail(projectId ?? ""), uiOnly ? "ui" : "api"],
+    queryKey: [...queryKeys.projects.detail(projectId ?? ""), authEnabled ? "api" : "ui"],
     queryFn: () => fetchProject(projectId!),
     enabled: Boolean(projectId),
     staleTime: 30_000,
   });
 
-  const fallback = projectId && uiOnly ? getUiOnlyProjectDetail(projectId) : null;
-
   return {
-    project: data ?? fallback,
-    isLoading: uiOnly ? false : isLoading,
-    error: uiOnly ? null : error ? (error instanceof Error ? error.message : "Failed to load project") : null,
+    project: data ?? null,
+    isLoading: authEnabled ? isLoading : false,
+    error: authEnabled
+      ? error
+        ? error instanceof Error
+          ? error.message
+          : "Failed to load project"
+        : null
+      : null,
     refetch: () => refetch().then(() => undefined),
   };
 }

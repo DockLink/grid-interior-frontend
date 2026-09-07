@@ -1,13 +1,9 @@
 import {
   displayVendorTaskStatus,
   formatVendorTaskDate,
-  getVendorPartyContact,
-  getVendorPartyName,
   todayIsoDate,
-  type VendorPartyContact,
-  type VendorPartyKind,
-  type VendorTask,
-} from "@/lib/suppliers/mock-vendor-tasks";
+} from "@/lib/suppliers/map-vendor-tasks";
+import type { VendorPartyContact, VendorTask } from "@/types/vendor-tasks";
 
 export interface VendorTasksPrintMeta {
   title: string;
@@ -34,14 +30,18 @@ function partyLines(party: VendorPartyContact): string {
   return bits.map(escapeHtml).join(" · ");
 }
 
-export function buildVendorTasksPrintHtml(meta: VendorTasksPrintMeta, tasks: VendorTask[]): string {
+export function buildVendorTasksPrintHtml(
+  meta: VendorTasksPrintMeta,
+  tasks: VendorTask[],
+  resolvePartyName?: (task: VendorTask) => string,
+): string {
   const printed = formatVendorTaskDate(todayIsoDate());
   const showParty = !meta.party;
   const rows = tasks
     .map((task, index) => {
       const status = displayVendorTaskStatus(task);
       const partyCell = showParty
-        ? `<td>${escapeHtml(getVendorPartyName(task.partyKind, task.partyId))}</td>`
+        ? `<td>${escapeHtml(resolvePartyName?.(task) ?? "Party")}</td>`
         : "";
       return `<tr>
         <td>${index + 1}</td>
@@ -114,12 +114,16 @@ export function buildVendorTasksPrintHtml(meta: VendorTasksPrintMeta, tasks: Ven
 </html>`;
 }
 
-export function openVendorTasksPrintWindow(meta: VendorTasksPrintMeta, tasks: VendorTask[]): boolean {
+export function openVendorTasksPrintWindow(
+  meta: VendorTasksPrintMeta,
+  tasks: VendorTask[],
+  resolvePartyName?: (task: VendorTask) => string,
+): boolean {
   const popup = window.open("", "_blank", "width=900,height=700");
   if (!popup) return false;
   popup.opener = null;
   popup.document.open();
-  popup.document.write(buildVendorTasksPrintHtml(meta, tasks));
+  popup.document.write(buildVendorTasksPrintHtml(meta, tasks, resolvePartyName));
   popup.document.close();
   popup.focus();
   popup.print();
@@ -127,11 +131,9 @@ export function openVendorTasksPrintWindow(meta: VendorTasksPrintMeta, tasks: Ve
 }
 
 export function printMetaForParty(
-  partyKind: VendorPartyKind,
-  partyId: number,
+  party: VendorPartyContact,
   projectLabel: string,
 ): VendorTasksPrintMeta {
-  const party = getVendorPartyContact(partyKind, partyId);
   return {
     title: `${party.name} — Tasks & Deadlines`,
     subtitle: "Handover sheet for on-site work. Sign and return a copy to GRID.",

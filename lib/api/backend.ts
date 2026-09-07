@@ -1,7 +1,7 @@
 import type { ApiErrorBody } from "@/types/api";
 
 const BACKEND_API_URL =
-  process.env.BACKEND_API_URL ?? "http://localhost:3000/v2";
+  process.env.BACKEND_API_URL ?? "http://localhost:3001/v2";
 
 type BackendResult<T> =
   | { ok: true; data: T; status: number }

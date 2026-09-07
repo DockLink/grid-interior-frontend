@@ -1,36 +1,86 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
-import { CLIENTS } from "@/lib/clients/mock-clients";
+import { useClient } from "@/hooks/use-client";
+import { useClients } from "@/hooks/use-clients";
+import { useUsers } from "@/hooks/use-users";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { getDemoClients } from "@/lib/clients/demo-data";
+import { getUserInitials, getUserListPrimaryLabel } from "@/lib/user/display";
+import type { Client } from "@/types/clients";
 import { cn } from "@/lib/utils";
 
-const TEAM_MEMBERS = [
-  { initials: "SM", name: "Sofia Marchetti", role: "Design Director", color: "linear-gradient(135deg, var(--figma-navy), var(--figma-teal))" },
-  { initials: "CR", name: "Chiara Romano", role: "Designer", color: "linear-gradient(135deg, var(--figma-teal), #0b9eab)" },
-  { initials: "LP", name: "Lorenzo Pieri", role: "Project Coord.", color: "linear-gradient(135deg, #243458, var(--figma-navy))" },
+const DEMO_TEAM = [
+  { id: "demo-1", initials: "SM", name: "Sofia Marchetti", role: "Design Director", color: "linear-gradient(135deg, var(--figma-navy), var(--figma-teal))" },
+  { id: "demo-2", initials: "CR", name: "Chiara Romano", role: "Designer", color: "linear-gradient(135deg, var(--figma-teal), #0b9eab)" },
+  { id: "demo-3", initials: "LP", name: "Lorenzo Pieri", role: "Project Coord.", color: "linear-gradient(135deg, #243458, var(--figma-navy))" },
 ];
+
+const DEMO_CLIENTS = getDemoClients();
 
 export function FollowUpPanel({
   clientId,
   onClose,
   onViewClient,
 }: {
-  clientId?: number;
+  clientId?: string;
   onClose: () => void;
-  onViewClient?: (id: number) => void;
+  onViewClient?: (id: string) => void;
 }) {
-  const client = CLIENTS.find((c) => c.id === clientId) ?? CLIENTS[4];
+  const authDisabled = isAuthDisabled();
+  const { client: fetchedClient, isLoading: clientLoading, error: clientError } = useClient(
+    clientId ?? null,
+    { enabled: Boolean(clientId) && !authDisabled },
+  );
+  const { clients: allClients, isLoading: listLoading, error: listError, updateClient, isUpdating } =
+    useClients({ page: 1, limit: 100 });
+  const { users } = useUsers({ page: 1, limit: 100, status: "ACTIVE" });
 
-  const [date, setDate] = useState("2025-08-07");
+  const teamMembers = useMemo(() => {
+    if (authDisabled) return DEMO_TEAM;
+    return users.map((u, i) => ({
+      id: u.id,
+      initials: getUserInitials(u),
+      name: getUserListPrimaryLabel(u),
+      role: u.roles[0] ?? "Team Member",
+      color: `linear-gradient(135deg, hsl(${i * 60 + 200}, 45%, 40%), var(--figma-teal))`,
+    }));
+  }, [authDisabled, users]);
+
+  const followUpClients = useMemo(() => {
+    const source = authDisabled ? DEMO_CLIENTS : allClients;
+    return source.filter((c) => Boolean(c.followUpDate));
+  }, [authDisabled, allClients]);
+
+  const [selectedId, setSelectedId] = useState<string | null>(clientId ?? null);
+
+  const client = useMemo(() => {
+    if (clientId) {
+      if (authDisabled) {
+        return DEMO_CLIENTS.find((c) => c.id === clientId) ?? DEMO_CLIENTS[4];
+      }
+      return fetchedClient;
+    }
+    const id = selectedId ?? followUpClients[0]?.id;
+    if (!id) return null;
+    if (authDisabled) return DEMO_CLIENTS.find((c) => c.id === id) ?? DEMO_CLIENTS[4];
+    return allClients.find((c) => c.id === id) ?? followUpClients.find((c) => c.id === id) ?? null;
+  }, [clientId, selectedId, followUpClients, fetchedClient, allClients, authDisabled]);
+
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [assignee, setAssignee] = useState(0);
   const [notes, setNotes] = useState("");
   const [notesFocus, setNotesFocus] = useState(false);
   const [dateFocus, setDateFocus] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const member = TEAM_MEMBERS[assignee];
+  const isLoading = !authDisabled && (clientId ? clientLoading : listLoading);
+  const error = !authDisabled ? (clientId ? clientError : listError) : null;
+
+  const member = teamMembers[assignee] ?? teamMembers[0];
 
   const formatDate = (d: string) => {
     if (!d) return "[date]";
@@ -38,13 +88,57 @@ export function FollowUpPanel({
     return dt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
   };
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => {
-      setSaved(false);
-      onClose();
-    }, 1200);
+  const handleSave = async () => {
+    if (!client) return;
+    if (authDisabled) {
+      setSaved(true);
+      setTimeout(() => {
+        setSaved(false);
+        onClose();
+      }, 1200);
+      return;
+    }
+    try {
+      await updateClient(client.id, {
+        follow_up_date: date,
+        assigned_to_id: member?.id ?? null,
+      });
+      setSaved(true);
+      toast.success("Reminder set");
+      setTimeout(() => {
+        setSaved(false);
+        onClose();
+      }, 1200);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to set reminder");
+    }
   };
+
+  if (isLoading) {
+    return (
+      <>
+        <div className="fixed inset-0 z-[200] bg-[rgba(27,42,74,0.12)] backdrop-blur-[1px]" onClick={onClose} aria-hidden />
+        <div className="fixed bottom-0 right-0 top-0 z-[201] flex w-[420px] max-w-full items-center justify-center rounded-l-[20px] bg-white">
+          <span className="text-sm text-[var(--figma-gray500)]">Loading…</span>
+        </div>
+      </>
+    );
+  }
+
+  if (!client) {
+    return (
+      <>
+        <div className="fixed inset-0 z-[200] bg-[rgba(27,42,74,0.12)] backdrop-blur-[1px]" onClick={onClose} aria-hidden />
+        <div className="fixed bottom-0 right-0 top-0 z-[201] flex w-[420px] max-w-full flex-col items-center justify-center gap-3 rounded-l-[20px] bg-white px-7">
+          {error ? <p className="m-0 text-center text-sm text-red-600">{error}</p> : null}
+          <p className="m-0 text-center text-sm text-[var(--figma-gray500)]">No clients with follow-up reminders.</p>
+          <button type="button" onClick={onClose} className="text-[13px] text-[var(--figma-teal)]">
+            Close
+          </button>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -83,6 +177,23 @@ export function FollowUpPanel({
             <MaterialIcon name="close" outlined size={17} className="text-[var(--figma-gray500)]" />
           </button>
         </div>
+
+        {!clientId && followUpClients.length > 1 ? (
+          <div className="mx-7 mt-4 flex flex-col gap-1.5">
+            <label className="text-[12px] font-semibold text-[var(--figma-navy)]">Client with reminder</label>
+            <select
+              value={client.id}
+              onChange={(e) => setSelectedId(e.target.value)}
+              className="rounded-xl border-[1.5px] border-[var(--figma-border)] bg-white px-3 py-2 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
+            >
+              {followUpClients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} — {c.followUpDate}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
         <div className="mx-7 my-4 flex shrink-0 items-center gap-3 rounded-xl border border-[var(--figma-border)] bg-[var(--figma-gray50)] p-3">
           <div
@@ -125,6 +236,12 @@ export function FollowUpPanel({
           </div>
         </div>
 
+        {error ? (
+          <div className="mx-7 mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">
+            {error}
+          </div>
+        ) : null}
+
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-7">
           <div className="flex flex-col gap-1.5">
             <label className="text-[13px] font-semibold text-[var(--figma-navy)]">Reminder Date</label>
@@ -157,9 +274,9 @@ export function FollowUpPanel({
           <div className="flex flex-col gap-1.5">
             <label className="text-[13px] font-semibold text-[var(--figma-navy)]">Assign to Team Member</label>
             <div className="flex flex-col gap-2">
-              {TEAM_MEMBERS.map((m, i) => (
+              {teamMembers.map((m, i) => (
                 <button
-                  key={m.initials}
+                  key={m.id}
                   type="button"
                   onClick={() => setAssignee(i)}
                   className={cn(
@@ -211,7 +328,7 @@ export function FollowUpPanel({
           <div className="flex items-start gap-2 rounded-[10px] border border-[rgba(14,124,134,0.15)] bg-[rgba(14,124,134,0.05)] p-2.5">
             <MaterialIcon name="info" outlined size={15} className="mt-0.5 shrink-0 text-[var(--figma-teal)]" />
             <p className="m-0 text-xs leading-relaxed text-[var(--figma-gray500)]">
-              This reminder will notify <strong className="text-[var(--figma-navy)]">{member.name}</strong> automatically
+              This reminder will notify <strong className="text-[var(--figma-navy)]">{member?.name ?? "the assignee"}</strong> automatically
               on <strong className="text-[var(--figma-teal)]">{formatDate(date)}</strong> regarding{" "}
               <strong className="text-[var(--figma-navy)]">{client.name}</strong>.
             </p>
@@ -228,7 +345,7 @@ export function FollowUpPanel({
             </div>
           ) : null}
 
-          <SetReminderBtn onClick={handleSave} loading={saved} />
+          <SetReminderBtn onClick={() => void handleSave()} loading={saved || isUpdating} />
 
           <button
             type="button"

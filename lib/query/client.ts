@@ -1,5 +1,6 @@
-import { QueryClient } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 
+import { handleApiError } from "@/lib/api/handle-api-error";
 import { BackendDisabledError } from "@/types/api";
 
 /**
@@ -12,6 +13,16 @@ import { BackendDisabledError } from "@/types/api";
  *  - refetchOnWindowFocus false → don't hammer the server on every Alt-Tab.
  */
 export const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error) => {
+      handleApiError(error, { redirectOn401: true });
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      handleApiError(error, { toast: true, redirectOn401: true });
+    },
+  }),
   defaultOptions: {
     queries: {
       staleTime: 30_000,

@@ -1,27 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Check, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { useAuth } from "@/hooks/use-auth";
 import { useAccessRequests } from "@/hooks/use-access-requests";
-import { authApiClient } from "@/lib/api/authenticated-client";
-import { getPrimaryRole } from "@/lib/auth/rbac";
+import { useAuth } from "@/hooks/use-auth";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { toSidebarRole } from "@/lib/navigation/sidebar-role";
 import {
   accessRequestStatusLabel,
   accessRequestStatusStyle,
 } from "@/lib/notifications/access-request-map";
-import { toProjectsQueryString } from "@/lib/projects/query-string";
 import {
   dsCallout,
   dsLargeTitle,
   dsSubtitle,
 } from "@/lib/styles/dashboard-tokens";
-import type { AccessRequest } from "@/types/access-requests";
-import type { ProjectsListResponse } from "@/types/projects";
-import { PROJECT_LEAD_ROLE } from "@/types/projects";
+import type { AccessRequest, ProjectMemberRole } from "@/types/access-requests";
 
 function requesterLabel(req: AccessRequest): string {
   const u = req.requestedBy;
@@ -33,55 +29,44 @@ function requesterLabel(req: AccessRequest): string {
 }
 
 export default function AccessRequestsPage() {
-  // ── MOCK DATA ──
+  const { primaryRole } = useAuth();
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [visible, setVisible] = useState<AccessRequest[]>([
-    {
-      id: "req_1",
-      projectId: "proj_1",
-      project: { id: "proj_1", name: "Marchetti Villa" } as any,
-      requestedById: "user_2",
-      requestedBy: { id: "user_2", firstName: "Dania", lastName: "Sorour", email: "dania@grid-interior.ae" } as any,
-      status: "PENDING",
-      requestNote: "Need access to check the 3D renders for the living room.",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: "req_2",
-      projectId: "proj_2",
-      project: { id: "proj_2", name: "Al-Mansoori Suite" } as any,
-      requestedById: "user_3",
-      requestedBy: { id: "user_3", firstName: "Yuki", lastName: "Tanaka", email: "yuki@grid-interior.ae" } as any,
-      status: "PENDING",
-      requestNote: "Please grant access so I can update the timeline.",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ]);
 
-  const canReview = true;
-  const isLoading = false;
-  const error = null;
+  const { requests, isLoading, error, reviewRequest } = useAccessRequests({
+    status: "PENDING",
+    page: 1,
+    limit: 50,
+  });
+
+  const sidebarRole = primaryRole ? toSidebarRole(primaryRole) : null;
+  const canReview = useMemo(() => {
+    if (isAuthDisabled()) return true;
+    return sidebarRole === "admin" || sidebarRole === "superadmin" || sidebarRole === "lead";
+  }, [sidebarRole]);
+
+  const visible = requests;
 
   async function handleReview(
     req: AccessRequest,
     action: "approve" | "reject",
-    grantedRole?: "MEMBER" | "VIEWER"
+    grantedRole?: ProjectMemberRole,
   ) {
     setBusyId(req.id);
     try {
-      await new Promise(r => setTimeout(r, 600));
-      setVisible(prev => prev.filter(r => r.id !== req.id));
+      await reviewRequest({
+        accessRequestId: req.id,
+        action,
+        grantedRole: action === "approve" ? grantedRole : undefined,
+      });
       toast.success(
         action === "reject"
           ? "Access request rejected"
           : grantedRole === "VIEWER"
             ? "Limited access granted"
-            : "Full access granted"
+            : "Full access granted",
       );
     } catch (err) {
-      toast.error("Failed to process request");
+      toast.error(err instanceof Error ? err.message : "Failed to process request");
     } finally {
       setBusyId(null);
     }
@@ -110,6 +95,21 @@ export default function AccessRequestsPage() {
           </div>
         </div>
       </div>
+
+      {isAuthDisabled() && (
+        <div
+          style={{
+            ...dsCallout,
+            marginBottom: 16,
+            borderColor: "#FDE68A",
+            background: "#FFFBEB",
+            color: "#92400E",
+          }}
+        >
+          Live access requests require auth. Copy <code>.env.local.example</code> to{" "}
+          <code>.env.local</code> and set <code>NEXT_PUBLIC_ENABLE_AUTH=true</code>.
+        </div>
+      )}
 
       {error && (
         <div style={{ ...dsCallout, color: "var(--ds-destructive)", background: "#FEE2E2", marginBottom: 16 }}>
@@ -168,7 +168,7 @@ export default function AccessRequestsPage() {
                 </span>
               </div>
 
-              {req.status === "PENDING" && (
+              {req.status === "PENDING" && canReview && (
                 <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
                   <button
                     type="button"

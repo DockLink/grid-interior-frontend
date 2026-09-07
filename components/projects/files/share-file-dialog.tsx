@@ -56,8 +56,8 @@ export function ShareFileDialog({
   // The share path is served by THIS frontend app, so always present the link
   // against the current origin — never the backend host the API returned.
   const shareUrl =
-    result && file && typeof window !== "undefined"
-      ? `${window.location.origin}/share/${result.token}/file/${file.id}/content`
+    result && typeof window !== "undefined"
+      ? `${window.location.origin}/share/${result.token}`
       : result?.shareUrl ?? "";
 
   function resetForm() {

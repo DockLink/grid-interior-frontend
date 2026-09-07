@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
-import { DemoCaption } from "@/components/demo/demo-caption";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { NeuTabToggle } from "@/components/projects/hub/neu-tab-toggle";
+import { AddSupplierModal } from "@/components/suppliers/add-supplier-modal";
 import {
   CategoryBadge,
   GradientButton,
@@ -13,18 +15,19 @@ import {
   StatusToggle,
 } from "@/components/suppliers/supplier-ui";
 import { VendorTasksTab } from "@/components/suppliers/vendor-tasks-tab";
-import { getSupplierLinkedProjects, type SupplierLinkedProject } from "@/lib/projects/mock-project-links";
+import { useProjects } from "@/hooks/use-projects";
+import { useSupplier } from "@/hooks/use-supplier";
+import { useVendorTasks } from "@/hooks/use-vendor-tasks";
+import { handleApiError } from "@/lib/api/handle-api-error";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { stageToPhase } from "@/lib/projects/map-project-hub";
+import { CATEGORY_CFG } from "@/lib/projects/link-categories";
 import {
-  CATEGORY_CFG,
   DELIVERY_STATUS_CFG,
   PAYMENT_STATUS_CFG,
-  SUPPLIER_ORDERS,
-  SUPPLIER_RATES,
-  SUPPLIERS,
-  type Supplier,
-  type SupplierOrder,
-  type SupplierRate,
-} from "@/lib/suppliers/mock-suppliers";
+} from "@/lib/suppliers/map-suppliers";
+import type { Supplier, SupplierOrder, UpdateSupplierPayload } from "@/types/suppliers";
+import type { SupplierLinkedProject } from "@/types/project-links";
 import { NAV_ROUTES, projectRoute } from "@/types/navigation";
 import { cn } from "@/lib/utils";
 
@@ -38,84 +41,12 @@ const TABS = [
   { id: "tasks" as Tab, label: "Tasks & Deadlines", icon: "task_alt" },
 ];
 
+const CREDIT_TERMS = ["Net 15", "Net 30", "Net 45", "Net 60", "Due on completion", "Advance payment"];
+
 const PROJECT_STATUS_CFG: Record<string, { label: string; color: string; bg: string }> = {
   "on-track": { label: "On Track", color: "var(--figma-success)", bg: "rgba(63,166,107,0.10)" },
   "at-risk": { label: "At Risk", color: "#F5A623", bg: "rgba(245,166,35,0.10)" },
 };
-
-function RateRow({ rate, onSave }: { rate: SupplierRate; onSave: (r: SupplierRate) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({ ...rate });
-  const [hov, setHov] = useState(false);
-
-  if (editing) {
-    return (
-      <tr className="border-b border-[var(--figma-border)] bg-[rgba(14,124,134,0.03)]">
-        {(["item", "rate", "unit", "creditTerms", "leadTime"] as const).map((field) => (
-          <td key={field} className="px-3 py-2">
-            <input
-              value={draft[field]}
-              onChange={(e) => setDraft((p) => ({ ...p, [field]: e.target.value }))}
-              className="hub-input-focus w-full rounded-lg border-[1.5px] border-[var(--figma-teal)] bg-white px-2.5 py-1.5 text-[12px] text-[var(--figma-navy)] outline-none neu-inset"
-            />
-          </td>
-        ))}
-        <td className="px-3 py-2">
-          <div className="flex gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                onSave(draft);
-                setEditing(false);
-              }}
-              className="gi-gradient-cta cursor-pointer rounded-lg border-none px-3 py-1.5 text-[12px] font-semibold text-white"
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setDraft({ ...rate });
-                setEditing(false);
-              }}
-              className="cursor-pointer rounded-lg border border-[var(--figma-border)] bg-white px-2.5 py-1.5 text-[12px] text-[var(--figma-gray500)]"
-            >
-              Cancel
-            </button>
-          </div>
-        </td>
-      </tr>
-    );
-  }
-
-  return (
-    <tr
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      className="border-b border-[var(--figma-border)] transition-colors duration-120"
-      style={{ background: hov ? "rgba(14,124,134,0.03)" : "#fff" }}
-    >
-      <td className="px-4 py-3 text-[13px] font-medium text-[var(--figma-navy)]">{rate.item}</td>
-      <td className="px-4 py-3 text-[13px] font-semibold text-[var(--figma-navy)]">{rate.rate}</td>
-      <td className="px-4 py-3 text-[12px] text-[var(--figma-gray500)]">{rate.unit}</td>
-      <td className="px-4 py-3 text-[12px] text-[var(--figma-gray500)]">{rate.creditTerms}</td>
-      <td className="px-4 py-3 text-[12px] text-[var(--figma-gray500)]">{rate.leadTime}</td>
-      <td className="px-4 py-3">
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          title="Edit rate"
-          className={cn(
-            "flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded-[7px] border-none transition-all duration-150",
-            hov ? "bg-[var(--figma-gray100)]" : "bg-transparent",
-          )}
-        >
-          <MaterialIcon name="edit" outlined size={16} className="text-[var(--figma-gray500)]" />
-        </button>
-      </td>
-    </tr>
-  );
-}
 
 function OverviewTab({ supplier }: { supplier: Supplier }) {
   const catColor = CATEGORY_CFG[supplier.category]?.color ?? "var(--figma-teal)";
@@ -196,59 +127,106 @@ function OverviewTab({ supplier }: { supplier: Supplier }) {
   );
 }
 
-function RatesTab({ supplierId }: { supplierId: number }) {
-  const initialRates = SUPPLIER_RATES[supplierId] ?? [];
-  const [rates, setRates] = useState<SupplierRate[]>(initialRates);
+function RatesTab({
+  supplier,
+  onSave,
+  isSaving,
+}: {
+  supplier: Supplier;
+  onSave: (payload: UpdateSupplierPayload) => Promise<void>;
+  isSaving: boolean;
+}) {
+  const [creditTerms, setCreditTerms] = useState(
+    supplier.creditTerms === "—" ? "Net 30" : supplier.creditTerms,
+  );
+  const [leadTime, setLeadTime] = useState(
+    supplier.avgLeadTime === "—" ? "" : supplier.avgLeadTime,
+  );
+  const [notes, setNotes] = useState(supplier.notes ?? "");
 
-  if (rates.length === 0) {
-    return (
-      <div className="py-16 text-center text-[var(--figma-gray400)]">
-        <MaterialIcon name="price_change" outlined size={40} className="mx-auto mb-3 block" />
-        <div className="mb-1.5 text-[15px] font-semibold text-[var(--figma-navy)]">No rate card yet</div>
-        <div className="text-[13px]">Add the first rate entry for this supplier</div>
-      </div>
-    );
-  }
+  const dirty =
+    creditTerms !== (supplier.creditTerms === "—" ? "Net 30" : supplier.creditTerms) ||
+    leadTime !== (supplier.avgLeadTime === "—" ? "" : supplier.avgLeadTime) ||
+    notes !== (supplier.notes ?? "");
+
+  const handleSave = async () => {
+    try {
+      await onSave({
+        credit_terms: creditTerms || undefined,
+        avg_lead_time: leadTime.trim() || undefined,
+        notes: notes.trim() || undefined,
+      });
+      toast.success("Rates & terms updated");
+    } catch (error) {
+      handleApiError(error, { toast: true });
+    }
+  };
 
   return (
     <div className="overflow-hidden rounded-2xl border border-[var(--figma-border)] bg-white">
-      <div className="flex items-center justify-between border-b border-[var(--figma-border)] px-5 py-3">
-        <div className="flex items-center gap-2">
-          <MaterialIcon name="info" outlined size={16} className="text-[var(--figma-teal)]" />
-          <span className="text-[12px] text-[var(--figma-gray500)]">
-            Rates can be edited at any time — click the{" "}
-            <strong className="text-[var(--figma-navy)]">pencil icon</strong> on any row
-          </span>
+      <div className="flex items-start justify-between gap-4 border-b border-[var(--figma-border)] px-5 py-4">
+        <div>
+          <div className="mb-1 flex items-center gap-2">
+            <MaterialIcon name="price_change" outlined size={18} className="text-[var(--figma-teal)]" />
+            <h3 className="text-[15px] font-semibold text-[var(--figma-navy)]">Credit terms & lead time</h3>
+          </div>
+          <p className="m-0 max-w-xl text-[12px] text-[var(--figma-gray500)]">
+            Edit commercial terms stored on this supplier. Itemized rate cards will be available when the
+            backend supports them.
+          </p>
         </div>
-        <GradientButton className="px-3.5 py-1.5 text-[12px]">
-          <MaterialIcon name="add" outlined size={14} />
-          Add Rate
+        <GradientButton
+          onClick={handleSave}
+          disabled={!dirty || isSaving}
+          className="shrink-0 px-3.5 py-1.5 text-[12px]"
+        >
+          <MaterialIcon name="save" outlined size={14} />
+          {isSaving ? "Saving…" : "Save"}
         </GradientButton>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[13px]">
-          <thead>
-            <tr className="bg-[var(--figma-gray50)]">
-              {["Item / Service", "Rate", "Unit", "Credit Terms", "Lead Time", ""].map((col) => (
-                <th
-                  key={col}
-                  className="border-b border-[var(--figma-border)] px-4 py-[11px] text-left text-[12px] font-semibold tracking-wide whitespace-nowrap text-[var(--figma-navy)]"
-                >
-                  {col}
-                </th>
+
+      <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[13px] font-medium text-[var(--figma-navy)]">Credit Terms</label>
+          <div className="relative">
+            <select
+              value={creditTerms}
+              onChange={(e) => setCreditTerms(e.target.value)}
+              className="w-full cursor-pointer appearance-none rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white py-2.5 pr-9 pl-3.5 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
+            >
+              {CREDIT_TERMS.map((term) => (
+                <option key={term} value={term}>
+                  {term}
+                </option>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rates.map((rate) => (
-              <RateRow
-                key={rate.id}
-                rate={rate}
-                onSave={(updated) => setRates((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))}
-              />
-            ))}
-          </tbody>
-        </table>
+            </select>
+            <MaterialIcon
+              name="expand_more"
+              outlined
+              size={16}
+              className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[var(--figma-gray400)]"
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[13px] font-medium text-[var(--figma-navy)]">Avg Lead Time</label>
+          <input
+            value={leadTime}
+            onChange={(e) => setLeadTime(e.target.value)}
+            placeholder="e.g. 4–6 weeks"
+            className="w-full rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3.5 py-2.5 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <label className="text-[13px] font-medium text-[var(--figma-navy)]">Notes</label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            placeholder="Commercial notes, preferred payment methods…"
+            className="hub-input-focus w-full resize-y rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3.5 py-2.5 text-[13px] leading-relaxed text-[var(--figma-navy)] outline-none neu-inset"
+          />
+        </div>
       </div>
     </div>
   );
@@ -287,8 +265,8 @@ function OrderRow({
   );
 }
 
-function OrdersTab({ supplierId }: { supplierId: number }) {
-  const orders = SUPPLIER_ORDERS[supplierId] ?? [];
+function OrdersTab() {
+  const orders: SupplierOrder[] = [];
 
   return (
     <div className="overflow-hidden rounded-2xl border border-[var(--figma-border)] bg-white">
@@ -311,7 +289,11 @@ function OrdersTab({ supplierId }: { supplierId: number }) {
               <tr>
                 <td colSpan={7} className="px-6 py-12 text-center">
                   <MaterialIcon name="local_shipping" outlined size={36} className="mx-auto mb-2.5 block text-[var(--figma-border)]" />
-                  <div className="text-[14px] text-[var(--figma-gray500)]">No orders yet</div>
+                  <div className="mb-1 text-[14px] font-medium text-[var(--figma-navy)]">No order history yet</div>
+                  <div className="mx-auto max-w-sm text-[13px] text-[var(--figma-gray500)]">
+                    Order history is not available from the API yet. Delivery and payment records will appear
+                    here when the backend adds them.
+                  </div>
                 </td>
               </tr>
             ) : (
@@ -326,13 +308,12 @@ function OrdersTab({ supplierId }: { supplierId: number }) {
   );
 }
 
-function ProjectsTab({ supplierId }: { supplierId: number }) {
-  const projects = getSupplierLinkedProjects(supplierId);
-
+function ProjectsTab({ projects }: { projects: SupplierLinkedProject[] }) {
   if (projects.length === 0) {
     return (
       <div className="rounded-[14px] border border-dashed border-[var(--figma-border)] bg-white px-4 py-8 text-center text-[13px] text-[var(--figma-gray400)]">
-        No projects linked to this supplier.
+        No projects linked to this supplier yet. Link this supplier from a project&apos;s Links screen, or
+        assign a task under Tasks &amp; Deadlines.
       </div>
     );
   }
@@ -381,7 +362,13 @@ function LinkedProjectCard({
   );
 }
 
-function HeaderToggle({ active, onChange }: { active: boolean; onChange: (v: boolean) => void }) {
+function HeaderToggle({
+  active,
+  onChange,
+}: {
+  active: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
     <button
       type="button"
@@ -402,10 +389,80 @@ function HeaderToggle({ active, onChange }: { active: boolean; onChange: (v: boo
   );
 }
 
-export function SupplierProfileScreen({ supplierId }: { supplierId: number }) {
+export function SupplierProfileScreen({ supplierId }: { supplierId: string }) {
+  const authDisabled = isAuthDisabled();
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
-  const supplier = SUPPLIERS.find((s) => s.id === supplierId) ?? SUPPLIERS[0]!;
-  const [active, setActive] = useState(supplier.status === "Active");
+  const [editOpen, setEditOpen] = useState(false);
+  const {
+    supplier,
+    isLoading,
+    error,
+    updateSupplier,
+    deleteSupplier,
+    isUpdating,
+    isDeleting,
+  } = useSupplier(supplierId);
+  const { tasks: vendorTasks } = useVendorTasks({ party_id: supplierId, party_kind: "supplier" });
+  const { projects } = useProjects({ page: 1, limit: 100 });
+
+  const linkedProjects = useMemo(() => {
+    const byId = new Map(projects.map((p) => [p.id, p]));
+    const seen = new Set<string>();
+    return vendorTasks
+      .filter((task) => {
+        if (seen.has(task.projectId)) return false;
+        seen.add(task.projectId);
+        return true;
+      })
+      .map((task) => {
+        const project = byId.get(task.projectId);
+        const status: SupplierLinkedProject["status"] =
+          project?.status === "Inactive" ? "at-risk" : "on-track";
+        return {
+          projectId: task.projectId,
+          name: project?.name ?? "Project",
+          phase: stageToPhase(project?.currentStage),
+          status,
+          role: "Supplier",
+        } satisfies SupplierLinkedProject;
+      });
+  }, [vendorTasks, projects]);
+
+  if (authDisabled) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+        Live supplier profiles require auth. Copy <code className="font-mono">.env.local.example</code> to{" "}
+        <code className="font-mono">.env.local</code> and set{" "}
+        <code className="font-mono">NEXT_PUBLIC_ENABLE_AUTH=true</code>.
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return <div className="py-10 text-center text-[13px] text-[var(--figma-gray500)]">Loading supplier…</div>;
+  }
+
+  if (error || !supplier) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800">
+        {error ?? "Supplier not found"}
+      </div>
+    );
+  }
+
+  const active = supplier.status === "Active";
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Delete supplier “${supplier.name}”? This cannot be undone.`)) return;
+    try {
+      await deleteSupplier();
+      toast.success("Supplier deleted");
+      router.push(NAV_ROUTES.suppliers);
+    } catch (err) {
+      handleApiError(err, { toast: true });
+    }
+  };
 
   return (
     <div>
@@ -444,16 +501,31 @@ export function SupplierProfileScreen({ supplierId }: { supplierId: number }) {
               <span className="text-[13px] text-[var(--figma-gray500)]">{supplier.creditTerms}</span>
             </div>
           </div>
-          <DemoCaption className="mt-2" />
         </div>
-        <div className="flex shrink-0 gap-2.5">
-          <HeaderToggle active={active} onChange={setActive} />
+        <div className="flex shrink-0 flex-wrap gap-2.5">
+          <HeaderToggle
+            active={active}
+            onChange={(next) => {
+              void updateSupplier({ status: next ? "Active" : "Inactive" });
+            }}
+          />
           <button
             type="button"
+            disabled={isUpdating}
+            onClick={() => setEditOpen(true)}
             className="flex cursor-pointer items-center gap-1.5 rounded-[10px] border border-[var(--figma-border)] bg-white px-4 py-2 text-[13px] font-medium text-[var(--figma-navy)] neu-raised"
           >
             <MaterialIcon name="edit" outlined size={16} />
             Edit
+          </button>
+          <button
+            type="button"
+            disabled={isDeleting}
+            onClick={() => void handleDelete()}
+            className="flex cursor-pointer items-center gap-1.5 rounded-[10px] border border-[rgba(242,109,109,0.35)] bg-white px-4 py-2 text-[13px] font-medium text-[var(--figma-alert)]"
+          >
+            <MaterialIcon name="delete" outlined size={16} />
+            {isDeleting ? "Deleting…" : "Delete"}
           </button>
         </div>
       </div>
@@ -463,10 +535,27 @@ export function SupplierProfileScreen({ supplierId }: { supplierId: number }) {
       </div>
 
       {tab === "overview" && <OverviewTab supplier={supplier} />}
-      {tab === "rates" && <RatesTab supplierId={supplierId} />}
-      {tab === "orders" && <OrdersTab supplierId={supplierId} />}
-      {tab === "projects" && <ProjectsTab supplierId={supplierId} />}
+      {tab === "rates" && (
+        <RatesTab
+          key={`${supplier.id}-${supplier.creditTerms}-${supplier.avgLeadTime}-${supplier.notes ?? ""}`}
+          supplier={supplier}
+          isSaving={isUpdating}
+          onSave={(payload) => updateSupplier(payload).then(() => undefined)}
+        />
+      )}
+      {tab === "orders" && <OrdersTab />}
+      {tab === "projects" && <ProjectsTab projects={linkedProjects} />}
       {tab === "tasks" && <VendorTasksTab partyKind="supplier" partyId={supplierId} />}
+
+      <AddSupplierModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        editSupplier={supplier}
+        isCreating={isUpdating}
+        onUpdateSupplier={async (payload) => {
+          await updateSupplier(payload);
+        }}
+      />
     </div>
   );
 }

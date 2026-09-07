@@ -18,7 +18,7 @@ import {
   LAYOUT_INITIAL_DRAWINGS,
   LAYOUT_INITIAL_TASKS,
 } from "@/lib/projects/mock-layout";
-import { TEAM_MEMBERS } from "@/lib/projects/mock-projects";
+import { useHubTeam } from "@/lib/projects/hub-team-context";
 import { cn } from "@/lib/utils";
 import type { ActiveProjectView } from "@/types/project-hub";
 import type { LayoutDrawingFile, LayoutTask, LayoutTaskStatus } from "@/types/layout";
@@ -89,6 +89,7 @@ function DrawingCard({ file, onDelete }: { file: LayoutDrawingFile; onDelete: ()
 }
 
 function TeamRow() {
+  const teamMembers = useHubTeam();
   const [assigned, setAssigned] = useState([1, 2]);
   const [showPicker, setShowPicker] = useState(false);
 
@@ -97,7 +98,7 @@ function TeamRow() {
       <SectionTitle icon="group" title="Team Assignment" />
       <div className="flex flex-wrap items-center gap-2">
         {assigned.map((id) => {
-          const member = TEAM_MEMBERS.find((m) => m.id === id)!;
+          const member = teamMembers.find((m) => m.id === id)!;
           return (
             <div
               key={id}
@@ -134,7 +135,7 @@ function TeamRow() {
               className="absolute left-0 top-[110%] z-50 min-w-[180px] rounded-xl border border-[var(--figma-border)] bg-white py-2"
               style={{ boxShadow: "var(--neu-dropdown, 0 8px 24px rgba(27,42,74,0.12))" }}
             >
-              {TEAM_MEMBERS.filter((m) => !assigned.includes(m.id)).map((m) => (
+              {teamMembers.filter((m) => !assigned.includes(m.id)).map((m) => (
                 <button
                   key={m.id}
                   type="button"
@@ -153,7 +154,7 @@ function TeamRow() {
                   <span className="text-[13px] text-[var(--figma-navy)]">{m.name}</span>
                 </button>
               ))}
-              {TEAM_MEMBERS.filter((m) => !assigned.includes(m.id)).length === 0 && (
+              {teamMembers.filter((m) => !assigned.includes(m.id)).length === 0 && (
                 <div className="px-3.5 py-2.5 text-xs text-[var(--figma-gray400)]">All members assigned</div>
               )}
             </div>
@@ -165,8 +166,9 @@ function TeamRow() {
 }
 
 function TaskItem({ task, onToggle }: { task: LayoutTask; onToggle: (id: number) => void }) {
+  const teamMembers = useHubTeam();
   const status = STATUS_CFG[task.status];
-  const member = TEAM_MEMBERS.find((m) => m.id === task.assigneeId)!;
+  const member = teamMembers.find((m) => m.id === task.assigneeId)!;
 
   return (
     <div className="flex items-center gap-3 border-b border-[var(--figma-border)] py-2.5">

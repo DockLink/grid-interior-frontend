@@ -1,28 +1,59 @@
 "use client";
 
-import { TEAM_MEMBERS } from "@/lib/projects/mock-projects";
+import { getUserInitials, getUserListPrimaryLabel } from "@/lib/user/display";
+import type { ProjectMember } from "@/types/projects";
 
-export function AvatarStack({ teamIds, max = 4 }: { teamIds: number[]; max?: number }) {
-  const shown = teamIds.slice(0, max);
-  const extra = teamIds.length - max;
+const MEMBER_COLORS = ["#0E7C86", "#7C3AED", "#0891B2", "#D97706", "#1B2A4A", "#BE185D"];
+
+function colorForUser(userId: string): string {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i += 1) {
+    hash = (hash + userId.charCodeAt(i)) % MEMBER_COLORS.length;
+  }
+  return MEMBER_COLORS[hash] ?? MEMBER_COLORS[0];
+}
+
+function memberDisplay(member: ProjectMember) {
+  const user = member.assignee;
+  if (!user) {
+    return { initials: "?", name: "Member", color: MEMBER_COLORS[0] };
+  }
+  return {
+    initials: getUserInitials({ ...user, email: user.email ?? "" }),
+    name: getUserListPrimaryLabel({ ...user, email: user.email ?? "" }),
+    color: colorForUser(member.user_id),
+  };
+}
+
+export function AvatarStack({
+  members,
+  max = 4,
+}: {
+  members?: ProjectMember[];
+  max?: number;
+}) {
+  const active = (members ?? []).filter((m) => m.status === "ACTIVE");
+  const shown = active.slice(0, max);
+  const extra = active.length - max;
+
+  if (shown.length === 0) return null;
 
   return (
     <div className="flex items-center">
-      {shown.map((id, i) => {
-        const member = TEAM_MEMBERS.find((t) => t.id === id);
-        if (!member) return null;
+      {shown.map((member, i) => {
+        const display = memberDisplay(member);
         return (
           <div
-            key={id}
-            title={member.name}
+            key={member.user_id}
+            title={display.name}
             className="relative flex size-7 items-center justify-center rounded-full border-2 border-white text-[10px] font-bold text-white"
             style={{
-              background: member.color,
+              background: display.color,
               marginLeft: i === 0 ? 0 : -8,
               zIndex: shown.length - i,
             }}
           >
-            {member.initials}
+            {display.initials}
           </div>
         );
       })}

@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { queryKeys } from "@/lib/query/keys";
 import type {
   AccessRequest,
   AccessRequestsListResponse,
@@ -23,73 +25,89 @@ function toQueryString(params: AccessRequestsQueryParams = {}): string {
   return str ? `?${str}` : "";
 }
 
+async function fetchAccessRequests(
+  params: AccessRequestsQueryParams,
+): Promise<AccessRequestsListResponse> {
+  return authApiClient<AccessRequestsListResponse>(
+    `/access-requests${toQueryString(params)}`,
+  );
+}
+
 export function useAccessRequests(
   params: AccessRequestsQueryParams = { page: 1, limit: 50 },
-  options: { enabled?: boolean } = {}
+  options: { enabled?: boolean } = {},
 ) {
-  const enabled = options.enabled !== false;
-  const [requests, setRequests] = useState<AccessRequest[]>([]);
-  const [meta, setMeta] = useState<Omit<AccessRequestsListResponse, "data"> | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const enabled = options.enabled !== false && !isAuthDisabled();
+  const qKey = queryKeys.accessRequests.list(params);
 
-  const fetchRequests = useCallback(async () => {
-    if (!enabled || isAuthDisabled()) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await authApiClient<AccessRequestsListResponse>(
-        `/access-requests${toQueryString(params)}`
-      );
-      setRequests(res.data ?? []);
-      setMeta({
-        total: res.total,
-        page: res.page,
-        limit: res.limit,
-        totalPages: res.totalPages,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load access requests");
-      setRequests([]);
-      setMeta(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [enabled, params.page, params.limit, params.status, params.project_id, params.requested_by_id]);
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: qKey,
+    queryFn: () => fetchAccessRequests(params),
+    staleTime: 30_000,
+    enabled,
+  });
 
-  useEffect(() => {
-    void fetchRequests();
-  }, [fetchRequests]);
+  const invalidate = useCallback(() => {
+    return qc.invalidateQueries({ queryKey: queryKeys.accessRequests.all });
+  }, [qc]);
 
-  const createRequest = useCallback(async (payload: CreateAccessRequestPayload) => {
-    const created = await authApiClient<AccessRequest>("/access-requests", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    await fetchRequests();
-    return created;
-  }, [fetchRequests]);
+  const createMutation = useMutation({
+    mutationFn: (payload: CreateAccessRequestPayload) =>
+      authApiClient<AccessRequest>("/access-requests", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => void invalidate(),
+  });
 
-  const reviewRequest = useCallback(async (payload: ReviewAccessRequestPayload) => {
-    const updated = await authApiClient<AccessRequest>("/access-requests/review", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    await fetchRequests();
-    return updated;
-  }, [fetchRequests]);
+  const reviewMutation = useMutation({
+    mutationFn: (payload: ReviewAccessRequestPayload) =>
+      authApiClient<AccessRequest>("/access-requests/review", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => void invalidate(),
+  });
 
-  const cancelRequest = useCallback(async (id: string) => {
-    await authApiClient(`/access-requests/${id}`, { method: "DELETE" });
-    await fetchRequests();
-  }, [fetchRequests]);
+  const cancelMutation = useMutation({
+    mutationFn: (id: string) =>
+      authApiClient(`/access-requests/${id}`, { method: "DELETE" }),
+    onSuccess: () => void invalidate(),
+  });
+
+  const createRequest = useCallback(
+    (payload: CreateAccessRequestPayload) => createMutation.mutateAsync(payload),
+    [createMutation],
+  );
+
+  const reviewRequest = useCallback(
+    (payload: ReviewAccessRequestPayload) => reviewMutation.mutateAsync(payload),
+    [reviewMutation],
+  );
+
+  const cancelRequest = useCallback(
+    (id: string) => cancelMutation.mutateAsync(id),
+    [cancelMutation],
+  );
 
   return {
-    requests,
-    meta,
+    requests: data?.data ?? [],
+    meta: data
+      ? {
+          total: data.total,
+          page: data.page,
+          limit: data.limit,
+          totalPages: data.totalPages,
+        }
+      : null,
     isLoading,
-    error,
-    refetch: fetchRequests,
+    error: error
+      ? error instanceof Error
+        ? error.message
+        : "Failed to load access requests"
+      : null,
+    refetch: () => refetch().then(() => undefined),
     createRequest,
     reviewRequest,
     cancelRequest,

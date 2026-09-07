@@ -2,45 +2,63 @@
 
 import { useMemo, useState } from "react";
 
-import { DemoCaption } from "@/components/demo/demo-caption";
-import { Button } from "@/components/ui/button";
+import { HoldRequestCard } from "@/components/hold-requests/hold-request-card";
+import { useAuth } from "@/hooks/use-auth";
+import { useHoldRequests } from "@/hooks/use-project-hold-requests";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import {
-  Sheet,
-  SheetBody,
-  SheetCloseButton,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
-  HOLD_STATUS_CFG,
-  MOCK_GLOBAL_HOLDS,
-  type GlobalHoldRequest,
-  type GlobalHoldStatus,
-} from "@/lib/hold-requests/mock-hold-requests";
+  holdRequestStatusLabel,
+  holdRequestStatusStyle,
+} from "@/lib/hold-requests/display";
+import { toSidebarRole } from "@/lib/navigation/sidebar-role";
+import type { TaskableHoldRequestStatus } from "@/types/hold-requests";
 
 type TabId = "queue" | "all" | "mine";
 
+const STATUS_FILTERS: Array<{ id: TaskableHoldRequestStatus | "all"; label: string }> = [
+  { id: "all", label: "All statuses" },
+  { id: "PENDING", label: "Pending review" },
+  { id: "APPROVED", label: "Approved" },
+  { id: "APPROVED_MODIFIED", label: "Approved (modified)" },
+  { id: "DECLINED", label: "Declined" },
+  { id: "CANCELLED", label: "Cancelled" },
+  { id: "EXPIRED", label: "Expired" },
+];
+
 export function GlobalHoldRequestsPage() {
+  const { user, primaryRole } = useAuth();
+  const authDisabled = isAuthDisabled();
+  const sidebarRole = primaryRole ? toSidebarRole(primaryRole) : null;
+  const canProcess = sidebarRole === "admin" || sidebarRole === "superadmin";
+
   const [tab, setTab] = useState<TabId>("queue");
-  const [status, setStatus] = useState<GlobalHoldStatus | "all">("all");
-  const [selected, setSelected] = useState<GlobalHoldRequest | null>(null);
+  const [status, setStatus] = useState<TaskableHoldRequestStatus | "all">("all");
+
+  const apiStatus = tab === "queue" ? ("PENDING" as const) : status === "all" ? undefined : status;
+
+  const { requests, isLoading, isProcessing, error, processRequest } = useHoldRequests({
+    status: apiStatus,
+    requestedById: tab === "mine" ? user?.id : undefined,
+    limit: 100,
+  });
 
   const filtered = useMemo(() => {
-    return MOCK_GLOBAL_HOLDS.filter((h) => {
-      if (tab === "queue" && h.status !== "pending") return false;
-      if (tab === "mine" && !h.mine) return false;
-      if (status !== "all" && h.status !== status) return false;
-      return true;
-    });
-  }, [tab, status]);
+    if (tab === "queue" || status === "all") return requests;
+    return requests.filter((r) => r.status === status);
+  }, [requests, tab, status]);
 
   return (
     <div>
       <div className="mb-5">
         <h2 className="text-[22px] font-bold text-[#16233D]">Hold Requests</h2>
-        <p className="text-[14px] text-[#5B6B85]">Studio-wide pause queue — demo overlay</p>
-        <DemoCaption className="mt-1" />
+        <p className="text-[14px] text-[#5B6B85]">Studio-wide pause queue for task timeline holds</p>
+        {authDisabled && (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+            Live hold requests require auth. Copy <code className="font-mono">.env.local.example</code> to{" "}
+            <code className="font-mono">.env.local</code> and set{" "}
+            <code className="font-mono">NEXT_PUBLIC_ENABLE_AUTH=true</code>.
+          </div>
+        )}
       </div>
 
       <div className="mb-4 flex w-fit gap-1 rounded-full bg-[#F0F2F5] p-1">
@@ -67,101 +85,58 @@ export function GlobalHoldRequestsPage() {
         ))}
       </div>
 
-      <div className="mb-5 flex flex-wrap gap-2">
-        {(["all", "pending", "approved", "rejected", "resumed"] as const).map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setStatus(s)}
-            className="rounded-full px-3 py-1.5 text-[11px] font-semibold capitalize"
-            style={{
-              background: status === s ? "rgba(15,168,160,0.12)" : "#F0F2F5",
-              color: status === s ? "#0FA8A0" : "#5B6B85",
-            }}
-          >
-            {s === "all" ? "All statuses" : HOLD_STATUS_CFG[s].label}
-          </button>
-        ))}
-      </div>
+      {tab !== "queue" && (
+        <div className="mb-5 flex flex-wrap gap-2">
+          {STATUS_FILTERS.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setStatus(s.id)}
+              className="rounded-full px-3 py-1.5 text-[11px] font-semibold"
+              style={{
+                background: status === s.id ? "rgba(15,168,160,0.12)" : "#F0F2F5",
+                color: status === s.id ? "#0FA8A0" : "#5B6B85",
+              }}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {isLoading && (
+        <p className="text-[13px] text-[#5B6B85]">Loading hold requests…</p>
+      )}
+      {error && <p className="text-[13px] text-red-600">{error}</p>}
 
       <div className="grid gap-3">
-        {filtered.length === 0 && (
+        {!isLoading && filtered.length === 0 && (
           <p className="rounded-2xl border border-dashed border-[#E4E9F0] bg-white p-8 text-center text-[13px] text-[#5B6B85]">
             No hold requests in this view.
           </p>
         )}
-        {filtered.map((h) => {
-          const cfg = HOLD_STATUS_CFG[h.status];
+        {filtered.map((req) => {
+          const style = holdRequestStatusStyle(req.status);
           return (
-            <button
-              key={h.id}
-              type="button"
-              onClick={() => setSelected(h)}
-              className="rounded-2xl border border-[#E4E9F0] bg-white p-5 text-left hover:border-[#0FA8A0]"
-            >
-              <div className="mb-2 flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-[#16233D]">{h.task}</p>
-                  <p className="text-[12px] text-[#5B6B85]">{h.project}</p>
-                </div>
+            <div key={req.id} className="space-y-2">
+              <div className="flex items-center justify-end px-1">
                 <span
                   className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
-                  style={{ background: cfg.bg, color: cfg.color }}
+                  style={{ background: style.bg, color: style.color }}
                 >
-                  {cfg.label}
+                  {holdRequestStatusLabel(req.status)}
                 </span>
               </div>
-              <p className="text-[13px] text-[#5B6B85]">{h.reason}</p>
-              <p className="mt-2 text-[12px] text-[#5B6B85]">
-                {h.requester} · {h.requestedStart} → {h.requestedEnd}
-              </p>
-            </button>
+              <HoldRequestCard
+                req={req}
+                isProcessing={isProcessing === req.id}
+                canProcess={canProcess}
+                onProcess={processRequest}
+              />
+            </div>
           );
         })}
       </div>
-
-      <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
-        <SheetContent className="bg-white">
-          <SheetHeader className="relative">
-            <SheetTitle>{selected?.task}</SheetTitle>
-            <SheetCloseButton onClick={() => setSelected(null)} />
-          </SheetHeader>
-          <SheetBody className="space-y-4 text-[13px]">
-            <p className="text-[#5B6B85]">{selected?.project}</p>
-            <p>{selected?.reason}</p>
-            <div className="grid grid-cols-2 gap-3 rounded-xl bg-[#F8FAFB] p-4">
-              <div>
-                <p className="text-[11px] font-semibold tracking-wide text-[#5B6B85] uppercase">
-                  Original
-                </p>
-                <p className="mt-1 font-medium text-[#16233D]">
-                  {selected?.originalStart}
-                  <br />
-                  {selected?.originalEnd}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold tracking-wide text-[#5B6B85] uppercase">
-                  Requested
-                </p>
-                <p className="mt-1 font-medium text-[#0FA8A0]">
-                  {selected?.requestedStart}
-                  <br />
-                  {selected?.requestedEnd}
-                </p>
-              </div>
-            </div>
-            <p className="text-[#5B6B85]">Requested by {selected?.requester}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSelected(null)}
-            >
-              Close
-            </Button>
-          </SheetBody>
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }

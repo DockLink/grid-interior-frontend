@@ -23,17 +23,30 @@ function printedToday(): string {
   });
 }
 
+export interface TimelinePrintMeta {
+  projectName?: string;
+  projectStartLabel?: string;
+  projectEndLabel?: string;
+  projectStartIso?: string;
+}
+
 export function buildTimelinePrintHtml(
   phases: GanttPhase[],
   milestones: Milestone[],
+  meta: TimelinePrintMeta = {},
 ): string {
+  const projectName = meta.projectName ?? PROJECT_NAME;
+  const projectStart = meta.projectStartLabel ?? PROJECT_START;
+  const projectEnd = meta.projectEndLabel ?? PROJECT_END;
+  const startIso = meta.projectStartIso;
+
   const phaseRows = phases
     .map(
       (phase) => `<tr>
         <td>${escapeHtml(phase.name)}</td>
         <td>${escapeHtml(statusLabel(phase.status))}</td>
-        <td>${escapeHtml(weekToDateLabel(phase.startWeek))}</td>
-        <td>${escapeHtml(weekToDateLabel(phase.startWeek + phase.durationWeeks))}</td>
+        <td>${escapeHtml(weekToDateLabel(phase.startWeek, startIso))}</td>
+        <td>${escapeHtml(weekToDateLabel(phase.startWeek + phase.durationWeeks, startIso))}</td>
         <td>${phase.durationWeeks}w</td>
         <td>${phase.progress}%</td>
         <td>${escapeHtml(phase.lead.name)}</td>
@@ -58,7 +71,7 @@ export function buildTimelinePrintHtml(
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>${escapeHtml(PROJECT_NAME)} — Project Timeline</title>
+  <title>${escapeHtml(projectName)} — Project Timeline</title>
   <style>
     @page { margin: 14mm; }
     body { font-family: "Segoe UI", Helvetica, Arial, sans-serif; color: #1B2A4A; margin: 0; }
@@ -75,8 +88,8 @@ export function buildTimelinePrintHtml(
 </head>
 <body>
   <div class="brand">GRID Interior · Project Timeline</div>
-  <h1>${escapeHtml(PROJECT_NAME)}</h1>
-  <p class="sub">${escapeHtml(PROJECT_START)} → ${escapeHtml(PROJECT_END)}</p>
+  <h1>${escapeHtml(projectName)}</h1>
+  <p class="sub">${escapeHtml(projectStart)} → ${escapeHtml(projectEnd)}</p>
   <p class="meta">Exported ${escapeHtml(printedToday())} · Save as PDF from the print dialog</p>
 
   <h2>Phases</h2>
@@ -122,12 +135,13 @@ export function buildTimelinePrintHtml(
 export function openTimelinePrintWindow(
   phases: GanttPhase[],
   milestones: Milestone[],
+  meta: TimelinePrintMeta = {},
 ): boolean {
   const popup = window.open("", "_blank", "width=960,height=720");
   if (!popup) return false;
   popup.opener = null;
   popup.document.open();
-  popup.document.write(buildTimelinePrintHtml(phases, milestones));
+  popup.document.write(buildTimelinePrintHtml(phases, milestones, meta));
   popup.document.close();
   popup.focus();
   popup.print();

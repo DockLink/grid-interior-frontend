@@ -3,17 +3,33 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { useProjectContext } from "@/components/projects/project-context";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { ProjectSubNav } from "@/components/projects/hub/project-sub-nav";
 import { StatusBadge } from "@/components/projects/hub/status-badge";
-import { getActiveProject } from "@/lib/projects/mock-projects";
+import {
+  formatProjectStartDate,
+  projectStatusLabel,
+} from "@/lib/projects/map-project-overview";
 import { clientRoute, NAV_ROUTES } from "@/types/navigation";
 
 export function ProjectDetailHeader({ projectId }: { projectId: string }) {
-  const project = getActiveProject(projectId);
+  const { project, isLoading } = useProjectContext();
   const [editHover, setEditHover] = useState(false);
 
+  if (isLoading) {
+    return (
+      <div className="bg-white px-10 py-7 text-[13px] text-[var(--figma-gray500)]">
+        Loading project…
+      </div>
+    );
+  }
+
   if (!project) return null;
+
+  const clientName = project.client?.name ?? "No client";
+  const startDate = formatProjectStartDate(project.start_date);
+  const status = projectStatusLabel(project.status);
 
   return (
     <div className="bg-white px-10 pt-7">
@@ -29,28 +45,34 @@ export function ProjectDetailHeader({ projectId }: { projectId: string }) {
         <div>
           <div className="mb-1.5 flex flex-wrap items-center gap-3">
             <h1 className="m-0 text-[26px] font-bold text-[var(--figma-navy)]">{project.name}</h1>
-            <StatusBadge status={project.status} />
+            <StatusBadge status={status} />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={clientRoute(project.clientId)}
-              className="flex cursor-pointer items-center gap-1.5 no-underline font-[inherit]"
-            >
-              <div className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--figma-navy)] to-[var(--figma-teal)] text-[9px] font-bold text-white">
-                {project.clientName
-                  .split(" ")
-                  .map((n) => n[0])
-                  .slice(0, 2)
-                  .join("")}
-              </div>
-              <span className="text-[13px] font-medium text-[var(--figma-teal)] hover:underline">
-                {project.clientName}
-              </span>
-            </Link>
+            {project.client?.id ? (
+              <Link
+                href={clientRoute(project.client.id)}
+                className="flex cursor-pointer items-center gap-1.5 no-underline font-[inherit]"
+              >
+                <div className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--figma-navy)] to-[var(--figma-teal)] text-[9px] font-bold text-white">
+                  {clientName
+                    .split(" ")
+                    .map((n) => n[0])
+                    .slice(0, 2)
+                    .join("")}
+                </div>
+                <span className="text-[13px] font-medium text-[var(--figma-teal)] hover:underline">
+                  {clientName}
+                </span>
+              </Link>
+            ) : (
+              <span className="text-[13px] font-medium text-[var(--figma-teal)]">{clientName}</span>
+            )}
             <span className="text-[var(--figma-border)]">·</span>
-            <span className="text-xs text-[var(--figma-gray500)]">{project.projectType}</span>
+            <span className="text-xs text-[var(--figma-gray500)]">
+              {project.description?.trim() || "Interior Design"}
+            </span>
             <span className="text-[var(--figma-border)]">·</span>
-            <span className="text-xs text-[var(--figma-gray500)]">Since {project.startDate}</span>
+            <span className="text-xs text-[var(--figma-gray500)]">Since {startDate}</span>
           </div>
         </div>
         <button

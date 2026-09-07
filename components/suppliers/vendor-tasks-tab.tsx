@@ -1,46 +1,48 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
+import { useProjectContext } from "@/components/projects/project-context";
 import {
   openVendorTasksPrintWindow,
   printMetaForParty,
 } from "@/components/suppliers/vendor-tasks-print";
 import { GradientButton, StatusPill } from "@/components/suppliers/supplier-ui";
+import { useProjectLinks } from "@/hooks/use-project-links";
+import { useProjects } from "@/hooks/use-projects";
 import {
-  getProjectLinks,
-  getSubVendorLinkedProjects,
-  getSupplierLinkedProjects,
-} from "@/lib/projects/mock-project-links";
-import { getActiveProject } from "@/lib/projects/mock-projects";
+  getProjectNameFromCache,
+  getVendorPartyContactFromCache,
+  getVendorPartyNameFromCache,
+  useVendorTasks,
+} from "@/hooks/use-vendor-tasks";
+import { handleApiError } from "@/lib/api/handle-api-error";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import {
-  addVendorTask,
   displayVendorTaskStatus,
   formatVendorTaskDate,
-  getVendorPartyName,
-  getVendorProjectName,
-  getVendorTasksForParty,
-  getVendorTasksForProject,
-  getVendorTasksSnapshot,
   isVendorTaskOverdue,
-  subscribeVendorTasks,
-  updateVendorTask,
   VENDOR_TASK_STATUS_OPTIONS,
-  type VendorPartyKind,
-  type VendorTask,
-  type VendorTaskStatus,
-} from "@/lib/suppliers/mock-vendor-tasks";
+} from "@/lib/suppliers/map-vendor-tasks";
 import {
   downloadVendorTasksCsv,
   slugForFilename,
   vendorTaskToExportRow,
 } from "@/lib/suppliers/vendor-tasks-export";
+import type { VendorPartyKind, VendorTask, VendorTaskStatus } from "@/types/vendor-tasks";
 import { cn } from "@/lib/utils";
 
-function useVendorTasks(): VendorTask[] {
-  return useSyncExternalStore(subscribeVendorTasks, getVendorTasksSnapshot, getVendorTasksSnapshot);
+function AuthDisabledCallout({ feature }: { feature: string }) {
+  return (
+    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+      Live {feature} require auth. Copy <code className="font-mono">.env.local.example</code> to{" "}
+      <code className="font-mono">.env.local</code> and set{" "}
+      <code className="font-mono">NEXT_PUBLIC_ENABLE_AUTH=true</code>.
+    </div>
+  );
 }
 
 function ToolbarButton({
@@ -70,45 +72,17 @@ function ToolbarButton({
   );
 }
 
-function exportCsv(tasks: VendorTask[], filename: string) {
-  if (tasks.length === 0) {
-    toast.error("No tasks to export");
-    return;
-  }
-  downloadVendorTasksCsv(
-    tasks.map((task) => vendorTaskToExportRow(task, displayVendorTaskStatus(task).label)),
-    filename,
-  );
-  toast.success("CSV downloaded");
-}
-
-function printTasks(
-  tasks: VendorTask[],
-  meta: { title: string; subtitle: string; projectLabel: string; partyKind?: VendorPartyKind; partyId?: number },
-) {
-  if (tasks.length === 0) {
-    toast.error("No tasks to print");
-    return;
-  }
-  const printMeta =
-    meta.partyKind != null && meta.partyId != null
-      ? { ...printMetaForParty(meta.partyKind, meta.partyId, meta.projectLabel), subtitle: meta.subtitle }
-      : { title: meta.title, subtitle: meta.subtitle, projectLabel: meta.projectLabel };
-  const opened = openVendorTasksPrintWindow(printMeta, tasks);
-  if (!opened) toast.error("Allow pop-ups to print the handover sheet");
-}
-
 type LinkedProjectOption = { projectId: string; name: string };
 
 type LinkedPartyOption = {
   partyKind: VendorPartyKind;
-  partyId: number;
+  partyId: string;
   label: string;
 };
 
 interface TaskFormState {
   partyKind: VendorPartyKind;
-  partyId: number;
+  partyId: string;
   projectId: string;
   title: string;
   description: string;
@@ -125,14 +99,18 @@ function AddVendorTaskModal({
   lockedProjectId,
   projectOptions,
   partyOptions,
+  onSave,
+  isSaving,
 }: {
   open: boolean;
   onClose: () => void;
   editing: VendorTask | null;
-  lockedParty?: { partyKind: VendorPartyKind; partyId: number };
+  lockedParty?: { partyKind: VendorPartyKind; partyId: string };
   lockedProjectId?: string;
   projectOptions: LinkedProjectOption[];
   partyOptions: LinkedPartyOption[];
+  onSave: (form: TaskFormState, editing: VendorTask | null) => Promise<void>;
+  isSaving: boolean;
 }) {
   if (!open) return null;
   return (
@@ -144,6 +122,8 @@ function AddVendorTaskModal({
       lockedProjectId={lockedProjectId}
       projectOptions={projectOptions}
       partyOptions={partyOptions}
+      onSave={onSave}
+      isSaving={isSaving}
     />
   );
 }
@@ -155,18 +135,22 @@ function AddVendorTaskModalBody({
   lockedProjectId,
   projectOptions,
   partyOptions,
+  onSave,
+  isSaving,
 }: {
   onClose: () => void;
   editing: VendorTask | null;
-  lockedParty?: { partyKind: VendorPartyKind; partyId: number };
+  lockedParty?: { partyKind: VendorPartyKind; partyId: string };
   lockedProjectId?: string;
   projectOptions: LinkedProjectOption[];
   partyOptions: LinkedPartyOption[];
+  onSave: (form: TaskFormState, editing: VendorTask | null) => Promise<void>;
+  isSaving: boolean;
 }) {
   const defaultParty = lockedParty ??
     (partyOptions[0]
       ? { partyKind: partyOptions[0].partyKind, partyId: partyOptions[0].partyId }
-      : { partyKind: "supplier" as const, partyId: 0 });
+      : { partyKind: "supplier" as const, partyId: "" });
   const defaultProject = lockedProjectId ?? projectOptions[0]?.projectId ?? "";
 
   const [form, setForm] = useState<TaskFormState>(() =>
@@ -220,38 +204,14 @@ function AddVendorTaskModalBody({
     return next;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const next = validate();
     if (Object.keys(next).length > 0) {
       setErrors(next);
       return;
     }
     try {
-      if (editing) {
-        updateVendorTask(editing.id, {
-          title: form.title,
-          description: form.description,
-          startDate: form.startDate,
-          dueDate: form.dueDate,
-          status: form.status,
-          projectId: form.projectId,
-          partyKind: form.partyKind,
-          partyId: form.partyId,
-        });
-        toast.success("Task updated (demo)");
-      } else {
-        addVendorTask({
-          partyKind: form.partyKind,
-          partyId: form.partyId,
-          projectId: form.projectId,
-          title: form.title,
-          description: form.description,
-          startDate: form.startDate,
-          dueDate: form.dueDate,
-          status: form.status,
-        });
-        toast.success("Task assigned (demo)");
-      }
+      await onSave(form, editing);
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save task");
@@ -356,7 +316,11 @@ function AddVendorTaskModalBody({
           >
             Cancel
           </button>
-          <GradientButton onClick={handleSave} className="flex-[2] justify-center py-3">
+          <GradientButton
+            onClick={() => void handleSave()}
+            disabled={isSaving}
+            className="flex-[2] justify-center py-3"
+          >
             <MaterialIcon name="save" outlined size={16} />
             {editing ? "Save task" : "Assign task"}
           </GradientButton>
@@ -461,11 +425,17 @@ function VendorTasksTable({
   showProject,
   showParty,
   onEdit,
+  onDelete,
+  resolvePartyName,
+  resolveProjectName,
 }: {
   tasks: VendorTask[];
   showProject: boolean;
   showParty: boolean;
   onEdit: (task: VendorTask) => void;
+  onDelete: (task: VendorTask) => void;
+  resolvePartyName: (task: VendorTask) => string;
+  resolveProjectName: (task: VendorTask) => string;
 }) {
   if (tasks.length === 0) {
     return (
@@ -477,8 +447,8 @@ function VendorTasksTable({
 
   return (
     <div className="overflow-hidden rounded-2xl border border-[var(--figma-border)] bg-white">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[13px]">
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr className="bg-[var(--figma-gray50)]">
               {(showParty ? ["Party"] : [])
@@ -503,6 +473,9 @@ function VendorTasksTable({
                 showParty={showParty}
                 isLast={i === tasks.length - 1}
                 onEdit={() => onEdit(task)}
+                onDelete={() => onDelete(task)}
+                partyName={resolvePartyName(task)}
+                projectName={resolveProjectName(task)}
               />
             ))}
           </tbody>
@@ -518,12 +491,18 @@ function TaskRow({
   showParty,
   isLast,
   onEdit,
+  onDelete,
+  partyName,
+  projectName,
 }: {
   task: VendorTask;
   showProject: boolean;
   showParty: boolean;
   isLast: boolean;
   onEdit: () => void;
+  onDelete: () => void;
+  partyName: string;
+  projectName: string;
 }) {
   const [hov, setHov] = useState(false);
   const overdue = isVendorTaskOverdue(task);
@@ -537,14 +516,10 @@ function TaskRow({
       style={{ background: hov ? "rgba(14,124,134,0.03)" : overdue ? "rgba(242,109,109,0.04)" : "#fff" }}
     >
       {showParty && (
-        <td className="px-4 py-3 text-[13px] font-medium text-[var(--figma-navy)]">
-          {getVendorPartyName(task.partyKind, task.partyId)}
-        </td>
+        <td className="px-4 py-3 text-[13px] font-medium text-[var(--figma-navy)]">{partyName}</td>
       )}
       {showProject && (
-        <td className="px-4 py-3 text-[13px] font-medium text-[var(--figma-navy)]">
-          {getVendorProjectName(task.projectId)}
-        </td>
+        <td className="px-4 py-3 text-[13px] font-medium text-[var(--figma-navy)]">{projectName}</td>
       )}
       <td className="px-4 py-3">
         <div className="text-[13px] font-medium text-[var(--figma-navy)]">{task.title}</div>
@@ -567,17 +542,30 @@ function TaskRow({
         <StatusPill label={status.label} color={status.color} bg={status.bg} />
       </td>
       <td className="px-4 py-3">
-        <button
-          type="button"
-          onClick={onEdit}
-          title="Edit task"
-          className={cn(
-            "flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded-[7px] border-none",
-            hov ? "bg-[var(--figma-gray100)]" : "bg-transparent",
-          )}
-        >
-          <MaterialIcon name="edit" outlined size={16} className="text-[var(--figma-gray500)]" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onEdit}
+            title="Edit task"
+            className={cn(
+              "flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded-[7px] border-none",
+              hov ? "bg-[var(--figma-gray100)]" : "bg-transparent",
+            )}
+          >
+            <MaterialIcon name="edit" outlined size={16} className="text-[var(--figma-gray500)]" />
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            title="Delete task"
+            className={cn(
+              "flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded-[7px] border-none",
+              hov ? "bg-[rgba(242,109,109,0.10)]" : "bg-transparent",
+            )}
+          >
+            <MaterialIcon name="delete" outlined size={16} className="text-[var(--figma-alert)]" />
+          </button>
+        </div>
       </td>
     </tr>
   );
@@ -642,41 +630,177 @@ function TasksToolbar({
   );
 }
 
+function useTaskResolvers() {
+  const qc = useQueryClient();
+  return useMemo(
+    () => ({
+      partyName: (task: VendorTask) =>
+        getVendorPartyNameFromCache(qc, task.partyKind, task.partyId),
+      projectName: (task: VendorTask) => getProjectNameFromCache(qc, task.projectId),
+    }),
+    [qc],
+  );
+}
+
+function exportCsv(
+  tasks: VendorTask[],
+  filename: string,
+  resolvers: ReturnType<typeof useTaskResolvers>,
+) {
+  if (tasks.length === 0) {
+    toast.error("No tasks to export");
+    return;
+  }
+  downloadVendorTasksCsv(
+    tasks.map((task) =>
+      vendorTaskToExportRow(
+        task,
+        displayVendorTaskStatus(task).label,
+        resolvers.partyName(task),
+        resolvers.projectName(task),
+      ),
+    ),
+    filename,
+  );
+  toast.success("CSV downloaded");
+}
+
+function printTasks(
+  tasks: VendorTask[],
+  meta: {
+    title: string;
+    subtitle: string;
+    projectLabel: string;
+    partyKind?: VendorPartyKind;
+    partyId?: string;
+  },
+  qc: ReturnType<typeof useQueryClient>,
+  resolvePartyName: (task: VendorTask) => string,
+) {
+  if (tasks.length === 0) {
+    toast.error("No tasks to print");
+    return;
+  }
+  const printMeta =
+    meta.partyKind != null && meta.partyId != null
+      ? printMetaForParty(
+          getVendorPartyContactFromCache(qc, meta.partyKind, meta.partyId),
+          meta.projectLabel,
+        )
+      : { title: meta.title, subtitle: meta.subtitle, projectLabel: meta.projectLabel };
+
+  const opened = openVendorTasksPrintWindow(printMeta, tasks, resolvePartyName);
+  if (!opened) toast.error("Allow pop-ups to print the handover sheet");
+}
+
 export function VendorTasksTab({
   partyKind,
   partyId,
 }: {
   partyKind: VendorPartyKind;
-  partyId: number;
+  partyId: string;
 }) {
-  const all = useVendorTasks();
-  const linkedProjects =
-    partyKind === "supplier"
-      ? getSupplierLinkedProjects(partyId)
-      : getSubVendorLinkedProjects(partyId);
+  const authDisabled = isAuthDisabled();
+  const qc = useQueryClient();
+  const resolvers = useTaskResolvers();
+  const {
+    tasks: mine,
+    isLoading,
+    error,
+    createTask,
+    updateTask,
+    deleteTask,
+    isCreating,
+    isUpdating,
+    isDeleting,
+  } = useVendorTasks({ party_id: partyId, party_kind: partyKind });
+  const { projects } = useProjects({ page: 1, limit: 100 });
+
+  const projectOptions = useMemo(
+    () => projects.map((p) => ({ projectId: p.id, name: p.name })),
+    [projects],
+  );
+
+  const linkedProjects = useMemo(() => {
+    const byId = new Map(projects.map((p) => [p.id, p.name]));
+    const seen = new Set<string>();
+    return mine
+      .filter((task) => {
+        if (seen.has(task.projectId)) return false;
+        seen.add(task.projectId);
+        return true;
+      })
+      .map((task) => ({
+        projectId: task.projectId,
+        name: byId.get(task.projectId) ?? getProjectNameFromCache(qc, task.projectId),
+      }));
+  }, [mine, projects, qc]);
+
   const [projectFilter, setProjectFilter] = useState("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<VendorTask | null>(null);
 
-  const mine = useMemo(
-    () => getVendorTasksForParty(partyKind, partyId, all),
-    [all, partyKind, partyId],
-  );
   const filtered = useMemo(
     () => (projectFilter === "all" ? mine : mine.filter((t) => t.projectId === projectFilter)),
     [mine, projectFilter],
   );
 
-  const partyName = getVendorPartyName(partyKind, partyId);
+  const partyName = getVendorPartyNameFromCache(qc, partyKind, partyId);
   const projectLabel =
     projectFilter === "all"
       ? "All projects"
       : (linkedProjects.find((p) => p.projectId === projectFilter)?.name ?? "Project");
 
-  const openAdd = () => {
-    setEditing(null);
-    setModalOpen(true);
+  const handleSave = async (form: TaskFormState, editingTask: VendorTask | null) => {
+    if (editingTask) {
+      await updateTask(editingTask.id, {
+        title: form.title,
+        description: form.description || undefined,
+        start_date: form.startDate || undefined,
+        due_date: form.dueDate,
+        status: form.status,
+      });
+      toast.success("Task updated");
+    } else {
+      await createTask({
+        party_kind: form.partyKind,
+        party_id: form.partyId,
+        project_id: form.projectId,
+        title: form.title,
+        description: form.description || undefined,
+        start_date: form.startDate || undefined,
+        due_date: form.dueDate,
+        status: form.status,
+      });
+      toast.success("Task assigned");
+    }
   };
+
+  const handleDelete = async (task: VendorTask) => {
+    if (!window.confirm(`Delete task “${task.title}”?`)) return;
+    try {
+      await deleteTask(task.id);
+      toast.success("Task deleted");
+    } catch (err) {
+      handleApiError(err, { toast: true });
+    }
+  };
+
+  if (authDisabled) {
+    return <AuthDisabledCallout feature="vendor tasks" />;
+  }
+
+  if (isLoading) {
+    return <div className="py-10 text-center text-[13px] text-[var(--figma-gray500)]">Loading tasks…</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800">
+        {error}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -687,22 +811,30 @@ export function VendorTasksTab({
           ...linkedProjects.map((p) => ({ value: p.projectId, label: p.name })),
         ]}
         onFilterChange={setProjectFilter}
-        onAdd={openAdd}
-        addDisabled={linkedProjects.length === 0}
+        onAdd={() => {
+          setEditing(null);
+          setModalOpen(true);
+        }}
+        addDisabled={projectOptions.length === 0}
         onPrint={() =>
-          printTasks(filtered, {
-            title: `${partyName} — Tasks & Deadlines`,
-            subtitle: "Handover sheet for on-site work. Sign and return a copy to GRID.",
-            projectLabel,
-            partyKind,
-            partyId,
-          })
+          printTasks(
+            filtered,
+            {
+              title: `${partyName} — Tasks & Deadlines`,
+              subtitle: "Handover sheet for on-site work. Sign and return a copy to GRID.",
+              projectLabel,
+              partyKind,
+              partyId,
+            },
+            qc,
+            resolvers.partyName,
+          )
         }
-        onCsv={() => exportCsv(filtered, `${slugForFilename(partyName)}-tasks-deadlines.csv`)}
+        onCsv={() => exportCsv(filtered, `${slugForFilename(partyName)}-tasks-deadlines.csv`, resolvers)}
       />
-      {linkedProjects.length === 0 ? (
+      {mine.length === 0 ? (
         <div className="rounded-[14px] border border-dashed border-[var(--figma-border)] bg-white px-4 py-8 text-center text-[13px] text-[var(--figma-gray400)]">
-          Link this party to a project before assigning tasks.
+          No tasks assigned yet. Use Add task to assign work against any project.
         </div>
       ) : (
         <VendorTasksTable
@@ -713,6 +845,9 @@ export function VendorTasksTab({
             setEditing(task);
             setModalOpen(true);
           }}
+          onDelete={(task) => void handleDelete(task)}
+          resolvePartyName={resolvers.partyName}
+          resolveProjectName={resolvers.projectName}
         />
       )}
       <AddVendorTaskModal
@@ -720,44 +855,121 @@ export function VendorTasksTab({
         onClose={() => setModalOpen(false)}
         editing={editing}
         lockedParty={{ partyKind, partyId }}
-        projectOptions={linkedProjects.map((p) => ({ projectId: p.projectId, name: p.name }))}
+        projectOptions={projectOptions}
         partyOptions={[]}
+        onSave={handleSave}
+        isSaving={isCreating || isUpdating || isDeleting}
       />
     </div>
   );
 }
 
 export function ProjectVendorTasksSection({ projectId }: { projectId: string }) {
-  const all = useVendorTasks();
-  const links = getProjectLinks(projectId);
-  const project = getActiveProject(projectId);
+  const authDisabled = isAuthDisabled();
+  const qc = useQueryClient();
+  const resolvers = useTaskResolvers();
+  const { project } = useProjectContext();
   const projectName = project?.name ?? "Project";
+  const { links, isLoading: linksLoading, error: linksError } = useProjectLinks(projectId);
+  const {
+    tasks,
+    isLoading: tasksLoading,
+    error: tasksError,
+    createTask,
+    updateTask,
+    deleteTask,
+    isCreating,
+    isUpdating,
+    isDeleting,
+  } = useVendorTasks({ project_id: projectId });
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<VendorTask | null>(null);
 
-  const tasks = useMemo(() => getVendorTasksForProject(projectId, all), [all, projectId]);
-  const partyOptions: LinkedPartyOption[] = [
-    ...links.suppliers.map((s) => ({
-      partyKind: "supplier" as const,
-      partyId: s.id,
-      label: `${s.name} (Supplier)`,
-    })),
-    ...links.subVendors.map((v) => ({
-      partyKind: "subvendor" as const,
-      partyId: v.id,
-      label: `${v.name} (Sub-vendor)`,
-    })),
-  ];
+  const partyOptions: LinkedPartyOption[] = useMemo(
+    () => [
+      ...links.suppliers.map((s) => ({
+        partyKind: "supplier" as const,
+        partyId: s.id,
+        label: `${s.name} (Supplier)`,
+      })),
+      ...links.subVendors.map((v) => ({
+        partyKind: "subvendor" as const,
+        partyId: v.id,
+        label: `${v.name} (Sub-vendor)`,
+      })),
+    ],
+    [links],
+  );
 
   const groups = partyOptions.map((party) => ({
     party,
     tasks: tasks.filter((t) => t.partyKind === party.partyKind && t.partyId === party.partyId),
   }));
 
-  const openAdd = () => {
-    setEditing(null);
-    setModalOpen(true);
+  const handleSave = async (form: TaskFormState, editingTask: VendorTask | null) => {
+    if (editingTask) {
+      await updateTask(editingTask.id, {
+        title: form.title,
+        description: form.description || undefined,
+        start_date: form.startDate || undefined,
+        due_date: form.dueDate,
+        status: form.status,
+      });
+      toast.success("Task updated");
+    } else {
+      await createTask({
+        party_kind: form.partyKind,
+        party_id: form.partyId,
+        project_id: form.projectId,
+        title: form.title,
+        description: form.description || undefined,
+        start_date: form.startDate || undefined,
+        due_date: form.dueDate,
+        status: form.status,
+      });
+      toast.success("Task assigned");
+    }
   };
+
+  const handleDelete = async (task: VendorTask) => {
+    if (!window.confirm(`Delete task “${task.title}”?`)) return;
+    try {
+      await deleteTask(task.id);
+      toast.success("Task deleted");
+    } catch (err) {
+      handleApiError(err, { toast: true });
+    }
+  };
+
+  if (authDisabled) {
+    return (
+      <section>
+        <AuthDisabledCallout feature="vendor tasks" />
+      </section>
+    );
+  }
+
+  const isLoading = linksLoading || tasksLoading;
+  const error = linksError ?? tasksError;
+
+  if (isLoading) {
+    return (
+      <section>
+        <div className="py-6 text-center text-[13px] text-[var(--figma-gray500)]">Loading tasks…</div>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section>
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800">
+          {error}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section>
@@ -769,16 +981,24 @@ export function ProjectVendorTasksSection({ projectId }: { projectId: string }) 
         </span>
       </div>
       <TasksToolbar
-        onAdd={openAdd}
+        onAdd={() => {
+          setEditing(null);
+          setModalOpen(true);
+        }}
         addDisabled={partyOptions.length === 0}
         onPrint={() =>
-          printTasks(tasks, {
-            title: `${projectName} — Contractor tasks`,
-            subtitle: "Handover sheet for on-site work. Sign and return a copy to GRID.",
-            projectLabel: projectName,
-          })
+          printTasks(
+            tasks,
+            {
+              title: `${projectName} — Contractor tasks`,
+              subtitle: "Handover sheet for on-site work. Sign and return a copy to GRID.",
+              projectLabel: projectName,
+            },
+            qc,
+            resolvers.partyName,
+          )
         }
-        onCsv={() => exportCsv(tasks, `${slugForFilename(projectName)}-vendor-tasks.csv`)}
+        onCsv={() => exportCsv(tasks, `${slugForFilename(projectName)}-vendor-tasks.csv`, resolvers)}
       />
       {partyOptions.length === 0 ? (
         <div className="rounded-[14px] border border-dashed border-[var(--figma-border)] bg-white px-4 py-8 text-center text-[13px] text-[var(--figma-gray400)]">
@@ -796,13 +1016,18 @@ export function ProjectVendorTasksSection({ projectId }: { projectId: string }) 
                   icon="print"
                   label="Print"
                   onClick={() =>
-                    printTasks(group.tasks, {
-                      title: `${getVendorPartyName(group.party.partyKind, group.party.partyId)} — Tasks & Deadlines`,
-                      subtitle: "Handover sheet for on-site work. Sign and return a copy to GRID.",
-                      projectLabel: projectName,
-                      partyKind: group.party.partyKind,
-                      partyId: group.party.partyId,
-                    })
+                    printTasks(
+                      group.tasks,
+                      {
+                        title: `${getVendorPartyNameFromCache(qc, group.party.partyKind, group.party.partyId)} — Tasks & Deadlines`,
+                        subtitle: "Handover sheet for on-site work. Sign and return a copy to GRID.",
+                        projectLabel: projectName,
+                        partyKind: group.party.partyKind,
+                        partyId: group.party.partyId,
+                      },
+                      qc,
+                      resolvers.partyName,
+                    )
                   }
                 />
               </div>
@@ -814,6 +1039,9 @@ export function ProjectVendorTasksSection({ projectId }: { projectId: string }) 
                   setEditing(task);
                   setModalOpen(true);
                 }}
+                onDelete={(task) => void handleDelete(task)}
+                resolvePartyName={resolvers.partyName}
+                resolveProjectName={resolvers.projectName}
               />
             </div>
           ))}
@@ -826,6 +1054,8 @@ export function ProjectVendorTasksSection({ projectId }: { projectId: string }) 
         lockedProjectId={projectId}
         projectOptions={[{ projectId, name: projectName }]}
         partyOptions={partyOptions}
+        onSave={handleSave}
+        isSaving={isCreating || isUpdating || isDeleting}
       />
     </section>
   );
