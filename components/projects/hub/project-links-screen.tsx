@@ -5,6 +5,7 @@ import { useState, type ReactNode } from "react";
 
 import { ClientAvatar, ClientStatusBadge } from "@/components/clients/client-ui";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
+import { useProjectContext } from "@/components/projects/project-context";
 import {
   AvailabilityDot,
   CategoryBadge,
@@ -12,14 +13,14 @@ import {
   StatusPill,
 } from "@/components/suppliers/supplier-ui";
 import { ProjectVendorTasksSection } from "@/components/suppliers/vendor-tasks-tab";
-import { getActiveProject } from "@/lib/projects/mock-projects";
-import {
-  getProjectLinks,
-  type LinkedClientView,
-  type LinkedSubVendorView,
-  type LinkedSupplierView,
-} from "@/lib/projects/mock-project-links";
-import { CATEGORY_CFG } from "@/lib/suppliers/mock-suppliers";
+import { useProjectLinks } from "@/hooks/use-project-links";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { CATEGORY_CFG } from "@/lib/projects/link-categories";
+import type {
+  LinkedClientView,
+  LinkedSubVendorView,
+  LinkedSupplierView,
+} from "@/types/project-links";
 import { cn } from "@/lib/utils";
 import { clientRoute, subVendorRoute, supplierRoute } from "@/types/navigation";
 
@@ -134,13 +135,42 @@ function SubVendorCard({ vendor }: { vendor: LinkedSubVendorView }) {
 }
 
 export function ProjectLinksScreen({ projectId }: { projectId: string }) {
-  const project = getActiveProject(projectId);
-  const links = getProjectLinks(projectId);
+  const authDisabled = isAuthDisabled();
+  const { project, isLoading: projectLoading, error: projectError } = useProjectContext();
+  const { links, isLoading: linksLoading, error: linksError } = useProjectLinks(projectId);
 
-  if (!project) {
+  if (authDisabled) {
+    return (
+      <div className="px-10 py-7">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+          Live project links require auth. Copy <code className="font-mono">.env.local.example</code> to{" "}
+          <code className="font-mono">.env.local</code> and set{" "}
+          <code className="font-mono">NEXT_PUBLIC_ENABLE_AUTH=true</code>.
+        </div>
+      </div>
+    );
+  }
+
+  if (projectLoading || linksLoading) {
+    return (
+      <div className="px-10 py-8 text-[13px] text-[var(--figma-gray500)]">Loading project links…</div>
+    );
+  }
+
+  if (projectError || !project) {
     return (
       <div className="px-10 py-8 text-[var(--figma-gray500)]">
-        Project not found. Return to the projects list.
+        {projectError ?? "Project not found. Return to the projects list."}
+      </div>
+    );
+  }
+
+  if (linksError) {
+    return (
+      <div className="px-10 py-8">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800">
+          {linksError}
+        </div>
       </div>
     );
   }

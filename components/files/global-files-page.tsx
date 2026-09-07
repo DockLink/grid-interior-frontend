@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DemoCaption } from "@/components/demo/demo-caption";
 import {
@@ -8,6 +8,10 @@ import {
   MeetingsList,
 } from "@/components/files/meeting-minutes-section";
 import { FolderNameDialog } from "@/components/projects/files/folder-name-dialog";
+import { useGlobalRecentFiles } from "@/hooks/use-global-recent-files";
+import { useProjects } from "@/hooks/use-projects";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { mapProjectFileToDocFile } from "@/lib/files/map-global-files";
 import {
   FOLDER_CFG,
   FOLDER_TREE,
@@ -28,11 +32,13 @@ import {
   type GalleryPhotoCategory,
   type MeetingMinute,
 } from "@/lib/files/mock-documents";
-import {
-  getActiveProject,
-  getAllActiveProjects,
-} from "@/lib/projects/mock-projects";
 import { projectTabRoute } from "@/types/navigation";
+
+const DEMO_PROJECT_NAMES: Record<string, string> = {
+  "mock-1": "Marchetti Villa",
+  "mock-2": "Bianchi Office",
+  "mock-3": "Romano Residence",
+};
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -69,13 +75,17 @@ function matchesProject(projectId: string, filter: string) {
   return filter === "all" || projectId === filter;
 }
 
-function projectLabel(projectId: string) {
-  return getActiveProject(projectId)?.name ?? "Project";
+function projectLabel(projectId: string, projectNames: Record<string, string>) {
+  return projectNames[projectId] ?? "Project";
 }
 
-function projectFilterSubtitle(filter: string, suffix: string) {
+function projectFilterSubtitle(
+  filter: string,
+  suffix: string,
+  projectNames: Record<string, string>,
+) {
   if (filter === "all") return `All projects · ${suffix}`;
-  return `${projectLabel(filter)} · ${suffix}`;
+  return `${projectLabel(filter, projectNames)} · ${suffix}`;
 }
 
 type DocsView =
@@ -266,11 +276,12 @@ function TabBar({
 function ProjectFilterBar({
   projectFilter,
   onChange,
+  projects,
 }: {
   projectFilter: string;
   onChange: (id: string) => void;
+  projects: { id: string; name: string }[];
 }) {
-  const projects = getAllActiveProjects();
   const chips = [
     { id: "all", label: "All projects" },
     ...projects.map((p) => ({ id: p.id, label: p.name })),
@@ -333,8 +344,22 @@ function ProjectFilterBar({
 }
 
 // ── FILES BROWSER ─────────────────────────────────────────────────────────────
-function FileBrowser({ projectFilter }: { projectFilter: string }) {
-  const canCreateFolders = projectFilter !== "all";
+function FileBrowser({
+  projectFilter,
+  files,
+  projectNames,
+  isLoading,
+  error,
+  isLive,
+}: {
+  projectFilter: string;
+  files: DocFile[];
+  projectNames: Record<string, string>;
+  isLoading?: boolean;
+  error?: string | null;
+  isLive?: boolean;
+}) {
+  const canCreateFolders = !isLive && projectFilter !== "all";
   const [activeFolder, setActiveFolder] = useState<FolderType | "all">("all");
   const [search, setSearch] = useState("");
   const [focused, setFocused] = useState(false);
@@ -364,7 +389,7 @@ function FileBrowser({ projectFilter }: { projectFilter: string }) {
     if (!ids.has(activeFolder)) setActiveFolder("all");
   }, [projectFilter, tree, activeFolder]);
 
-  const scopedFiles = MOCK_FILES.filter((f) =>
+  const scopedFiles = files.filter((f) =>
     matchesProject(f.projectId, projectFilter),
   );
 
@@ -378,7 +403,7 @@ function FileBrowser({ projectFilter }: { projectFilter: string }) {
   const grouped =
     projectFilter === "all"
       ? (() => {
-          const order = getAllActiveProjects().map((p) => p.id);
+          const order = Object.keys(projectNames);
           const map = new Map<string, DocFile[]>();
           for (const f of filtered) {
             const list = map.get(f.projectId) ?? [];
@@ -534,9 +559,31 @@ function FileBrowser({ projectFilter }: { projectFilter: string }) {
   };
 
   const emptyMessage =
-    scopedFiles.length === 0
-      ? "No files for this project."
-      : "No files in this folder.";
+    isLoading
+      ? "Loading files…"
+      : error
+        ? error
+        : scopedFiles.length === 0
+          ? isLive
+            ? "No recent files yet."
+            : "No files for this project."
+          : "No files in this folder.";
+
+  if (isLoading) {
+    return (
+      <div style={{ padding: "28px 40px", color: T.gray500, fontSize: 14 }}>
+        Loading files…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: "28px 40px", color: T.alert, fontSize: 14 }}>
+        {error}
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: "28px 40px" }}>
@@ -563,9 +610,9 @@ function FileBrowser({ projectFilter }: { projectFilter: string }) {
             Documents & Files
           </h1>
           <p style={{ fontSize: 12, color: T.gray500, margin: 0 }}>
-            {projectFilterSubtitle(projectFilter, "All project files")}
+            {projectFilterSubtitle(projectFilter, "All project files", projectNames)}
           </p>
-          <DemoCaption className="mt-1" />
+          {!isLive && <DemoCaption className="mt-1" />}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button
@@ -790,7 +837,7 @@ function FileBrowser({ projectFilter }: { projectFilter: string }) {
                         color: T.navy,
                       }}
                     >
-                      {projectLabel(group.projectId)}
+                      {projectLabel(group.projectId, projectNames)}
                     </span>
                     <Link
                       href={projectTabRoute(group.projectId, "files")}
@@ -820,6 +867,7 @@ function FileBrowser({ projectFilter }: { projectFilter: string }) {
                       }
                       showProject
                       folderCfg={liveCfg}
+                      projectNames={projectNames}
                     />
                   ))}
                 </div>
@@ -831,6 +879,7 @@ function FileBrowser({ projectFilter }: { projectFilter: string }) {
                   file={file}
                   isLast={idx === filtered.length - 1}
                   folderCfg={liveCfg}
+                  projectNames={projectNames}
                 />
               ))
             )}
@@ -864,11 +913,13 @@ function FileRow({
   isLast,
   showProject = false,
   folderCfg = FOLDER_CFG,
+  projectNames = DEMO_PROJECT_NAMES,
 }: {
   file: DocFile;
   isLast: boolean;
   showProject?: boolean;
   folderCfg?: Record<string, FolderCfg>;
+  projectNames?: Record<string, string>;
 }) {
   const [hov, setHov] = useState(false);
   const cfg = folderCfg[file.folder] ?? FOLDER_CFG[file.folder] ?? {
@@ -944,7 +995,7 @@ function FileRow({
             <span className="material-icons-outlined" style={{ fontSize: 11 }}>
               folder_open
             </span>
-            {projectLabel(file.projectId)}
+            {projectLabel(file.projectId, projectNames)}
           </div>
         )}
       </div>
@@ -994,7 +1045,13 @@ function FileRow({
 }
 
 // ── PHOTO GALLERY ─────────────────────────────────────────────────────────────
-function PhotoGallery({ projectFilter }: { projectFilter: string }) {
+function PhotoGallery({
+  projectFilter,
+  projectNames,
+}: {
+  projectFilter: string;
+  projectNames: Record<string, string>;
+}) {
   const [filter, setFilter] = useState<"all" | GalleryPhotoCategory>("all");
   const [lightbox, setLightbox] = useState<GalleryPhoto | null>(null);
 
@@ -1037,6 +1094,7 @@ function PhotoGallery({ projectFilter }: { projectFilter: string }) {
             {projectFilterSubtitle(
               projectFilter,
               "Site pictures, work in progress, and completion photos",
+              projectNames,
             )}
           </p>
           <DemoCaption className="mt-1" />
@@ -1262,16 +1320,20 @@ function PhotoGallery({ projectFilter }: { projectFilter: string }) {
 function GlobalSearch({
   projectFilter,
   meetings,
+  files,
+  projectNames,
 }: {
   projectFilter: string;
   meetings: MeetingMinute[];
+  files: DocFile[];
+  projectNames: Record<string, string>;
 }) {
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
 
   const fileResults =
     query.length > 1
-      ? MOCK_FILES.filter(
+      ? files.filter(
           (f) =>
             matchesProject(f.projectId, projectFilter) &&
             (f.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -1307,6 +1369,7 @@ function GlobalSearch({
         {projectFilterSubtitle(
           projectFilter,
           "Search across all files, photos, and meeting minutes",
+          projectNames,
         )}
       </p>
 
@@ -1408,7 +1471,7 @@ function GlobalSearch({
                 </div>
                 <div style={{ fontSize: 11, color: T.gray400 }}>
                   {(FOLDER_CFG[file.folder]?.label ?? file.folder)}
-                  {projectFilter === "all" ? ` · ${projectLabel(file.projectId)}` : ""}
+                  {projectFilter === "all" ? ` · ${projectLabel(file.projectId, projectNames)}` : ""}
                   {" · "}
                   {file.date}
                 </div>
@@ -1446,7 +1509,7 @@ function GlobalSearch({
               <div style={{ fontSize: 13, fontWeight: 600, color: T.navy }}>{m.title}</div>
               <div style={{ fontSize: 11, color: T.gray400 }}>
                 Minutes
-                {projectFilter === "all" ? ` · ${projectLabel(m.projectId)}` : ""}
+                {projectFilter === "all" ? ` · ${projectLabel(m.projectId, projectNames)}` : ""}
                 {" · "}
                 {m.date}
               </div>
@@ -1464,12 +1527,37 @@ function GlobalSearch({
 export { DocumentsWorkspace as GlobalFilesPage };
 
 export function DocumentsWorkspace() {
+  const authDisabled = isAuthDisabled();
   const [view, setView] = useState<DocsView>("files");
   const [meetings, setMeetings] = useState<MeetingMinute[]>(() => [...MOCK_MEETINGS]);
   const [selectedMeeting, setSelectedMeeting] =
     useState<MeetingMinute | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [projectFilter, setProjectFilter] = useState("all");
+
+  const { projects } = useProjects({ status: "ACTIVE", limit: 50 });
+  const {
+    files: recentFiles,
+    isLoading: filesLoading,
+    error: filesError,
+  } = useGlobalRecentFiles();
+
+  const projectOptions = useMemo(() => {
+    if (authDisabled) {
+      return Object.entries(DEMO_PROJECT_NAMES).map(([id, name]) => ({ id, name }));
+    }
+    return projects.map((p) => ({ id: p.id, name: p.name }));
+  }, [authDisabled, projects]);
+
+  const projectNames = useMemo(() => {
+    if (authDisabled) return DEMO_PROJECT_NAMES;
+    return Object.fromEntries(projects.map((p) => [p.id, p.name]));
+  }, [authDisabled, projects]);
+
+  const documentFiles = useMemo(() => {
+    if (authDisabled) return MOCK_FILES;
+    return recentFiles.map(mapProjectFileToDocFile);
+  }, [authDisabled, recentFiles]);
 
   function handleProjectFilter(id: string) {
     setProjectFilter(id);
@@ -1511,16 +1599,37 @@ export function DocumentsWorkspace() {
       <ProjectFilterBar
         projectFilter={projectFilter}
         onChange={handleProjectFilter}
+        projects={projectOptions}
       />
 
+      {authDisabled && view === "files" && (
+        <div className="mx-10 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+          Live documents require auth. Copy <code className="font-mono">.env.local.example</code> to{" "}
+          <code className="font-mono">.env.local</code> and set{" "}
+          <code className="font-mono">NEXT_PUBLIC_ENABLE_AUTH=true</code>. Showing demo files below.
+        </div>
+      )}
+
       <div style={{ flex: 1 }}>
-        {view === "files" && <FileBrowser projectFilter={projectFilter} />}
-        {view === "gallery" && <PhotoGallery projectFilter={projectFilter} />}
+        {view === "files" && (
+          <FileBrowser
+            projectFilter={projectFilter}
+            files={documentFiles}
+            projectNames={projectNames}
+            isLoading={!authDisabled && filesLoading}
+            error={!authDisabled ? filesError : null}
+            isLive={!authDisabled}
+          />
+        )}
+        {view === "gallery" && (
+          <PhotoGallery projectFilter={projectFilter} projectNames={projectNames} />
+        )}
         {showEditor && (
           <MeetingEntry
             key={isCreating ? "create" : selectedMeeting?.id}
             meeting={isCreating ? null : selectedMeeting}
             projectFilter={projectFilter}
+            projectNames={projectNames}
             onBack={() => {
               setSelectedMeeting(null);
               setIsCreating(false);
@@ -1532,6 +1641,7 @@ export function DocumentsWorkspace() {
           <MeetingsList
             meetings={meetings}
             projectFilter={projectFilter}
+            projectNames={projectNames}
             onOpenEntry={(m) => {
               setIsCreating(false);
               setSelectedMeeting(m);
@@ -1543,7 +1653,12 @@ export function DocumentsWorkspace() {
           />
         )}
         {view === "search" && (
-          <GlobalSearch projectFilter={projectFilter} meetings={meetings} />
+          <GlobalSearch
+            projectFilter={projectFilter}
+            meetings={meetings}
+            files={documentFiles}
+            projectNames={projectNames}
+          />
         )}
       </div>
     </div>

@@ -1,10 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+
 import { authApiClient } from "@/lib/api/authenticated-client";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { uploadFileMultipart } from "@/lib/files/multipart-upload";
+import { queryKeys } from "@/lib/query/keys";
 import type {
   CreateShareLinkPayload,
   DownloadUrlResponse,
@@ -14,83 +17,99 @@ import type {
   ShareLinkResponse,
 } from "@/types/files";
 
+async function fetchFolderTree(projectId: string): Promise<ProjectFolderTree> {
+  const res = await authApiClient<{ data: ProjectFolderTree }>(
+    `/projects/${projectId}/files/tree`,
+  );
+  return res.data;
+}
+
+async function fetchFolderFiles(
+  projectId: string,
+  folderPath: string,
+): Promise<ProjectFile[]> {
+  const qs = new URLSearchParams({ folderPath });
+  const res = await authApiClient<{ data: ProjectFile[] }>(
+    `/projects/${projectId}/files?${qs}`,
+  );
+  return res.data ?? [];
+}
+
 export function useProjectFiles(projectId: string) {
-  const [folderTree, setFolderTree] = useState<ProjectFolderTree | null>(null);
-  const [treeLoading, setTreeLoading] = useState(true);
-  const [treeError, setTreeError] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const authEnabled = !isAuthDisabled();
 
   const [currentFolderPath, setCurrentFolderPath] = useState<string | null>(null);
-  const [files, setFiles] = useState<ProjectFile[]>([]);
-  const [filesLoading, setFilesLoading] = useState(false);
-  const [filesError, setFilesError] = useState<string | null>(null);
-
-  const [isProvisioning, setIsProvisioning] = useState(false);
   const hasProvisionedRef = useRef(false);
 
-  const loadTree = useCallback(async () => {
-    if (isAuthDisabled()) {
-      setFolderTree(null);
-      setTreeLoading(false);
-      setTreeError(null);
-      return;
-    }
-    setTreeLoading(true);
-    setTreeError(null);
-    try {
-      const res = await authApiClient<{ data: ProjectFolderTree }>(
-        `/projects/${projectId}/files/tree`
-      );
-      setFolderTree(res.data);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to load file tree";
-      setTreeError(msg);
-    } finally {
-      setTreeLoading(false);
-    }
-  }, [projectId]);
+  const {
+    data: folderTree = null,
+    isLoading: treeLoading,
+    error: treeQueryError,
+  } = useQuery({
+    queryKey: queryKeys.files.tree(projectId),
+    queryFn: () => fetchFolderTree(projectId),
+    staleTime: 30_000,
+    enabled: authEnabled && Boolean(projectId),
+  });
+
+  const {
+    data: files = [],
+    isLoading: filesLoading,
+    error: filesQueryError,
+  } = useQuery({
+    queryKey: queryKeys.files.folder(projectId, currentFolderPath ?? ""),
+    queryFn: () => fetchFolderFiles(projectId, currentFolderPath!),
+    staleTime: 30_000,
+    enabled: authEnabled && Boolean(projectId) && Boolean(currentFolderPath),
+  });
+
+  const treeError = treeQueryError
+    ? treeQueryError instanceof Error
+      ? treeQueryError.message
+      : "Failed to load file tree"
+    : null;
+
+  const filesError = filesQueryError
+    ? filesQueryError instanceof Error
+      ? filesQueryError.message
+      : "Failed to load files"
+    : null;
+
+  const invalidateTree = useCallback(() => {
+    return qc.invalidateQueries({ queryKey: queryKeys.files.tree(projectId) });
+  }, [qc, projectId]);
+
+  const invalidateFolder = useCallback(
+    (folderPath: string) => {
+      return qc.invalidateQueries({
+        queryKey: queryKeys.files.folder(projectId, folderPath),
+      });
+    },
+    [qc, projectId],
+  );
+
+  const provisionMutation = useMutation({
+    mutationFn: async () => {
+      await authApiClient(`/projects/${projectId}/folders`, { method: "POST" });
+    },
+    onSuccess: () => {
+      void invalidateTree();
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Failed to provision folders");
+    },
+  });
 
   const provisionFolders = useCallback(async () => {
-    if (hasProvisionedRef.current || isProvisioning) return;
+    if (hasProvisionedRef.current || provisionMutation.isPending) return;
     hasProvisionedRef.current = true;
-    setIsProvisioning(true);
     try {
-      await authApiClient(`/projects/${projectId}/folders`, { method: "POST" });
-      await loadTree();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to provision folders");
-    } finally {
-      setIsProvisioning(false);
+      await provisionMutation.mutateAsync();
+    } catch {
+      hasProvisionedRef.current = false;
     }
-  }, [projectId, loadTree, isProvisioning]);
-
-  const loadFiles = useCallback(async (folderPath: string) => {
-    setFilesLoading(true);
-    setFilesError(null);
-    try {
-      const qs = new URLSearchParams({ folderPath });
-      const res = await authApiClient<{ data: ProjectFile[] }>(
-        `/projects/${projectId}/files?${qs}`
-      );
-      setFiles(res.data ?? []);
-    } catch (err) {
-      setFiles([]);
-      setFilesError(err instanceof Error ? err.message : "Failed to load files");
-    } finally {
-      setFilesLoading(false);
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    void loadTree();
-  }, [loadTree]);
-
-  useEffect(() => {
-    if (currentFolderPath) {
-      void loadFiles(currentFolderPath);
-    } else {
-      setFiles([]);
-    }
-  }, [currentFolderPath, loadFiles]);
+  }, [provisionMutation]);
 
   const selectFolder = useCallback((path: string | null) => {
     setCurrentFolderPath(path);
@@ -103,8 +122,6 @@ export function useProjectFiles(projectId: string) {
       replaceFileId?: string,
       onProgress?: (pct: number) => void,
     ) => {
-      // Direct browser → S3 multipart upload: the file bytes never pass through
-      // Next.js or NestJS, so there is no app-level size limit.
       const body = await uploadFileMultipart({
         projectId,
         folderPath,
@@ -114,23 +131,23 @@ export function useProjectFiles(projectId: string) {
       });
 
       if (currentFolderPath === folderPath) {
-        await loadFiles(folderPath);
+        await invalidateFolder(folderPath);
       }
       return body;
     },
-    [projectId, currentFolderPath, loadFiles]
+    [projectId, currentFolderPath, invalidateFolder],
   );
 
   const getDownloadUrl = useCallback(async (fileId: string): Promise<string> => {
     const res = await authApiClient<{ data: DownloadUrlResponse }>(
-      `/files/${fileId}/download-url`
+      `/files/${fileId}/download-url`,
     );
     return res.data.downloadUrl;
   }, []);
 
   const getVersionHistory = useCallback(async (fileId: string): Promise<ProjectFile[]> => {
     const res = await authApiClient<{ data: ProjectFile[] }>(
-      `/files/${fileId}/versions`
+      `/files/${fileId}/versions`,
     );
     return res.data ?? [];
   }, []);
@@ -138,9 +155,14 @@ export function useProjectFiles(projectId: string) {
   const deleteFile = useCallback(
     async (fileId: string) => {
       await authApiClient(`/files/${fileId}`, { method: "DELETE" });
-      setFiles((prev) => prev.filter((f) => f.id !== fileId));
+      if (currentFolderPath) {
+        qc.setQueryData<ProjectFile[]>(
+          queryKeys.files.folder(projectId, currentFolderPath),
+          (prev) => (prev ?? []).filter((f) => f.id !== fileId),
+        );
+      }
     },
-    []
+    [currentFolderPath, projectId, qc],
   );
 
   const renameFile = useCallback(
@@ -150,14 +172,17 @@ export function useProjectFiles(projectId: string) {
         {
           method: "PATCH",
           body: JSON.stringify({ fileName }),
-        }
+        },
       );
-      setFiles((prev) =>
-        prev.map((f) => (f.id === fileId ? res.data : f))
-      );
+      if (currentFolderPath) {
+        qc.setQueryData<ProjectFile[]>(
+          queryKeys.files.folder(projectId, currentFolderPath),
+          (prev) => (prev ?? []).map((f) => (f.id === fileId ? res.data : f)),
+        );
+      }
       return res.data;
     },
-    []
+    [currentFolderPath, projectId, qc],
   );
 
   const createShareLink = useCallback(
@@ -167,11 +192,11 @@ export function useProjectFiles(projectId: string) {
         {
           method: "POST",
           body: JSON.stringify(payload),
-        }
+        },
       );
       return res.data;
     },
-    []
+    [],
   );
 
   const revokeShareLink = useCallback(async (token: string): Promise<void> => {
@@ -187,10 +212,10 @@ export function useProjectFiles(projectId: string) {
           body: JSON.stringify({ name, parentPath }),
         },
       );
-      await loadTree();
+      await invalidateTree();
       return res.data;
     },
-    [projectId, loadTree],
+    [projectId, invalidateTree],
   );
 
   const renameFolder = useCallback(
@@ -202,7 +227,7 @@ export function useProjectFiles(projectId: string) {
           body: JSON.stringify({ path, newName }),
         },
       );
-      await loadTree();
+      await invalidateTree();
       if (currentFolderPath?.startsWith(path)) {
         const suffix = currentFolderPath.slice(path.length);
         const newPath =
@@ -213,7 +238,7 @@ export function useProjectFiles(projectId: string) {
       }
       return res.data;
     },
-    [projectId, loadTree, currentFolderPath],
+    [projectId, invalidateTree, currentFolderPath],
   );
 
   const deleteFolder = useCallback(
@@ -225,10 +250,17 @@ export function useProjectFiles(projectId: string) {
       if (currentFolderPath === path || currentFolderPath?.startsWith(`${path}/`)) {
         setCurrentFolderPath(null);
       }
-      await loadTree();
+      await invalidateTree();
     },
-    [projectId, loadTree, currentFolderPath],
+    [projectId, invalidateTree, currentFolderPath],
   );
+
+  const reloadFiles = useCallback(() => {
+    if (!currentFolderPath) return Promise.resolve();
+    return invalidateFolder(currentFolderPath);
+  }, [currentFolderPath, invalidateFolder]);
+
+  const reloadTree = useCallback(() => invalidateTree(), [invalidateTree]);
 
   return {
     folderTree,
@@ -238,7 +270,7 @@ export function useProjectFiles(projectId: string) {
     files,
     filesLoading,
     filesError,
-    isProvisioning,
+    isProvisioning: provisionMutation.isPending,
     selectFolder,
     provisionFolders,
     uploadFile,
@@ -251,7 +283,7 @@ export function useProjectFiles(projectId: string) {
     createFolder,
     renameFolder,
     deleteFolder,
-    reloadFiles: () => currentFolderPath ? loadFiles(currentFolderPath) : Promise.resolve(),
-    reloadTree: loadTree,
+    reloadFiles,
+    reloadTree,
   };
 }

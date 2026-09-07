@@ -1,21 +1,22 @@
 "use client";
 
 import { RoleDashboard } from "@/components/dashboard/studio/role-dashboard";
-import {
-  MEMBER_ATTENTION_DATA,
-  MEMBER_STATS,
-  PROJECTS_OVERVIEW_DATA,
-} from "@/components/dashboard/studio/demo-data";
+import { useDashboardData } from "@/hooks/use-dashboard-data";
 
 export function MemberDashboard() {
+  const data = useDashboardData("member");
+
   return (
     <RoleDashboard
-      stats={MEMBER_STATS}
-      attention={MEMBER_ATTENTION_DATA}
+      stats={data.stats}
+      attention={data.attention}
       attentionTitle="My Focus"
       activityTitle="Recent File Activity"
-      projects={PROJECTS_OVERVIEW_DATA.slice(0, 3)}
+      projects={data.projects}
       projectsTitle="Assigned Projects"
+      todaysTasks={data.todaysTasks}
+      fileActivity={data.fileActivity}
+      isLoading={data.isLoading}
       showActions={false}
     />
   );

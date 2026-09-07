@@ -1,22 +1,24 @@
 "use client";
 
 import { RoleDashboard } from "@/components/dashboard/studio/role-dashboard";
-import {
-  LEAD_ATTENTION_DATA,
-  LEAD_STATS,
-  PROJECTS_OVERVIEW_DATA,
-} from "@/components/dashboard/studio/demo-data";
+import { useDashboardData } from "@/hooks/use-dashboard-data";
 
 export function LeadDashboard() {
+  const data = useDashboardData("lead");
+
   return (
     <RoleDashboard
-      stats={LEAD_STATS}
-      attention={LEAD_ATTENTION_DATA}
+      stats={data.stats}
+      attention={data.attention}
       attentionTitle="Needs Your Attention"
       activityTitle="Recent File Activity"
-      projects={PROJECTS_OVERVIEW_DATA.slice(0, 3)}
+      projects={data.projects}
       projectsTitle="Your Projects"
-      showActions={false}
+      todaysTasks={data.todaysTasks}
+      fileActivity={data.fileActivity}
+      isLoading={data.isLoading}
+      showActions
+      onAttentionAction={data.handleAttentionAction}
     />
   );
 }

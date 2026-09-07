@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { toast } from "sonner";
 import { DemoCaption } from "@/components/demo/demo-caption";
 import {
   MOCK_TASKS,
@@ -1181,11 +1182,13 @@ function MyTasksList({
   setTasks,
   onOpenTask,
   onOpenCreate,
+  readOnly = false,
 }: {
   tasks: MockTask[];
   setTasks: Dispatch<SetStateAction<MockTask[]>>;
   onOpenTask: (t: MockTask) => void;
   onOpenCreate: () => void;
+  readOnly?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [priorityFilter, setPriorityFilter] = useState<
@@ -1243,7 +1246,11 @@ function MyTasksList({
         : 1;
     });
 
-  const toggleDone = (id: number) =>
+  const toggleDone = (id: number) => {
+    if (readOnly) {
+      toast.info("Update task status from the project tasks tab.");
+      return;
+    }
     setTasks((p) =>
       p.map((t) =>
         t.id !== id
@@ -1251,6 +1258,7 @@ function MyTasksList({
           : { ...t, status: t.status === "done" ? "todo" : "done" }
       )
     );
+  };
 
   return (
     <div style={{ padding: "32px 40px" }}>
@@ -1709,11 +1717,13 @@ function TaskBoard({
   setTasks,
   onOpenTask,
   onOpenCreate,
+  readOnly = false,
 }: {
   tasks: MockTask[];
   setTasks: Dispatch<SetStateAction<MockTask[]>>;
   onOpenTask: (t: MockTask) => void;
   onOpenCreate: () => void;
+  readOnly?: boolean;
 }) {
   const [project, setProject] = useState("All Projects");
   const [projOpen, setProjOpen] = useState(false);
@@ -1744,6 +1754,10 @@ function TaskBoard({
   };
 
   const moveTask = (id: number, newStatus: MockTaskStatus) => {
+    if (readOnly) {
+      toast.info("Update task status from the project tasks tab.");
+      return;
+    }
     setTasks((p) =>
       p.map((t) => (t.id !== id ? t : { ...t, status: newStatus }))
     );
@@ -2159,17 +2173,53 @@ function KanbanCard({
 export function TasksWorkspace({
   initialView = "list",
   tasks: initialTasks,
+  readOnly = false,
+  isLoading = false,
+  error = null,
 }: {
   initialView?: "list" | "board";
   tasks?: MockTask[];
+  readOnly?: boolean;
+  isLoading?: boolean;
+  error?: string | null;
 }) {
   const [view, setView] = useState<"list" | "board">(initialView);
-  const [tasks, setTasks] = useState<MockTask[]>(initialTasks ?? MOCK_TASKS);
+  const [tasks, setTasks] = useState<MockTask[]>(
+    initialTasks !== undefined ? initialTasks : MOCK_TASKS,
+  );
   const [selectedTask, setSelectedTask] = useState<MockTask | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
+  useEffect(() => {
+    if (initialTasks !== undefined) {
+      setTasks(initialTasks);
+    }
+  }, [initialTasks]);
+
   const handleSetView = (v: "list" | "board") => setView(v);
-  const openCreate = () => setShowCreate(true);
+  const openCreate = () => {
+    if (readOnly) {
+      toast.info("Create tasks from the project tasks tab.");
+      return;
+    }
+    setShowCreate(true);
+  };
+
+  if (isLoading) {
+    return (
+      <div style={{ padding: "32px 40px", color: T.gray500, fontSize: 14 }}>
+        Loading tasks…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: "32px 40px", color: T.alert, fontSize: 14 }}>
+        {error}
+      </div>
+    );
+  }
 
   return (
     <div style={{ position: "relative" }}>
@@ -2186,6 +2236,7 @@ export function TasksWorkspace({
           setTasks={setTasks}
           onOpenTask={(t) => setSelectedTask(t)}
           onOpenCreate={openCreate}
+          readOnly={readOnly}
         />
       )}
       {view === "board" && (
@@ -2194,6 +2245,7 @@ export function TasksWorkspace({
           setTasks={setTasks}
           onOpenTask={(t) => setSelectedTask(t)}
           onOpenCreate={openCreate}
+          readOnly={readOnly}
         />
       )}
       {selectedTask && (

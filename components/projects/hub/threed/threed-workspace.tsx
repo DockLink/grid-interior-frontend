@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { DemoCaption } from "@/components/demo/demo-caption";
-import { DEFAULT_DEMO_PROJECT_ID, getActiveProject } from "@/lib/projects/mock-projects";
+import { useActiveProjectView } from "@/hooks/use-active-project-view";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { HubTeamProvider } from "@/lib/projects/hub-team-context";
 import type { ThreeDView } from "@/types/threed";
 
 import { ThreeDConfirmationScreen } from "./threed-confirmation-screen";
@@ -20,7 +22,8 @@ export function ThreeDWorkspace({
   onViewChange?: (view: ThreeDView) => void;
 }) {
   const router = useRouter();
-  const project = getActiveProject(projectId) ?? getActiveProject(DEFAULT_DEMO_PROJECT_ID)!;
+  const authDisabled = isAuthDisabled();
+  const { project, teamMembers, isLoading, error } = useActiveProjectView(projectId);
 
   const [view, setView] = useState<ThreeDView>(initialView);
 
@@ -37,18 +40,40 @@ export function ThreeDWorkspace({
     router.push(`/projects/${projectId}`);
   };
 
+  if (!authDisabled && isLoading) {
+    return (
+      <div className="px-10 py-6 text-sm text-[var(--figma-gray500)]">Loading project…</div>
+    );
+  }
+
+  if (!authDisabled && (error || !project)) {
+    return (
+      <div className="px-10 py-6 text-sm text-[var(--figma-alert)]">
+        {error ?? "Project not found"}
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="px-10 py-6 text-sm text-[var(--figma-gray500)]">Loading project…</div>
+    );
+  }
+
   return (
-    <div>
-      <DemoCaption className="mb-4 px-10 pt-6" />
-      {view === "visualizations" && (
-        <ThreeDVisualizationsScreen project={project} onBack={handleBack} />
-      )}
-      {view === "confirmation" && (
-        <ThreeDConfirmationScreen
-          project={project}
-          onBack={() => navigateView("visualizations")}
-        />
-      )}
-    </div>
+    <HubTeamProvider members={teamMembers}>
+      <div>
+        {authDisabled && <DemoCaption className="mb-4 px-10 pt-6" />}
+        {view === "visualizations" && (
+          <ThreeDVisualizationsScreen project={project} onBack={handleBack} />
+        )}
+        {view === "confirmation" && (
+          <ThreeDConfirmationScreen
+            project={project}
+            onBack={() => navigateView("visualizations")}
+          />
+        )}
+      </div>
+    </HubTeamProvider>
   );
 }

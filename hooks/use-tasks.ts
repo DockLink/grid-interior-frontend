@@ -1,49 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { queryKeys } from "@/lib/query/keys";
+import { mapTasksList } from "@/lib/tasks/map-task";
 import { toTasksQueryString } from "@/lib/tasks/query-string";
 import type { Task, TasksListResponse, TasksQueryParams } from "@/types/tasks";
 
+async function fetchTasks(params: TasksQueryParams): Promise<Task[]> {
+  const query = toTasksQueryString(params);
+  const res = await authApiClient<TasksListResponse>(`/tasks${query}`);
+  return mapTasksList(res);
+}
+
 export function useTasks(params: TasksQueryParams) {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: queryKeys.tasks.list(params),
+    queryFn: () => fetchTasks(params),
+    staleTime: 30_000,
+    enabled: !isAuthDisabled(),
+  });
 
-  const fetchTasks = useCallback(async () => {
-    if (isAuthDisabled()) {
-      setTasks([]);
-      setIsLoading(false);
-      setError(null);
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    try {
-      const query = toTasksQueryString(params);
-      const res = await authApiClient<TasksListResponse>(`/tasks${query}`);
-      setTasks(res.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load tasks");
-      setTasks([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [
-    params.page,
-    params.limit,
-    params.status,
-    params.taskable_type,
-    params.search,
-    params.depth,
-    JSON.stringify(params.projects),
-  ]);
-
-  useEffect(() => {
-    void fetchTasks();
-  }, [fetchTasks]);
-
-  return { tasks, isLoading, error, refetch: fetchTasks };
+  return {
+    tasks: data ?? [],
+    isLoading,
+    error: error ? (error instanceof Error ? error.message : "Failed to load tasks") : null,
+    refetch: () => refetch().then(() => undefined),
+  };
 }

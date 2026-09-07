@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { DemoCaption } from "@/components/demo/demo-caption";
+import { useOptionalProjectContext } from "@/components/projects/project-context";
 import {
   FOLDER_CFG,
   MOCK_FILES,
@@ -10,10 +11,7 @@ import {
   type MeetingAttachmentKind,
   type MeetingMinute,
 } from "@/lib/files/mock-documents";
-import {
-  getActiveProject,
-  getAllActiveProjects,
-} from "@/lib/projects/mock-projects";
+import { getAllActiveProjects } from "@/lib/projects/mock-projects";
 
 const T = {
   navy: "#1B2A4A",
@@ -43,13 +41,23 @@ function matchesProject(projectId: string, filter: string) {
   return filter === "all" || projectId === filter;
 }
 
-function projectLabel(projectId: string) {
-  return getActiveProject(projectId)?.name ?? "Project";
+function useProjectNameResolver(projectNames?: Record<string, string>) {
+  const ctx = useOptionalProjectContext();
+
+  return (projectId: string) => {
+    if (ctx?.project?.id === projectId) return ctx.project.name;
+    if (projectNames?.[projectId]) return projectNames[projectId];
+    return "Project";
+  };
 }
 
-function projectFilterSubtitle(filter: string, suffix: string) {
+function projectFilterSubtitle(
+  filter: string,
+  suffix: string,
+  resolveProjectName: (projectId: string) => string,
+) {
   if (filter === "all") return `All projects · ${suffix}`;
-  return `${projectLabel(filter)} · ${suffix}`;
+  return `${resolveProjectName(filter)} · ${suffix}`;
 }
 
 function formatBytes(bytes: number): string {
@@ -209,12 +217,15 @@ function Avatar({
 function MinuteAttachmentsPanel({
   attachments,
   projectFilter,
+  projectNames,
   onChange,
 }: {
   attachments: MeetingAttachment[];
   projectFilter: string;
+  projectNames?: Record<string, string>;
   onChange: (next: MeetingAttachment[]) => void;
 }) {
+  const resolveProjectName = useProjectNameResolver(projectNames);
   const uploadRef = useRef<HTMLInputElement>(null);
   const [showImport, setShowImport] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -524,7 +535,7 @@ function MinuteAttachmentsPanel({
                   <div style={{ fontSize: 11, color: T.gray400 }}>
                     {FOLDER_CFG[file.folder]?.label ?? file.folder} · {file.size}
                     {projectFilter === "all"
-                      ? ` · ${projectLabel(file.projectId)}`
+                      ? ` · ${resolveProjectName(file.projectId)}`
                       : ""}
                   </div>
                 </div>
@@ -545,12 +556,15 @@ export function MeetingsList({
   onOpenEntry,
   onNewMinutes,
   projectFilter,
+  projectNames,
 }: {
   meetings: MeetingMinute[];
   onOpenEntry: (m: MeetingMinute) => void;
   onNewMinutes: () => void;
   projectFilter: string;
+  projectNames?: Record<string, string>;
 }) {
+  const resolveProjectName = useProjectNameResolver(projectNames);
   const [q, setQ] = useState("");
   const typeIcon: Record<MeetingMinute["type"], string> = {
     typed: "edit_note",
@@ -598,6 +612,7 @@ export function MeetingsList({
             {projectFilterSubtitle(
               projectFilter,
               "Client & team meeting records",
+              resolveProjectName,
             )}
           </p>
           <DemoCaption className="mt-1" />
@@ -697,7 +712,7 @@ export function MeetingsList({
                     {projectFilter === "all" && (
                       <>
                         <span style={{ color: T.gray400 }}>·</span>
-                        {projectLabel(m.projectId)}
+                        {resolveProjectName(m.projectId)}
                       </>
                     )}
                   </div>
@@ -807,11 +822,13 @@ export function MeetingsList({
 export function MeetingEntry({
   meeting,
   projectFilter,
+  projectNames,
   onBack,
   onSave,
 }: {
   meeting: MeetingMinute | null;
   projectFilter: string;
+  projectNames?: Record<string, string>;
   onBack: () => void;
   onSave: (minute: MeetingMinute) => void;
 }) {
@@ -1025,6 +1042,7 @@ export function MeetingEntry({
       <MinuteAttachmentsPanel
         attachments={attachments}
         projectFilter={attachmentProjectFilter}
+        projectNames={projectNames}
         onChange={setAttachments}
       />
 

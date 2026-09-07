@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { cn } from "@/lib/utils";
-import type { ClientStatus } from "@/lib/clients/mock-clients";
+import type { ClientStatus } from "@/types/clients";
 
 const STATUS_CFG: Record<ClientStatus, { color: string; bg: string }> = {
   Active: { color: "var(--figma-navy)", bg: "rgba(27,42,74,0.09)" },

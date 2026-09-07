@@ -11,7 +11,10 @@ export function TaskUserAvatar({
 }) {
   return (
     <div
-      className={cn("flex shrink-0 items-center justify-center rounded-full bg-[#F5E6D0] font-semibold text-[var(--ds-accent)]", className)}
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-full bg-[rgba(14,124,134,0.12)] font-semibold text-[var(--figma-teal)]",
+        className
+      )}
       style={{ width: size, height: size, fontSize: Math.max(9, Math.floor(size * 0.38)) }}
     >
       {initials.slice(0, 2).toUpperCase()}

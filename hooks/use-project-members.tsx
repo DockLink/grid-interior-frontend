@@ -9,6 +9,7 @@ import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { getPrimaryRole } from "@/lib/auth/rbac";
 import { toSidebarRole } from "@/lib/navigation/sidebar-role";
 import type { SidebarRole } from "@/lib/navigation/sidebar-role";
+import { mapProjectMembersList } from "@/lib/projects/map-project-members";
 import {
   getEffectiveProjectRole,
   getProjectLeadUserIds,
@@ -56,7 +57,7 @@ export function ProjectMembersProvider({
       const result = await authApiClient<{ members: ProjectMember[] }>(
         `/projects/${projectId}/members`
       );
-      return result.members ?? [];
+      return mapProjectMembersList(result);
     },
     staleTime: 30_000,
     enabled: !isAuthDisabled(),
@@ -99,7 +100,7 @@ export function ProjectMembersProvider({
       });
     },
     onSuccess: (result) => {
-      qc.setQueryData<ProjectMember[]>(qKey, result.members ?? []);
+      qc.setQueryData<ProjectMember[]>(qKey, mapProjectMembersList(result));
     },
   });
 

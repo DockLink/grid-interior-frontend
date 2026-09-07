@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Readable } from "node:stream";
 
 const BACKEND_API_URL =
-  process.env.BACKEND_API_URL ?? "http://localhost:3000/v2";
+  process.env.BACKEND_API_URL ?? "http://localhost:3001/v2";
 
 function unauthorized() {
   return NextResponse.json({ statusCode: 401, message: "Unauthorized" }, { status: 401 });

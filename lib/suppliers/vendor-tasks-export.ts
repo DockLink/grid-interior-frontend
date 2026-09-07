@@ -1,9 +1,5 @@
-import {
-  formatVendorTaskDate,
-  getVendorPartyName,
-  getVendorProjectName,
-  type VendorTask,
-} from "@/lib/suppliers/mock-vendor-tasks";
+import type { VendorTask } from "@/types/vendor-tasks";
+import { formatVendorTaskDate } from "@/lib/suppliers/map-vendor-tasks";
 
 export interface VendorTaskExportRow {
   party: string;
@@ -19,10 +15,15 @@ function csvEscape(value: string): string {
   return value;
 }
 
-export function vendorTaskToExportRow(task: VendorTask, statusLabel: string): VendorTaskExportRow {
+export function vendorTaskToExportRow(
+  task: VendorTask,
+  statusLabel: string,
+  partyName: string,
+  projectName: string,
+): VendorTaskExportRow {
   return {
-    party: getVendorPartyName(task.partyKind, task.partyId),
-    project: getVendorProjectName(task.projectId),
+    party: partyName,
+    project: projectName,
     title: task.title,
     start: formatVendorTaskDate(task.startDate),
     deadline: formatVendorTaskDate(task.dueDate),

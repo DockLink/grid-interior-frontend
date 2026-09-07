@@ -44,7 +44,10 @@ export function TaskTeamView({
                 <div className="flex items-center gap-2">
                   <span className="truncate text-[15px] font-medium">{member.name}</span>
                   {isCurrentUser && (
-                    <Badge variant="secondary" className="bg-[#EDE3D4] text-[var(--ds-secondary-label)]">
+                    <Badge
+                      variant="secondary"
+                      className="bg-[var(--figma-gray100)] text-[var(--figma-gray500)]"
+                    >
                       You
                     </Badge>
                   )}
@@ -54,17 +57,17 @@ export function TaskTeamView({
                 </div>
               </div>
               <div className="flex w-32 shrink-0 items-center gap-2">
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#EDE3D4]">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--figma-gray100)]">
                   <div
                     className="h-full rounded-full transition-all"
-                    style={{ width: `${pct}%`, background: "#3D8B5E" }}
+                    style={{ width: `${pct}%`, background: "var(--ds-success)" }}
                   />
                 </div>
                 <span className="w-9 text-right text-xs font-medium text-[var(--ds-secondary-label)]">{pct}%</span>
               </div>
             </div>
             {memberTasks.length === 0 ? (
-              <div className="px-4 py-3.5 text-sm text-[#C4B5A5]">No tasks assigned</div>
+              <div className="px-4 py-3.5 text-sm text-[var(--figma-gray400)]">No tasks assigned</div>
             ) : (
               memberTasks.map((task, i) => {
                 const column = BOARD_COLUMNS.find((c) => c.id === task.status)!;
@@ -83,13 +86,13 @@ export function TaskTeamView({
                     <span
                       className={cn(
                         "flex-1 truncate text-sm font-medium",
-                        memberDone && task.status !== "done" && "text-[#3D8B5E]"
+                        memberDone && task.status !== "done" && "text-[var(--ds-success)]"
                       )}
                     >
                       {task.title}
                     </span>
                     {memberDone && task.status !== "done" && (
-                      <span className="text-xs text-[#3D8B5E]">Your part done</span>
+                      <span className="text-xs text-[var(--ds-success)]">Your part done</span>
                     )}
                     <Badge variant="secondary" style={{ color: column.accent }}>
                       {column.label}

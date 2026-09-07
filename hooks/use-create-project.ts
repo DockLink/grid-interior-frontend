@@ -22,12 +22,20 @@ export function useCreateProject() {
         stages?: CreateProjectStageInput[];
         memberUserIds?: string[];
         projectLeadUserId?: string | null;
+        clientId?: string;
       }
     ) => {
-      const project = await authApiClient<Project>("/projects", {
+      let project = await authApiClient<Project>("/projects", {
         method: "POST",
         body: JSON.stringify(payload),
       });
+
+      if (options?.clientId) {
+        project = await authApiClient<Project>(`/projects/${project.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ client: { id: options.clientId } }),
+        });
+      }
 
       if (options?.stages?.length) {
         for (const stage of options.stages) {

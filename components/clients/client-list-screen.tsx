@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import { DemoCaption } from "@/components/demo/demo-caption";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
@@ -12,18 +13,33 @@ import {
   GradientButton,
   NeuPagination,
   NeuSearchInput,
-  OutlineButton,
   ProjectCountBadge,
 } from "@/components/clients/client-ui";
 import { FollowUpPanel } from "@/components/clients/follow-up-panel";
-import { CLIENTS, type Client, type ClientStatus } from "@/lib/clients/mock-clients";
+import { ClientFormModal } from "@/components/clients/client-form-modal";
+import { useClients } from "@/hooks/use-clients";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { getDemoClients } from "@/lib/clients/demo-data";
 import { clientRoute } from "@/types/navigation";
+import type { Client, ClientStatus, LeadSource } from "@/types/clients";
 import { cn } from "@/lib/utils";
 
 const PER_PAGE = 8;
+const DEMO_CLIENTS = getDemoClients();
+
+function AuthCallout() {
+  return (
+    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+      Live clients require auth. Copy <code className="font-mono">.env.local.example</code> to{" "}
+      <code className="font-mono">.env.local</code> and set{" "}
+      <code className="font-mono">NEXT_PUBLIC_ENABLE_AUTH=true</code>. Showing demo clients below.
+    </div>
+  );
+}
 
 export function ClientListScreen() {
   const router = useRouter();
+  const authDisabled = isAuthDisabled();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [sourceFilter, setSourceFilter] = useState("All");
@@ -31,37 +47,65 @@ export function ClientListScreen() {
   const [showAdd, setShowAdd] = useState(false);
   const [showFollowUp, setShowFollowUp] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
-  const [restored, setRestored] = useState<number[]>([]);
+  const [restored, setRestored] = useState<string[]>([]);
 
-  const filtered = CLIENTS.filter((c) => {
-    const q = search.toLowerCase();
-    const matchQ =
-      !q ||
-      c.name.toLowerCase().includes(q) ||
-      c.company.toLowerCase().includes(q) ||
-      c.email.toLowerCase().includes(q) ||
-      (c.projects ?? []).some((p) => p.toLowerCase().includes(q));
-    const matchStatus = statusFilter === "All" || c.status === statusFilter;
-    const matchSource = sourceFilter === "All" || c.source === sourceFilter;
-    const matchDeleted = showDeleted
-      ? Boolean(c.deleted) && !restored.includes(c.id)
-      : !c.deleted || restored.includes(c.id);
-    return matchQ && matchStatus && matchSource && matchDeleted;
-  });
+  const queryParams = useMemo(
+    () => ({
+      page: 1,
+      limit: 100,
+      search: search.trim() || undefined,
+      status: statusFilter !== "All" ? (statusFilter as ClientStatus) : undefined,
+      source: sourceFilter !== "All" ? (sourceFilter as LeadSource) : undefined,
+      include_deleted: showDeleted || undefined,
+    }),
+    [search, statusFilter, sourceFilter, showDeleted],
+  );
+
+  const { clients, meta, isLoading, error, createClient, updateClient, isCreating } =
+    useClients(queryParams);
+
+  const sourceClients = authDisabled ? DEMO_CLIENTS : clients;
+
+  const filtered = useMemo(() => {
+    return sourceClients.filter((c) => {
+      const matchDeleted = showDeleted
+        ? Boolean(c.deleted) && !restored.includes(c.id)
+        : !c.deleted || restored.includes(c.id);
+      return matchDeleted;
+    });
+  }, [sourceClients, showDeleted, restored]);
 
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  const totalCount = authDisabled ? DEMO_CLIENTS.length : (meta?.total ?? clients.length);
 
-  const goToClient = (id: number) => router.push(clientRoute(id));
+  const goToClient = (id: string) => router.push(clientRoute(id));
+
+  const handleRestore = async (id: string) => {
+    if (authDisabled) {
+      setRestored((ids) => [...ids, id]);
+      setShowDeleted(false);
+      return;
+    }
+    try {
+      await updateClient(id, { deleted: false });
+      setRestored((ids) => [...ids, id]);
+      setShowDeleted(false);
+      toast.success("Client restored");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to restore client");
+    }
+  };
 
   return (
     <div className="min-h-full px-9 py-8">
-      <DemoCaption className="mb-4" />
+      {authDisabled ? <DemoCaption className="mb-4" /> : null}
+      {authDisabled ? <AuthCallout /> : null}
 
       <div className="mb-7 flex items-start justify-between">
         <div>
           <h1 className="mb-1.5 text-[28px] font-bold text-[var(--figma-navy)]">Clients</h1>
           <p className="m-0 text-sm leading-relaxed text-[var(--figma-gray500)]">
-            Manage client profiles and relationships · {CLIENTS.length} total
+            Manage client profiles and relationships · {totalCount} total
           </p>
         </div>
         <GradientButton icon="person_add" onClick={() => setShowAdd(true)}>
@@ -125,6 +169,12 @@ export function ClientListScreen() {
         </div>
       </div>
 
+      {!authDisabled && error ? (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+          {error}
+        </div>
+      ) : null}
+
       <div className="overflow-hidden rounded-2xl border border-[var(--figma-border)] bg-white">
         <table className="w-full border-collapse text-[13px]">
           <thead>
@@ -145,7 +195,17 @@ export function ClientListScreen() {
             </tr>
           </thead>
           <tbody>
-            {paged.length === 0 ? (
+            {!authDisabled && isLoading ? (
+              <tr>
+                <td colSpan={7}>
+                  <div className="flex flex-col gap-2 px-4 py-6">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="h-12 animate-pulse rounded-lg bg-[var(--figma-gray100)]" />
+                    ))}
+                  </div>
+                </td>
+              </tr>
+            ) : paged.length === 0 ? (
               <EmptyState onAdd={() => setShowAdd(true)} />
             ) : (
               paged.map((c) => (
@@ -156,8 +216,7 @@ export function ClientListScreen() {
                   onRestore={
                     c.deleted
                       ? () => {
-                          setRestored((ids) => [...ids, c.id]);
-                          setShowDeleted(false);
+                          void handleRestore(c.id);
                         }
                       : undefined
                   }
@@ -169,14 +228,29 @@ export function ClientListScreen() {
 
         <div className="flex items-center justify-between border-t border-[var(--figma-border)] px-5 py-3">
           <span className="text-xs text-[var(--figma-gray400)]">
-            Showing {Math.min((page - 1) * PER_PAGE + 1, filtered.length)}–
+            Showing {filtered.length === 0 ? 0 : Math.min((page - 1) * PER_PAGE + 1, filtered.length)}–
             {Math.min(page * PER_PAGE, filtered.length)} of {filtered.length} clients
           </span>
           <NeuPagination page={page} total={filtered.length} perPage={PER_PAGE} onChange={setPage} />
         </div>
       </div>
 
-      {showAdd ? <AddClientModal onClose={() => setShowAdd(false)} /> : null}
+      {showAdd ? (
+        <ClientFormModal
+          mode="create"
+          onClose={() => setShowAdd(false)}
+          isSaving={isCreating}
+          onSubmit={async (payload) => {
+            if (authDisabled) {
+              setShowAdd(false);
+              return;
+            }
+            await createClient(payload);
+            toast.success("Client created");
+            setShowAdd(false);
+          }}
+        />
+      ) : null}
       {showFollowUp ? (
         <FollowUpPanel onClose={() => setShowFollowUp(false)} onViewClient={(id) => goToClient(id)} />
       ) : null}
@@ -295,93 +369,5 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         </div>
       </td>
     </tr>
-  );
-}
-
-function AddClientModal({ onClose }: { onClose: () => void }) {
-  const [name, setName] = useState("");
-  const [company, setCompany] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [status, setStatus] = useState<ClientStatus>("Lead");
-
-  return (
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-[rgba(27,42,74,0.18)] backdrop-blur-[2px]"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="hub-modal-in w-full max-w-[480px] rounded-[20px] bg-white px-9 py-8" style={{ boxShadow: "var(--neu-modal)" }}>
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h2 className="mb-1 text-lg font-semibold text-[var(--figma-navy)]">Add New Client</h2>
-            <p className="m-0 text-[13px] text-[var(--figma-gray500)]">Create a new client profile</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex size-8 items-center justify-center rounded-lg border-none bg-[var(--figma-gray100)]"
-          >
-            <MaterialIcon name="close" outlined size={18} className="text-[var(--figma-gray500)]" />
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-4">
-          {[
-            { label: "Full Name", value: name, set: setName, icon: "person", placeholder: "e.g. Giulia Marchetti" },
-            { label: "Company", value: company, set: setCompany, icon: "business", placeholder: "e.g. Marchetti Holdings" },
-            { label: "Email Address", value: email, set: setEmail, icon: "email", placeholder: "giulia@example.com" },
-            { label: "Phone", value: phone, set: setPhone, icon: "phone", placeholder: "+39 02 1234 5678" },
-          ].map((f) => (
-            <div key={f.label} className="flex flex-col gap-1.5">
-              <label className="text-[13px] font-medium text-[var(--figma-navy)]">{f.label}</label>
-              <div className="relative">
-                <MaterialIcon
-                  name={f.icon}
-                  outlined
-                  size={17}
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--figma-gray400)]"
-                />
-                <input
-                  value={f.value}
-                  onChange={(e) => f.set(e.target.value)}
-                  placeholder={f.placeholder}
-                  className="hub-input-focus w-full rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white py-2.5 pl-9 pr-3.5 text-sm text-[var(--figma-navy)] outline-none neu-inset"
-                />
-              </div>
-            </div>
-          ))}
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[13px] font-medium text-[var(--figma-navy)]">Status</label>
-            <div className="flex gap-2">
-              {(["Lead", "Active", "Past"] as ClientStatus[]).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setStatus(s)}
-                  className={cn(
-                    "flex-1 rounded-lg border-[1.5px] py-2 text-[13px] transition-all duration-150",
-                    status === s
-                      ? "border-[var(--figma-teal)] bg-[rgba(14,124,134,0.08)] font-semibold text-[var(--figma-teal)]"
-                      : "border-[var(--figma-border)] bg-white font-normal text-[var(--figma-gray500)]",
-                  )}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6 flex gap-2.5">
-          <OutlineButton onClick={onClose} className="flex-1">
-            Cancel
-          </OutlineButton>
-          <GradientButton icon="person_add" onClick={onClose} className="flex-[2]">
-            Create Client
-          </GradientButton>
-        </div>
-      </div>
-    </div>
   );
 }

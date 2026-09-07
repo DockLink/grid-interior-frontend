@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Flag, GanttChart, LayoutGrid, List, ListTree, Plus, Settings, Users } from "lucide-react";
+import { GanttChart, LayoutGrid, List, ListTree, Users } from "lucide-react";
 import { toast } from "sonner";
 
+import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { StageManagementModal } from "@/components/projects/stage-management-modal";
 import { MilestoneManagementModal } from "@/components/projects/milestone-management-modal";
 import { TaskCreateDialog } from "@/components/projects/tasks/task-create-dialog";
@@ -13,7 +14,6 @@ import { TaskListHeader, TaskListRow } from "@/components/projects/tasks/task-li
 import { TaskMilestoneView } from "@/components/projects/tasks/task-milestone-view";
 import { TaskTeamView } from "@/components/projects/tasks/task-team-view";
 import { TimelineGantt } from "@/components/projects/timeline/timeline-gantt";
-import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useProjectTasksBoard } from "@/hooks/use-project-tasks-board";
 import type { TaskablePriority } from "@/types/tasks";
@@ -120,7 +120,7 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
   }
 
   const selectClass =
-    "h-8 rounded-md border border-[rgba(90,60,30,0.18)] bg-[var(--ds-bg)] px-2 text-xs text-[var(--ds-secondary-label)] outline-none";
+    "hub-input-focus h-8 cursor-pointer appearance-none rounded-[10px] border border-[var(--figma-border)] bg-white px-2.5 text-xs text-[var(--figma-navy)] outline-none neu-inset";
 
   // Date window of the selected task's parent STAGE, used to bound hold
   // requests. Holds may fall outside the milestone window but must stay within
@@ -168,29 +168,44 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="-mt-6">
-      <div className="sticky top-[44px] z-[98] flex items-center justify-between gap-3 border-b border-[rgba(90,60,30,0.08)] bg-[#EDE3D4] px-7 py-3">
+    <div>
+      <div className="sticky top-[44px] z-[98] flex items-center justify-between gap-3 border-b border-[var(--figma-border)] bg-white px-10 py-3">
         <div className="flex items-center gap-3">
-          <div className="inline-flex rounded-lg bg-[var(--ds-bg)] p-1">
+          <div
+            className="inline-flex gap-0.5 rounded-[14px] p-1 neu-inset"
+            style={{ background: "var(--figma-gray100)" }}
+          >
             {([
               { id: "kanban" as const, icon: LayoutGrid, label: "Board" },
               { id: "gantt" as const, icon: GanttChart, label: "Gantt" },
               { id: "list" as const, icon: List, label: "List" },
               { id: "milestones" as const, icon: ListTree, label: "Milestones" },
               { id: "team" as const, icon: Users, label: "Team" },
-            ]).map(({ id, icon: Icon, label }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setViewMode(id)}
-                className={`inline-flex h-7 items-center gap-1.5 rounded-md px-3 text-sm ${viewMode === id ? "bg-white text-[var(--ds-accent)] shadow-sm" : "text-[var(--ds-secondary-label)]"}`}
-              >
-                <Icon className="size-3.5" />
-                {label}
-              </button>
-            ))}
+            ]).map(({ id, icon: Icon, label }) => {
+              const active = viewMode === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setViewMode(id)}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-[10px] border-none px-3 text-[13px] transition-all duration-180"
+                  style={{
+                    background: active ? "#fff" : "transparent",
+                    color: active ? "var(--figma-navy)" : "var(--figma-gray500)",
+                    fontWeight: active ? 600 : 400,
+                    boxShadow: active ? "var(--neu-raised)" : "none",
+                  }}
+                >
+                  <Icon
+                    className="size-3.5"
+                    style={{ color: active ? "var(--figma-teal)" : "var(--figma-gray400)" }}
+                  />
+                  {label}
+                </button>
+              );
+            })}
           </div>
-          <span className="rounded-lg bg-[var(--ds-bg)] px-3 py-1.5 text-xs font-medium text-[var(--ds-secondary-label)]">
+          <span className="rounded-[10px] bg-[var(--figma-gray100)] px-3 py-1.5 text-xs font-medium text-[var(--figma-gray500)]">
             {viewMode === "milestones" || viewMode === "team" || viewMode === "gantt"
               ? `Tasks: ${filteredAll.length}`
               : isAdmin
@@ -201,21 +216,38 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
 
         {canManage && (
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowStageManagement(true)}>
-              <Settings className="size-3.5" /> Stages
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setShowMilestoneManagement(true)}>
-              <Flag className="size-3.5" /> Milestones
-            </Button>
-            <Button size="sm" onClick={() => setCreateStatus("todo")}>
-              <Plus className="size-3.5" /> New task
-            </Button>
+            <button
+              type="button"
+              onClick={() => setShowStageManagement(true)}
+              className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[20px] border-[1.5px] border-[var(--figma-border)] bg-white px-3.5 text-[12px] font-semibold text-[var(--figma-navy)] transition-all neu-raised hover:border-[var(--figma-teal)]"
+            >
+              <MaterialIcon name="layers" outlined size={15} className="text-[var(--figma-teal)]" />
+              Stages
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowMilestoneManagement(true)}
+              className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[20px] border-[1.5px] border-[var(--figma-border)] bg-white px-3.5 text-[12px] font-semibold text-[var(--figma-navy)] transition-all neu-raised hover:border-[var(--figma-teal)]"
+            >
+              <MaterialIcon name="flag" outlined size={15} className="text-[var(--figma-teal)]" />
+              Milestones
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreateStatus("todo")}
+              className="gi-gradient-cta inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[24px] px-4 text-[12px] font-semibold"
+            >
+              <MaterialIcon name="add" outlined size={15} />
+              New task
+            </button>
           </div>
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-[rgba(90,60,30,0.08)] bg-[#F2E9DA] px-7 py-2.5">
-        <span className="text-[11px] font-medium tracking-wide text-[var(--ds-secondary-label)] uppercase">Filters</span>
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--figma-border)] bg-[var(--figma-gray50)] px-10 py-2.5">
+        <span className="text-[11px] font-medium tracking-wide text-[var(--figma-gray500)] uppercase">
+          Filters
+        </span>
         <select
           value={filterStage}
           onChange={(e) => {
@@ -231,7 +263,11 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
             </option>
           ))}
         </select>
-        <select value={filterMilestone} onChange={(e) => setFilterMilestone(e.target.value)} className={selectClass}>
+        <select
+          value={filterMilestone}
+          onChange={(e) => setFilterMilestone(e.target.value)}
+          className={selectClass}
+        >
           <option value={ALL}>All milestones</option>
           {milestoneOptions.map((m) => (
             <option key={m.id} value={m.id}>
@@ -239,7 +275,11 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
             </option>
           ))}
         </select>
-        <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)} className={selectClass}>
+        <select
+          value={filterAssignee}
+          onChange={(e) => setFilterAssignee(e.target.value)}
+          className={selectClass}
+        >
           <option value={ALL}>All assignees</option>
           {teamMembers.map((m) => (
             <option key={m.userId} value={m.userId}>
@@ -247,7 +287,11 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
             </option>
           ))}
         </select>
-        <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className={selectClass}>
+        <select
+          value={filterPriority}
+          onChange={(e) => setFilterPriority(e.target.value)}
+          className={selectClass}
+        >
           <option value={ALL}>Any priority</option>
           <option value="HIGH">High</option>
           <option value="MEDIUM">Medium</option>
@@ -257,20 +301,20 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
           <button
             type="button"
             onClick={clearFilters}
-            className="text-xs font-medium text-[var(--ds-accent-hover)] hover:underline"
+            className="text-xs font-medium text-[var(--figma-teal)] hover:underline"
           >
             Clear
           </button>
         )}
       </div>
 
-      <div className="px-7 py-5">
+      <div className="px-10 py-5">
         {isLoading && <LoadingSpinner label="Loading tasks…" />}
         {error && <p className="text-sm text-red-700">{error}</p>}
 
         {!isLoading && isAssigneesLoading && (
-          <div className="mb-3 flex items-center gap-2 text-xs text-[var(--ds-secondary-label)]">
-            <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-[var(--ds-accent)] border-t-transparent" />
+          <div className="mb-3 flex items-center gap-2 text-xs text-[var(--figma-gray500)]">
+            <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-[var(--figma-teal)] border-t-transparent" />
             Loading assignees…
           </div>
         )}
@@ -321,10 +365,10 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
         )}
 
         {!isLoading && viewMode === "list" && (
-          <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+            <div className="overflow-hidden rounded-xl border border-[var(--figma-border)] bg-white shadow-[var(--neu-card)]">
             <TaskListHeader />
             {filteredVisible.length === 0 ? (
-              <div className="p-8 text-center text-sm text-[var(--ds-tertiary-label)]">No tasks match the current filters.</div>
+              <div className="p-8 text-center text-sm text-[var(--figma-gray400)]">No tasks match the current filters.</div>
             ) : (
               filteredVisible.map((task, i) => (
                 <div key={task.id} className={i < filteredVisible.length - 1 ? "border-b" : ""}>
@@ -337,7 +381,7 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
 
         {!isLoading && viewMode === "gantt" && (
           filteredAll.length === 0 ? (
-            <div className="rounded-xl border border-[var(--ds-separator)] bg-white p-8 text-center text-sm text-[var(--ds-secondary-label)]">
+            <div className="rounded-xl border border-[var(--figma-border)] bg-white p-8 text-center text-sm text-[var(--figma-gray500)]">
               No tasks match the current filters.
             </div>
           ) : (

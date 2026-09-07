@@ -186,24 +186,24 @@ export function TimelineGantt({
   function renderTaskRow(task: TimelineTaskItem, color: string) {
     const taskBg =
       task.status === "completed"
-        ? "#C4B5A5"
+        ? "#9CA3AF"
         : task.status === "overdue"
           ? "#DC2626"
           : task.status === "active"
             ? color
-            : "#D4C4B4";
+            : "#D1D5DB";
     const barH = Math.min(22, Math.max(14, taskH * 0.42));
     return (
       <div
         key={task.id}
-        className="flex border-b border-[rgba(90,60,30,0.05)]"
+        className="flex border-b border-[var(--figma-border)]/60"
         style={{ height: taskH }}
       >
         <div
-          className="sticky left-0 z-[3] flex shrink-0 items-center gap-2 border-r border-[var(--ds-separator)] bg-[#FAFAF8] pl-9 pr-3"
+          className="sticky left-0 z-[3] flex shrink-0 items-center gap-2 border-r border-[var(--ds-separator)] bg-[var(--figma-gray50)] pl-9 pr-3"
           style={{ width: GANTT_LEFT_COL }}
         >
-          {task.status === "completed" && <Check className="size-3 shrink-0 text-[#3D8B5E]" />}
+          {task.status === "completed" && <Check className="size-3 shrink-0 text-[var(--figma-success)]" />}
           <span className="truncate text-[12px] text-[var(--ds-secondary-label)]">{task.title}</span>
         </div>
         <div className="relative flex-1" style={{ width: chartWidth, height: taskH }}>
@@ -253,7 +253,7 @@ export function TimelineGantt({
             {months.map((m) => (
               <div
                 key={"grid" + m.label + m.px}
-                className="absolute inset-y-0 w-px bg-[rgba(90,60,30,0.06)]"
+                className="absolute inset-y-0 w-px bg-[var(--figma-border)]"
                 style={{ left: m.px }}
               />
             ))}
@@ -261,7 +261,7 @@ export function TimelineGantt({
 
           {/* Header */}
           <div
-            className="sticky top-0 z-[5] flex border-b border-[rgba(90,60,30,0.10)]"
+            className="sticky top-0 z-[5] flex border-b border-[var(--figma-border)]"
             style={{ height: HEADER_H }}
           >
             <div
@@ -279,7 +279,7 @@ export function TimelineGantt({
                   className="absolute inset-y-0 flex items-center"
                   style={{ left: m.px }}
                 >
-                  <div className="absolute inset-y-0 left-0 w-px bg-[rgba(90,60,30,0.08)]" />
+                  <div className="absolute inset-y-0 left-0 w-px bg-[var(--figma-border)]" />
                   <span className="whitespace-nowrap pl-1.5 text-[11px] text-[var(--ds-secondary-label)]">{m.label}</span>
                 </div>
               ))}
@@ -306,13 +306,13 @@ export function TimelineGantt({
             return (
               <div key={group.id}>
                 <div
-                  className={`flex border-b border-[rgba(90,60,30,0.10)] ${groupIndex > 0 ? "border-t border-[rgba(90,60,30,0.10)]" : ""}`}
+                  className={`flex border-b border-[var(--figma-border)] ${groupIndex > 0 ? "border-t border-[var(--figma-border)]" : ""}`}
                   style={{ height: stageH }}
                 >
                   <button
                     type="button"
                     onClick={() => onToggleStage(group.id)}
-                    className="sticky left-0 z-[3] flex shrink-0 cursor-pointer items-center gap-2 border-r border-[var(--ds-separator)] bg-[#EDE3D4] px-3.5 text-left"
+                    className="sticky left-0 z-[3] flex shrink-0 cursor-pointer items-center gap-2 border-r border-[var(--ds-separator)] bg-[var(--figma-gray100)] px-3.5 text-left"
                     style={{ width: GANTT_LEFT_COL }}
                   >
                     {collapsed ? (
@@ -325,7 +325,7 @@ export function TimelineGantt({
                     </span>
                   </button>
                   <div
-                    className="relative bg-[#EDE3D4]"
+                    className="relative bg-[var(--figma-gray100)]"
                     style={{ width: chartWidth, height: stageH }}
                   >
                     <div
@@ -383,13 +383,13 @@ export function TimelineGantt({
                     {group.milestones.map((ms) => {
                       const msExpanded = expandedMilestones.has(ms.id);
                       const hasTasks = (ms.tasks?.length ?? 0) > 0;
-                      const barBg = ms.status === "completed" ? "#EDE3D4" : group.color;
+                      const barBg = ms.status === "completed" ? "#E5E7EB" : group.color;
                       const msBarH = Math.min(28, Math.max(16, msH * 0.48));
 
                       return (
                         <div key={ms.id}>
                           <div
-                            className="flex border-b border-[rgba(90,60,30,0.07)]"
+                            className="flex border-b border-[var(--figma-border)]/70"
                             style={{ height: msH }}
                           >
                             <button
@@ -401,15 +401,15 @@ export function TimelineGantt({
                             >
                               {hasTasks ? (
                                 msExpanded ? (
-                                  <ChevronDown className="size-3.5 shrink-0 text-[#C4B5A5]" />
+                                  <ChevronDown className="size-3.5 shrink-0 text-[var(--figma-gray400)]" />
                                 ) : (
-                                  <ChevronRight className="size-3.5 shrink-0 text-[#C4B5A5]" />
+                                  <ChevronRight className="size-3.5 shrink-0 text-[var(--figma-gray400)]" />
                                 )
                               ) : (
                                 <span className="size-3.5 shrink-0" />
                               )}
                               {ms.status === "completed" && (
-                                <Check className="size-3 shrink-0 text-[#2D6A4F]" />
+                                <Check className="size-3 shrink-0 text-[var(--figma-success)]" />
                               )}
                               <span className="flex-1 truncate text-[13px] text-[var(--ds-secondary-label)]">{ms.title}</span>
                             </button>

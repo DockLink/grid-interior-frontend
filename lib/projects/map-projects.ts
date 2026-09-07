@@ -1,4 +1,5 @@
 import type { Project, ProjectCardView, ProjectImage } from "@/types/projects";
+import { resolveProjectEndDate } from "@/lib/projects/duration";
 
 export const FALLBACK_THUMBNAIL =
   "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&q=80";
@@ -57,6 +58,7 @@ function formatShortDate(iso: string | null | undefined): string | null {
 }
 
 export function mapProjectToCard(project: Project): ProjectCardView {
+  const endIso = resolveProjectEndDate(project);
   return {
     id: project.id,
     name: project.name,
@@ -68,6 +70,9 @@ export function mapProjectToCard(project: Project): ProjectCardView {
     currentStage: project.current_stage ?? null,
     created_at: project.created_at,
     startDate: formatMonthYear(project.start_date),
+    endDate: formatMonthYear(endIso),
+    startDateIso: project.start_date ?? null,
+    endDateIso: endIso,
     updatedAt: formatShortDate(project.updated_at),
     updatedAtIso: project.updated_at ?? null,
   };

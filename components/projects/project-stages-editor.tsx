@@ -174,23 +174,23 @@ export function ProjectStagesEditor({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Layers size={15} className="text-[var(--ds-accent-hover)]" />
-          <span className="text-[13px] font-semibold text-[var(--ds-label)]">Timeline stages</span>
+          <Layers size={15} className="text-[var(--figma-teal)]" />
+          <span className="text-[13px] font-semibold text-[var(--figma-navy)]">Timeline stages</span>
         </div>
-        <span className="text-[11px] text-[var(--ds-secondary-label)]">
+        <span className="text-[11px] text-[var(--figma-gray500)]">
           {stageViews.length} stage{stageViews.length === 1 ? "" : "s"}
           {completedCount > 0 ? ` · ${completedCount} complete` : ""}
         </span>
       </div>
 
-      <p className="text-[12px] leading-relaxed text-[var(--ds-secondary-label)]">
+      <p className="text-[12px] leading-relaxed text-[var(--figma-gray500)]">
         Edit stage names and dates, mark stages complete, or add new phases to the project timeline.
       </p>
 
       {stageViews.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-[rgba(90,60,30,0.20)] bg-[var(--ds-bg)]/40 px-4 py-6 text-center">
-          <p className="text-[13px] font-medium text-[var(--ds-secondary-label)]">No stages yet</p>
-          <p className="text-[12px] text-[var(--ds-secondary-label)]">Add your first stage below.</p>
+        <div className="rounded-xl border border-dashed border-[var(--figma-border)] bg-[var(--figma-gray50)] px-4 py-6 text-center">
+          <p className="text-[13px] font-medium text-[var(--figma-gray500)]">No stages yet</p>
+          <p className="text-[12px] text-[var(--figma-gray500)]">Add your first stage below.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -199,14 +199,14 @@ export function ProjectStagesEditor({
             return (
               <div
                 key={stage.id}
-                className="rounded-xl border border-[rgba(90,60,30,0.10)] bg-white px-3.5 py-3 shadow-sm"
+                className="rounded-[14px] border border-[var(--figma-border)] bg-white px-3.5 py-3 neu-raised"
               >
                 {isEditing ? (
                   <div className="space-y-2.5">
                     <input
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="h-9 w-full rounded-lg border border-[rgba(90,60,30,0.18)] bg-[var(--ds-bg)]/50 px-3 text-[13px] outline-none focus:border-[var(--ds-accent)]"
+                      className="hub-input-focus h-9 w-full rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
                       placeholder="Stage name"
                     />
                     <div className="grid grid-cols-2 gap-2">
@@ -214,14 +214,14 @@ export function ProjectStagesEditor({
                         type="date"
                         value={editStart}
                         onChange={(e) => setEditStart(e.target.value)}
-                        className="h-9 w-full rounded-lg border border-[rgba(90,60,30,0.18)] bg-[var(--ds-bg)]/50 px-3 text-[13px] outline-none focus:border-[var(--ds-accent)]"
+                        className="hub-input-focus h-9 w-full rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
                       />
                       <input
                         type="date"
                         value={editEnd}
                         min={editStart || undefined}
                         onChange={(e) => setEditEnd(e.target.value)}
-                        className="h-9 w-full rounded-lg border border-[rgba(90,60,30,0.18)] bg-[var(--ds-bg)]/50 px-3 text-[13px] outline-none focus:border-[var(--ds-accent)]"
+                        className="hub-input-focus h-9 w-full rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
                       />
                     </div>
                     <div className="flex justify-end gap-2">
@@ -229,7 +229,7 @@ export function ProjectStagesEditor({
                         type="button"
                         onClick={cancelEdit}
                         disabled={isEditSaving}
-                        className="rounded-lg border border-[rgba(90,60,30,0.18)] px-3 py-1.5 text-[12px] text-[var(--ds-secondary-label)]"
+                        className="rounded-[20px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 py-1.5 text-[12px] text-[var(--figma-gray500)]"
                       >
                         Cancel
                       </button>
@@ -237,7 +237,7 @@ export function ProjectStagesEditor({
                         type="button"
                         onClick={() => void handleSaveEdit(stage.id)}
                         disabled={isEditSaving}
-                        className="rounded-lg bg-[var(--ds-accent)] px-3 py-1.5 text-[12px] font-medium text-white"
+                        className="gi-gradient-cta rounded-[20px] px-4 py-1.5 text-[12px] font-semibold"
                       >
                         {isEditSaving ? "Saving…" : "Save"}
                       </button>
@@ -249,8 +249,8 @@ export function ProjectStagesEditor({
                       <span
                         className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
                           stage.isCompleted
-                            ? "bg-[#3D8B5E] text-white"
-                            : "bg-[#F5E6D0] text-[var(--ds-accent-hover)]"
+                            ? "bg-[var(--figma-success)] text-white"
+                            : "bg-[rgba(14,124,134,0.12)] text-[var(--figma-teal)]"
                         }`}
                       >
                         {stage.isCompleted ? <Check size={14} /> : index + 1}
@@ -258,12 +258,12 @@ export function ProjectStagesEditor({
                       <div className="min-w-0">
                         <div
                           className={`truncate text-[13.5px] font-medium ${
-                            stage.isCompleted ? "text-[#248A3D]" : "text-[var(--ds-label)]"
+                            stage.isCompleted ? "text-[var(--figma-success)]" : "text-[var(--figma-navy)]"
                           }`}
                         >
                           {stage.name}
                         </div>
-                        <div className="text-[11.5px] text-[var(--ds-secondary-label)]">
+                        <div className="text-[11.5px] text-[var(--figma-gray500)]">
                           {new Date(stage.startDate).toLocaleDateString()} –{" "}
                           {new Date(stage.endDate).toLocaleDateString()}
                         </div>
@@ -275,7 +275,7 @@ export function ProjectStagesEditor({
                         title="Edit stage"
                         onClick={() => beginEdit(stage.id)}
                         disabled={busyId === stage.id}
-                        className="flex size-8 items-center justify-center rounded-lg border border-[rgba(90,60,30,0.15)] text-[var(--ds-secondary-label)] hover:bg-[var(--ds-bg)]"
+                        className="flex size-8 items-center justify-center rounded-lg border border-[var(--figma-border)] text-[var(--figma-gray500)] hover:bg-[var(--figma-gray50)]"
                       >
                         <Pencil size={13} />
                       </button>
@@ -285,7 +285,7 @@ export function ProjectStagesEditor({
                           onClick={() => void handleReopen(stage.id)}
                           disabled={busyId === stage.id}
                           title="Reopen stage"
-                          className="flex items-center gap-1 rounded-lg border border-[rgba(90,60,30,0.22)] px-2 py-1.5 text-[11px] font-medium text-[var(--ds-secondary-label)] hover:bg-[var(--ds-bg)] disabled:opacity-50"
+                          className="flex items-center gap-1 rounded-lg border border-[var(--figma-border)] px-2 py-1.5 text-[11px] font-medium text-[var(--figma-gray500)] hover:bg-[var(--figma-gray50)] disabled:opacity-50"
                         >
                           <RotateCcw size={12} /> Reopen
                         </button>
@@ -295,7 +295,7 @@ export function ProjectStagesEditor({
                           onClick={() => void handleMarkComplete(stage.id)}
                           disabled={busyId === stage.id}
                           title="Mark stage complete"
-                          className="flex items-center gap-1 rounded-lg border border-[#3D8B5E]/30 bg-[#3D8B5E]/8 px-2 py-1.5 text-[11px] font-medium text-[#248A3D] hover:bg-[#3D8B5E]/15 disabled:opacity-50"
+                          className="flex items-center gap-1 rounded-lg border border-[var(--figma-success)]/30 bg-[var(--figma-success)]/8 px-2 py-1.5 text-[11px] font-medium text-[var(--figma-success)] hover:bg-[var(--figma-success)]/15 disabled:opacity-50"
                         >
                           <Check size={12} /> Complete
                         </button>
@@ -309,36 +309,36 @@ export function ProjectStagesEditor({
         </div>
       )}
 
-      <div className="rounded-xl border border-[rgba(90,60,30,0.10)] bg-[var(--ds-bg)]/30 p-3.5">
-        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-secondary-label)]">
+      <div className="rounded-[14px] border border-[var(--figma-border)] bg-[var(--figma-gray50)] p-3.5">
+        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--figma-gray500)]">
           Add stage
         </div>
         <input
           placeholder="Stage name"
           value={newStageName}
           onChange={(e) => setNewStageName(e.target.value)}
-          className="mb-2 h-9 w-full rounded-lg border border-[rgba(90,60,30,0.18)] bg-white px-3 text-[13px] outline-none focus:border-[var(--ds-accent)]"
+          className="hub-input-focus mb-2 h-9 w-full rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
         />
         <div className="mb-2.5 grid grid-cols-2 gap-2">
           <input
             type="date"
             value={newStageStart}
             onChange={(e) => setNewStageStart(e.target.value)}
-            className="h-9 w-full rounded-lg border border-[rgba(90,60,30,0.18)] bg-white px-3 text-[13px] outline-none focus:border-[var(--ds-accent)]"
+            className="hub-input-focus h-9 w-full rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
           />
           <input
             type="date"
             value={newStageEnd}
             min={newStageStart || undefined}
             onChange={(e) => setNewStageEnd(e.target.value)}
-            className="h-9 w-full rounded-lg border border-[rgba(90,60,30,0.18)] bg-white px-3 text-[13px] outline-none focus:border-[var(--ds-accent)]"
+            className="hub-input-focus h-9 w-full rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
           />
         </div>
         <button
           type="button"
           onClick={() => void handleCreateStage()}
           disabled={!canCreate}
-          className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--ds-accent)] text-[13px] font-semibold text-white hover:bg-[var(--ds-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+          className="gi-gradient-cta flex h-10 w-full cursor-pointer items-center justify-center gap-1.5 rounded-[24px] text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus size={15} />
           {isCreating ? "Creating…" : "Add stage"}

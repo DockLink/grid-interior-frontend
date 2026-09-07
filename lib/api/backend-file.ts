@@ -5,7 +5,7 @@ import type { ApiErrorBody } from "@/types/api";
  * Strip the version segment from BACKEND_API_URL if present.
  */
 const BACKEND_FILE_URL =
-  (process.env.BACKEND_API_URL ?? "http://localhost:3000/v2").replace(
+  (process.env.BACKEND_API_URL ?? "http://localhost:3001/v2").replace(
     /\/v\d+\/?$/,
     ""
   );

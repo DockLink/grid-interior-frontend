@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { useUsers } from "@/hooks/use-users";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { isSuperAdminRole } from "@/lib/navigation/sidebar-role";
 import type { User, UserRole, UserStatus } from "@/types/users";
 
@@ -304,6 +305,13 @@ export function UserManagementPage() {
 
   return (
     <div>
+      {isAuthDisabled() && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+          Live user management requires auth. Copy <code className="font-mono">.env.local.example</code> to{" "}
+          <code className="font-mono">.env.local</code> and set{" "}
+          <code className="font-mono">NEXT_PUBLIC_ENABLE_AUTH=true</code>.
+        </div>
+      )}
       <div
         style={{
           display: "flex",

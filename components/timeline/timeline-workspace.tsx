@@ -1,9 +1,42 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useParams } from "next/navigation";
 import { toast } from "sonner";
 import { DemoCaption } from "@/components/demo/demo-caption";
+import { MilestoneManagementModal } from "@/components/projects/milestone-management-modal";
+import { AddMaterialItemDialog } from "@/components/timeline/add-material-item-dialog";
 import { openTimelinePrintWindow } from "@/components/timeline/timeline-print";
+import { useActiveProjectView } from "@/hooks/use-active-project-view";
+import { useProjectLinks } from "@/hooks/use-project-links";
+import { useProjectTaskables } from "@/hooks/use-project-taskables";
+import { useProjectTimeline } from "@/hooks/use-project-timeline";
+import { useVendorTasks } from "@/hooks/use-vendor-tasks";
+import { handleApiError } from "@/lib/api/handle-api-error";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import {
+  averagePhaseProgress,
+  findSiteExecutionStage,
+  isSiteExecutionPhase,
+  mapClientKeyDates,
+  mapSiteSubstageCards,
+  siteProgressFromCards,
+  type ClientKeyDateCard,
+  type ClientSubStageCard,
+} from "@/lib/timeline/map-client-view";
+import {
+  mapVendorTasksToMaterialItems,
+  materialItemsHaveNumericValue,
+  sumMaterialValues,
+} from "@/lib/timeline/map-materials";
 import {
   formatSiteDayDate,
   getClientKeyDatesFromSite,
@@ -14,7 +47,6 @@ import {
   subscribeSiteSubstages,
 } from "@/lib/projects/mock-execution";
 import {
-  GANTT_PHASES,
   CLIENT_GANTT_PHASES,
   MATERIAL_ITEMS,
   MILESTONES,
@@ -24,6 +56,7 @@ import {
   TOTAL_WEEKS,
   type GanttPhase,
   type MaterialItem,
+  type Milestone,
 } from "@/lib/timeline/mock-timeline";
 import {
   downloadMaterialsExcel,
@@ -70,7 +103,48 @@ const S = {
     "16px 16px 40px rgba(163,177,198,0.45), -10px -10px 28px rgba(255,255,255,0.95)",
 };
 
-type TimelineView = "gantt" | "milestones" | "client" | "materials";
+export type TimelineView = "gantt" | "milestones" | "client" | "materials";
+
+interface TimelineLiveData {
+  phases: GanttPhase[];
+  milestones: Milestone[];
+  projectStartIso: string;
+  projectEndIso: string;
+  projectStartLabel: string;
+  projectEndLabel: string;
+  totalWeeks: number;
+  currentWeek: number;
+  updateStageDates: (
+    stageId: string,
+    startWeek: number,
+    durationWeeks: number,
+  ) => Promise<void>;
+}
+
+const TimelineProjectNameContext = createContext(PROJECT_NAME);
+const TimelineLiveContext = createContext<TimelineLiveData | null>(null);
+
+function useTimelineProjectName() {
+  return useContext(TimelineProjectNameContext);
+}
+
+function useTimelineLive(): TimelineLiveData {
+  const ctx = useContext(TimelineLiveContext);
+  if (!ctx) {
+    return {
+      phases: [],
+      milestones: MILESTONES,
+      projectStartIso: "2026-05-15",
+      projectEndIso: "2026-12-18",
+      projectStartLabel: PROJECT_START,
+      projectEndLabel: PROJECT_END,
+      totalWeeks: TOTAL_WEEKS,
+      currentWeek: 9,
+      updateStageDates: async () => undefined,
+    };
+  }
+  return ctx;
+}
 
 const STATUS_BADGE = {
   completed: { label: "Completed", color: "#3FA66B", bg: "#DCFCE7" },
@@ -167,108 +241,67 @@ function Avatar({
   );
 }
 
-// ── TAB BAR ───────────────────────────────────────────────────────────────────
-const TABS = [
-  { id: "gantt" as TimelineView, label: "Timeline", icon: "timeline" },
-  {
-    id: "milestones" as TimelineView,
-    label: "Milestones",
-    icon: "flag",
-  },
-  {
-    id: "client" as TimelineView,
-    label: "Client View",
-    icon: "person_outline",
-  },
-  {
-    id: "materials" as TimelineView,
-    label: "Materials",
-    icon: "inventory_2",
-  },
-];
-
-function TabBar({
-  view,
-  setView,
-}: {
-  view: TimelineView;
-  setView: (v: TimelineView) => void;
-}) {
-  return (
-    <div
-      style={{
-        background: T.white,
-        borderBottom: `1px solid ${T.border}`,
-        padding: "0 40px",
-        display: "flex",
-        gap: 2,
-        flexShrink: 0,
-      }}
-    >
-      {TABS.map((tab) => {
-        const active = view === tab.id;
-        return (
-          <button
-            key={tab.id}
-            onClick={() => setView(tab.id)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 7,
-              padding: "13px 18px",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontFamily: "inherit",
-              borderBottom: active
-                ? `2.5px solid ${T.teal}`
-                : "2.5px solid transparent",
-              color: active ? T.teal : T.gray500,
-              fontWeight: active ? 700 : 400,
-              fontSize: 13,
-              transition: "all 150ms",
-              marginBottom: -1,
-            }}
-          >
-            <span
-              className="material-icons-outlined"
-              style={{ fontSize: 16 }}
-            >
-              {tab.icon}
-            </span>
-            {tab.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── GANTT CHART ───────────────────────────────────────────────────────────────
 function GanttChart() {
+  const projectName = useTimelineProjectName();
+  const live = useTimelineLive();
+  const authDisabled = isAuthDisabled();
   const [zoom, setZoom] = useState<"month" | "week">("month");
   const [tooltip, setTooltip] = useState<GanttPhase | null>(null);
-  const [phases, setPhases] = useState(GANTT_PHASES);
+  const [phases, setPhases] = useState<GanttPhase[]>(live.phases);
   const [fridaySent, setFridaySent] = useState<string | null>("15 Aug 2026");
   const [copied, setCopied] = useState(false);
   const siteStages = useSiteSubstages();
   const keyDates = getClientKeyDatesFromSite(siteStages);
   const overlapBars = getSiteOverlapBarsFromSite(resolveSiteSubstages(siteStages));
 
+  const totalWeeks = Math.max(1, live.totalWeeks);
+  const currentWeek = live.currentWeek;
+  const projectStartIso = live.projectStartIso;
+  const milestones = live.milestones;
+
+  useEffect(() => {
+    setPhases(live.phases);
+  }, [live.phases]);
+
+  const persistPhase = async (phase: GanttPhase) => {
+    if (authDisabled || !phase.stageId) return;
+    try {
+      await live.updateStageDates(phase.stageId, phase.startWeek, phase.durationWeeks);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update stage dates");
+      setPhases(live.phases);
+    }
+  };
+
   const nudge = (id: number, delta: number) => {
-    setPhases((prev) =>
-      prev.map((p) =>
+    setPhases((prev) => {
+      const next = prev.map((p) =>
         p.id === id
-          ? { ...p, startWeek: Math.max(0, Math.min(TOTAL_WEEKS - p.durationWeeks, p.startWeek + delta)) }
+          ? {
+              ...p,
+              startWeek: Math.max(
+                0,
+                Math.min(totalWeeks - p.durationWeeks, p.startWeek + delta),
+              ),
+            }
           : p,
-      ),
-    );
+      );
+      const updated = next.find((p) => p.id === id);
+      if (updated) void persistPhase(updated);
+      return next;
+    });
   };
 
   const setDuration = (id: number, weeks: number) => {
-    setPhases((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, durationWeeks: Math.max(1, weeks) } : p)),
-    );
+    setPhases((prev) => {
+      const next = prev.map((p) =>
+        p.id === id ? { ...p, durationWeeks: Math.max(1, weeks) } : p,
+      );
+      const updated = next.find((p) => p.id === id);
+      if (updated) void persistPhase(updated);
+      return next;
+    });
   };
 
   const sendFriday = () => {
@@ -279,13 +312,10 @@ function GanttChart() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Current week indicator — assume we're at week 9 (in Design Development)
-  const CURRENT_WEEK = 9;
-
-  // Compute week labels — 30 weeks starting May 2026
+  // Compute week labels from live project start
   const weekLabels: { week: number; label: string }[] = [];
-  for (let w = 0; w < TOTAL_WEEKS; w++) {
-    const d = new Date("2026-05-15");
+  for (let w = 0; w < totalWeeks; w++) {
+    const d = new Date(`${projectStartIso}T00:00:00`);
     d.setDate(d.getDate() + w * 7);
     const label =
       zoom === "month"
@@ -331,7 +361,7 @@ function GanttChart() {
               gap: 12,
             }}
           >
-            <span>{PROJECT_NAME}</span>
+            <span>{projectName}</span>
             <span
               style={{
                 display: "flex",
@@ -345,10 +375,10 @@ function GanttChart() {
               >
                 event
               </span>
-              {PROJECT_START} → {PROJECT_END}
+              {live.projectStartLabel} → {live.projectEndLabel}
             </span>
           </div>
-          <DemoCaption className="mt-1" />
+          {authDisabled && <DemoCaption className="mt-1" />}
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           {/* Zoom toggle */}
@@ -394,7 +424,12 @@ function GanttChart() {
             icon="picture_as_pdf"
             small
             onClick={() => {
-              const opened = openTimelinePrintWindow(phases, MILESTONES);
+              const opened = openTimelinePrintWindow(phases, milestones, {
+                projectName,
+                projectStartLabel: live.projectStartLabel,
+                projectEndLabel: live.projectEndLabel,
+                projectStartIso,
+              });
               if (!opened) {
                 toast.error("Allow pop-ups to export the PDF");
                 return;
@@ -409,7 +444,8 @@ function GanttChart() {
             onClick={() => {
               downloadTimelinePhasesExcel(
                 phases,
-                `${slugForFilename(PROJECT_NAME)}-timeline.csv`,
+                `${slugForFilename(projectName)}-timeline.csv`,
+                projectStartIso,
               );
               toast.success("Excel file downloaded");
             }}
@@ -447,13 +483,13 @@ function GanttChart() {
           },
           {
             label: "Milestones Done",
-            value: `${MILESTONES.filter((m) => m.status === "completed").length}/${MILESTONES.length}`,
+            value: `${milestones.filter((m) => m.status === "completed").length}/${milestones.length}`,
             icon: "flag",
             color: T.success,
           },
           {
             label: "Overdue",
-            value: `${MILESTONES.filter((m) => m.status === "overdue").length}`,
+            value: `${milestones.filter((m) => m.status === "overdue").length}`,
             icon: "alarm",
             color: T.alert,
           },
@@ -648,9 +684,9 @@ function GanttChart() {
             }}
           >
             {zoom === "month"
-              ? Array.from({ length: Math.ceil(TOTAL_WEEKS / 4) }).map(
+              ? Array.from({ length: Math.ceil(totalWeeks / 4) }).map(
                   (_, i) => {
-                    const d = new Date("2026-05-15");
+                    const d = new Date(`${projectStartIso}T00:00:00`);
                     d.setDate(d.getDate() + i * 28);
                     return (
                       <div
@@ -672,7 +708,7 @@ function GanttChart() {
                     );
                   }
                 )
-              : Array.from({ length: TOTAL_WEEKS }).map((_, i) => (
+              : Array.from({ length: totalWeeks }).map((_, i) => (
                   <div
                     key={i}
                     style={{
@@ -695,7 +731,7 @@ function GanttChart() {
                 position: "absolute",
                 top: 0,
                 bottom: 0,
-                left: `${(CURRENT_WEEK / TOTAL_WEEKS) * 100}%`,
+                left: `${(currentWeek / totalWeeks) * 100}%`,
                 width: 2,
                 background: T.teal,
                 zIndex: 5,
@@ -705,6 +741,18 @@ function GanttChart() {
         </div>
 
         {/* Phase rows */}
+        {phases.length === 0 ? (
+          <div
+            style={{
+              padding: "28px 16px",
+              color: T.gray500,
+              fontSize: 13,
+              textAlign: "center",
+            }}
+          >
+            No stages yet. Add stages from the Tasks board to populate this timeline.
+          </div>
+        ) : null}
         {phases.map((phase, idx) => (
           <div
             key={phase.id}
@@ -828,14 +876,14 @@ function GanttChart() {
               onMouseLeave={() => setTooltip(null)}
             >
               {/* Grid lines */}
-              {Array.from({ length: TOTAL_WEEKS }).map((_, i) => (
+              {Array.from({ length: totalWeeks }).map((_, i) => (
                 <div
                   key={i}
                   style={{
                     position: "absolute",
                     top: 0,
                     bottom: 0,
-                    left: `${(i / TOTAL_WEEKS) * 100}%`,
+                    left: `${(i / totalWeeks) * 100}%`,
                     width: 1,
                     background:
                       i % 4 === 0
@@ -851,7 +899,7 @@ function GanttChart() {
                   position: "absolute",
                   top: 0,
                   bottom: 0,
-                  left: `${(CURRENT_WEEK / TOTAL_WEEKS) * 100}%`,
+                  left: `${(currentWeek / totalWeeks) * 100}%`,
                   width: 2,
                   background: `${T.teal}99`,
                   zIndex: 3,
@@ -870,19 +918,28 @@ function GanttChart() {
                   if (!row) return;
                   const rect = row.getBoundingClientRect();
                   const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                  const week = Math.round(pct * TOTAL_WEEKS);
-                  setPhases((prev) =>
-                    prev.map((p) =>
+                  const week = Math.round(pct * totalWeeks);
+                  setPhases((prev) => {
+                    const next = prev.map((p) =>
                       p.id === phase.id
-                        ? { ...p, startWeek: Math.max(0, Math.min(TOTAL_WEEKS - p.durationWeeks, week)) }
+                        ? {
+                            ...p,
+                            startWeek: Math.max(
+                              0,
+                              Math.min(totalWeeks - p.durationWeeks, week),
+                            ),
+                          }
                         : p,
-                    ),
-                  );
+                    );
+                    const updated = next.find((p) => p.id === phase.id);
+                    if (updated) void persistPhase(updated);
+                    return next;
+                  });
                 }}
                 style={{
                   position: "absolute",
-                  left: `${(phase.startWeek / TOTAL_WEEKS) * 100}%`,
-                  width: `${(phase.durationWeeks / TOTAL_WEEKS) * 100}%`,
+                  left: `${(phase.startWeek / totalWeeks) * 100}%`,
+                  width: `${(phase.durationWeeks / totalWeeks) * 100}%`,
                   height: 28,
                   borderRadius: 14,
                   background:
@@ -965,8 +1022,8 @@ function GanttChart() {
               <div
                 style={{
                   position: "absolute",
-                  left: `${(bar.startWeek / TOTAL_WEEKS) * 100}%`,
-                  width: `${(bar.durationWeeks / TOTAL_WEEKS) * 100}%`,
+                  left: `${(bar.startWeek / totalWeeks) * 100}%`,
+                  width: `${(bar.durationWeeks / totalWeeks) * 100}%`,
                   top: 6,
                   height: 16,
                   borderRadius: 8,
@@ -1027,6 +1084,21 @@ function GanttChart() {
 
 // ── MILESTONES ────────────────────────────────────────────────────────────────
 function MilestonesView() {
+  const params = useParams();
+  const projectId = typeof params.projectId === "string" ? params.projectId : "";
+  const projectName = useTimelineProjectName();
+  const live = useTimelineLive();
+  const authDisabled = isAuthDisabled();
+  const queryClient = useQueryClient();
+  const [showMilestoneManagement, setShowMilestoneManagement] = useState(false);
+  const milestones = live.milestones;
+
+  async function refreshMilestones() {
+    await queryClient.invalidateQueries({
+      queryKey: ["projects", "taskables", projectId, "MILESTONE"],
+    });
+  }
+
   return (
     <div style={{ padding: "28px 40px" }}>
       <div
@@ -1050,9 +1122,9 @@ function MilestonesView() {
             Milestones
           </h1>
           <p style={{ fontSize: 12, color: T.gray500, margin: 0 }}>
-            {PROJECT_NAME} · Key project checkpoints
+            {projectName} · Key project checkpoints
           </p>
-          <DemoCaption className="mt-1" />
+          {authDisabled && <DemoCaption className="mt-1" />}
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <GradBtn
@@ -1061,13 +1133,24 @@ function MilestonesView() {
             small
             onClick={() => {
               downloadMilestonesExcel(
-                MILESTONES,
-                `${slugForFilename(PROJECT_NAME)}-milestones.csv`,
+                milestones,
+                `${slugForFilename(projectName)}-milestones.csv`,
               );
               toast.success("Excel file downloaded");
             }}
           />
-          <GradBtn label="Add Milestone" icon="add" small />
+          <GradBtn
+            label="Add Milestone"
+            icon="add"
+            small
+            onClick={() => {
+              if (authDisabled) {
+                toast.message("Connect auth to add milestones");
+                return;
+              }
+              setShowMilestoneManagement(true);
+            }}
+          />
         </div>
       </div>
 
@@ -1091,7 +1174,13 @@ function MilestonesView() {
           }}
         />
 
-        {MILESTONES.map((m) => {
+        {milestones.length === 0 ? (
+          <div style={{ padding: "12px 0", color: T.gray500, fontSize: 13 }}>
+            No milestones yet. Click Add Milestone to create one under a stage.
+          </div>
+        ) : null}
+
+        {milestones.map((m) => {
           const cfg = STATUS_BADGE[m.status];
           return (
             <div
@@ -1239,6 +1328,13 @@ function MilestonesView() {
           );
         })}
       </div>
+      {showMilestoneManagement && (
+        <MilestoneManagementModal
+          projectId={projectId}
+          onClose={() => setShowMilestoneManagement(false)}
+          onUpdated={() => void refreshMilestones()}
+        />
+      )}
     </div>
   );
 }
@@ -1255,20 +1351,62 @@ const SITE_STATUS_UI: Record<
 };
 
 function ClientView() {
+  const params = useParams();
+  const projectId = typeof params.projectId === "string" ? params.projectId : "";
+  const projectName = useTimelineProjectName();
+  const authDisabled = isAuthDisabled();
+  const live = useTimelineLive();
+  const { tasks: projectTasks, isLoading: tasksLoading } = useProjectTaskables(
+    projectId,
+    "TASK",
+    { limit: 200 },
+  );
   const siteStages = useSiteSubstages();
   const resolvedSite = resolveSiteSubstages(siteStages);
-  const keyDates = getClientKeyDatesFromSite(resolvedSite);
-  const siteProgress = getSiteExecutionProgress(resolvedSite);
+  const mockKeyDates = getClientKeyDatesFromSite(resolvedSite);
+  const mockSiteProgress = getSiteExecutionProgress(resolvedSite);
 
-  const phases = CLIENT_GANTT_PHASES.map((p) =>
+  const mockPhases = CLIENT_GANTT_PHASES.map((p) =>
     p.name === "Site Execution"
       ? {
           ...p,
-          progress: siteProgress.progress,
-          status: siteProgress.status,
+          progress: mockSiteProgress.progress,
+          status: mockSiteProgress.status,
         }
       : p,
   );
+
+  const mockSiteCards: ClientSubStageCard[] = resolvedSite.map((s) => ({
+    id: s.id,
+    number: s.number,
+    name: s.name,
+    detail: s.detail,
+    status: s.status,
+    dateLabel: formatSiteDayDate(s.startDay),
+    checkpoint: s.checkpoint,
+  }));
+
+  const liveSiteStage = findSiteExecutionStage(live.phases);
+  const liveSiteCards = liveSiteStage
+    ? mapSiteSubstageCards(projectTasks, liveSiteStage.stageId ?? "")
+    : [];
+  const liveSiteProgress = siteProgressFromCards(liveSiteCards);
+  const liveKeyDates = mapClientKeyDates({
+    projectStartIso: live.projectStartIso,
+    projectEndIso: live.projectEndIso,
+    projectStartLabel: live.projectStartLabel,
+    projectEndLabel: live.projectEndLabel,
+    milestones: live.milestones,
+  });
+
+  const phases = authDisabled ? mockPhases : live.phases;
+  const keyDates: ClientKeyDateCard[] = authDisabled ? mockKeyDates : liveKeyDates;
+  const siteCards = authDisabled ? mockSiteCards : liveSiteCards;
+  const siteProgress = authDisabled ? mockSiteProgress : liveSiteProgress;
+  const overallProgress = authDisabled ? 38 : averagePhaseProgress(phases);
+  const startLabel = authDisabled ? PROJECT_START : live.projectStartLabel;
+  const endLabel = authDisabled ? PROJECT_END : live.projectEndLabel;
+  const showSiteSection = authDisabled || Boolean(liveSiteStage);
 
   return (
     <div style={{ padding: "28px 40px" }}>
@@ -1295,7 +1433,7 @@ function ClientView() {
           <p style={{ fontSize: 12, color: T.gray500, margin: 0 }}>
             Site Execution mirrors internal Execution updates · key dates and sub-stages stay in sync
           </p>
-          <DemoCaption className="mt-1" />
+          {authDisabled && <DemoCaption className="mt-1" />}
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <GradBtn
@@ -1305,7 +1443,7 @@ function ClientView() {
             onClick={() => {
               downloadTimelinePhasesExcel(
                 phases,
-                `${slugForFilename(PROJECT_NAME)}-client-timeline.csv`,
+                `${slugForFilename(projectName)}-client-timeline.csv`,
               );
               toast.success("Excel file downloaded");
             }}
@@ -1444,7 +1582,7 @@ function ClientView() {
             Overall Project Progress
           </span>
           <span style={{ fontSize: 13, fontWeight: 700, color: T.teal }}>
-            38%
+            {overallProgress}%
           </span>
         </div>
         <div
@@ -1459,7 +1597,7 @@ function ClientView() {
           <div
             style={{
               height: "100%",
-              width: "38%",
+              width: `${overallProgress}%`,
               borderRadius: 5,
               background: `linear-gradient(90deg, ${T.navy}, ${T.teal})`,
               transition: "width 600ms ease",
@@ -1475,8 +1613,8 @@ function ClientView() {
             color: T.gray400,
           }}
         >
-          <span>{PROJECT_START}</span>
-          <span>{PROJECT_END}</span>
+          <span>{startLabel}</span>
+          <span>{endLabel}</span>
         </div>
       </div>
 
@@ -1500,10 +1638,15 @@ function ClientView() {
         >
           Project Phases
         </div>
+        {phases.length === 0 && (
+          <div style={{ fontSize: 13, color: T.gray500 }}>
+            No stages yet for this project.
+          </div>
+        )}
         {phases.map((phase, idx) => {
           const isCurrent = phase.status === "active";
           const isDone = phase.status === "completed";
-          const isSite = phase.name === "Site Execution";
+          const isSite = isSiteExecutionPhase(phase.name);
           const showProgress = isCurrent || (isSite && phase.progress > 0);
           return (
             <div
@@ -1657,7 +1800,7 @@ function ClientView() {
         })}
       </div>
 
-      {/* Site sub-stages — same grid format as key dates / Execution */}
+      {showSiteSection && (
       <div
         style={{
           background: T.white,
@@ -1681,10 +1824,17 @@ function ClientView() {
               Site Execution · Sub-stages
             </div>
             <div style={{ fontSize: 11, color: T.gray500, marginTop: 2 }}>
-              Live from internal Execution · {siteProgress.progress}% site complete
+              Live from project tasks · {siteProgress.progress}% site complete
             </div>
           </div>
         </div>
+        {!authDisabled && tasksLoading ? (
+          <div style={{ fontSize: 13, color: T.gray500 }}>Loading sub-stages…</div>
+        ) : siteCards.length === 0 ? (
+          <div style={{ fontSize: 13, color: T.gray500 }}>
+            No tasks under the Site / Execution stage yet.
+          </div>
+        ) : (
         <div
           style={{
             display: "grid",
@@ -1692,7 +1842,7 @@ function ClientView() {
             gap: 14,
           }}
         >
-          {resolvedSite.map((s) => {
+          {siteCards.map((s) => {
             const sc = SITE_STATUS_UI[s.status];
             return (
               <div
@@ -1784,7 +1934,7 @@ function ClientView() {
                       color: T.navy,
                     }}
                   >
-                    {formatSiteDayDate(s.startDay)}
+                    {s.dateLabel}
                   </span>
                   <span
                     style={{
@@ -1803,35 +1953,62 @@ function ClientView() {
             );
           })}
         </div>
+        )}
       </div>
+      )}
     </div>
   );
 }
 
 // ── MATERIALS TRACKER ─────────────────────────────────────────────────────────
 function MaterialsView() {
+  const params = useParams();
+  const projectId = typeof params.projectId === "string" ? params.projectId : "";
+  const projectName = useTimelineProjectName();
+  const authDisabled = isAuthDisabled();
   const [statusFilter, setStatusFilter] = useState<
     "all" | MaterialItem["status"]
   >("all");
   const [categoryOpen, setCategoryOpen] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
-  const categories = [
-    ...new Set(MATERIAL_ITEMS.map((m) => m.category)),
-  ];
+  const { tasks: vendorTasks, isLoading: vendorLoading, createTask, isCreating } =
+    useVendorTasks({ project_id: projectId });
+  const { links } = useProjectLinks(projectId);
 
-  const filtered = MATERIAL_ITEMS.filter(
-    (m) => statusFilter === "all" || m.status === statusFilter
+  const liveItems = useMemo(
+    () => mapVendorTasksToMaterialItems(vendorTasks, links),
+    [vendorTasks, links],
   );
+  const items = authDisabled ? MATERIAL_ITEMS : liveItems;
 
-  const grouped = categories.map((cat) => ({
-    category: cat,
-    items: filtered.filter((m) => m.category === cat),
-  })).filter((g) => g.items.length > 0);
+  const categories = [...new Set(items.map((m) => m.category))];
+  const filtered = items.filter(
+    (m) => statusFilter === "all" || m.status === statusFilter,
+  );
+  const grouped = categories
+    .map((cat) => ({
+      category: cat,
+      items: filtered.filter((m) => m.category === cat),
+    }))
+    .filter((g) => g.items.length > 0);
 
-  const totalValue = MATERIAL_ITEMS.reduce(
-    (sum, m) =>
-      sum + parseInt(m.value.replace(/[^0-9]/g, ""), 10),
-    0
+  const showValue = materialItemsHaveNumericValue(items);
+  const totalValue = sumMaterialValues(items);
+  const partyOptions = useMemo(
+    () => [
+      ...links.suppliers.map((s) => ({
+        partyKind: "supplier" as const,
+        partyId: s.id,
+        label: s.name,
+      })),
+      ...links.subVendors.map((s) => ({
+        partyKind: "subvendor" as const,
+        partyId: s.id,
+        label: s.name,
+      })),
+    ],
+    [links],
   );
 
   return (
@@ -1858,9 +2035,11 @@ function MaterialsView() {
             Materials & Procurement
           </h1>
           <p style={{ fontSize: 12, color: T.gray500, margin: 0 }}>
-            {PROJECT_NAME} · Total value: AED {totalValue.toLocaleString()}
+            {showValue
+              ? `${projectName} · Total value: AED ${totalValue.toLocaleString()}`
+              : `${projectName} · ${items.length} item${items.length === 1 ? "" : "s"}`}
           </p>
-          <DemoCaption className="mt-1" />
+          {authDisabled && <DemoCaption className="mt-1" />}
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <GradBtn
@@ -1870,12 +2049,23 @@ function MaterialsView() {
             onClick={() => {
               downloadMaterialsExcel(
                 filtered,
-                `${slugForFilename(PROJECT_NAME)}-materials.csv`,
+                `${slugForFilename(projectName)}-materials.csv`,
               );
               toast.success("Excel file downloaded");
             }}
           />
-          <GradBtn label="Add Item" icon="add" small />
+          <GradBtn
+            label="Add Item"
+            icon="add"
+            small
+            onClick={() => {
+              if (authDisabled) {
+                toast.message("Connect auth to add procurement items");
+                return;
+              }
+              setAddOpen(true);
+            }}
+          />
         </div>
       </div>
 
@@ -1918,6 +2108,24 @@ function MaterialsView() {
       </div>
 
       {/* Grouped items */}
+      {!authDisabled && vendorLoading ? (
+        <div style={{ fontSize: 13, color: T.gray500 }}>Loading materials…</div>
+      ) : grouped.length === 0 ? (
+        <div
+          style={{
+            background: T.white,
+            borderRadius: 16,
+            padding: "28px 24px",
+            boxShadow: S.card,
+            fontSize: 13,
+            color: T.gray500,
+          }}
+        >
+          {items.length === 0
+            ? "No procurement items yet. Add a vendor task or link a supplier on Suppliers & Clients."
+            : "No items match this filter."}
+        </div>
+      ) : (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {grouped.map((group) => {
           const open = categoryOpen === null || categoryOpen === group.category;
@@ -2080,14 +2288,40 @@ function MaterialsView() {
           );
         })}
       </div>
+      )}
+      <AddMaterialItemDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        projectId={projectId}
+        partyOptions={partyOptions}
+        isSubmitting={isCreating}
+        onSubmit={async (input) => {
+          try {
+            await createTask({
+              party_kind: input.partyKind,
+              party_id: input.partyId,
+              project_id: projectId,
+              title: input.title,
+              description: input.notes,
+              due_date: input.dueDate,
+              status: "todo",
+            });
+            toast.success("Material item added");
+            setAddOpen(false);
+          } catch (err) {
+            handleApiError(err, { toast: true });
+          }
+        }}
+      />
     </div>
   );
 }
 
 function StatusReportPanel() {
-  const completed = MILESTONES.filter((m) => m.status === "completed").length;
-  const overdue = MILESTONES.filter((m) => m.status === "overdue").length;
-  const upcoming = MILESTONES.filter((m) => m.status === "upcoming").length;
+  const { milestones } = useTimelineLive();
+  const completed = milestones.filter((m) => m.status === "completed").length;
+  const overdue = milestones.filter((m) => m.status === "overdue").length;
+  const upcoming = milestones.filter((m) => m.status === "upcoming").length;
   const outstanding = overdue + upcoming;
   return (
     <div
@@ -2122,32 +2356,85 @@ function StatusReportPanel() {
   );
 }
 
-export function ProjectTimelineTab() {
-  const [view, setView] = useState<TimelineView>("gantt");
+export function ProjectTimelineTab({ view }: { view: TimelineView }) {
+  const params = useParams();
+  const projectId = typeof params.projectId === "string" ? params.projectId : "";
+  const authDisabled = isAuthDisabled();
+  const { project, isLoading: projectLoading, error: projectError } =
+    useActiveProjectView(projectId);
+  const timeline = useProjectTimeline(projectId);
+
+  const projectName = project?.name ?? PROJECT_NAME;
+  const isLoading = projectLoading || timeline.isLoading;
+  const error = projectError || timeline.error;
+
+  const liveValue: TimelineLiveData = useMemo(
+    () => ({
+      phases: timeline.phases,
+      milestones: timeline.milestones,
+      projectStartIso: timeline.projectStartIso,
+      projectEndIso: timeline.projectEndIso,
+      projectStartLabel: timeline.projectStartLabel,
+      projectEndLabel: timeline.projectEndLabel,
+      totalWeeks: timeline.totalWeeks,
+      currentWeek: timeline.currentWeek,
+      updateStageDates: timeline.updateStageDates,
+    }),
+    [
+      timeline.phases,
+      timeline.milestones,
+      timeline.projectStartIso,
+      timeline.projectEndIso,
+      timeline.projectStartLabel,
+      timeline.projectEndLabel,
+      timeline.totalWeeks,
+      timeline.currentWeek,
+      timeline.updateStageDates,
+    ],
+  );
+
+  if (!authDisabled && isLoading) {
+    return (
+      <div style={{ padding: "24px", color: T.gray500, fontSize: 14 }}>
+        Loading timeline…
+      </div>
+    );
+  }
+
+  if (!authDisabled && (error || !project)) {
+    return (
+      <div style={{ padding: "24px", color: T.alert, fontSize: 14 }}>
+        {error ?? "Project not found"}
+      </div>
+    );
+  }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        minHeight: "100%",
-        fontFamily: "inherit",
-      }}
-    >
-      <TabBar view={view} setView={setView} />
-      <div style={{ flex: 1 }}>
-        {view === "gantt" && (
-          <>
-            <div style={{ paddingTop: 20 }}>
-              <StatusReportPanel />
-            </div>
-            <GanttChart />
-          </>
-        )}
-        {view === "milestones" && <MilestonesView />}
-        {view === "client" && <ClientView />}
-        {view === "materials" && <MaterialsView />}
-      </div>
-    </div>
+    <TimelineProjectNameContext.Provider value={projectName}>
+      <TimelineLiveContext.Provider value={liveValue}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            minHeight: "100%",
+            fontFamily: "inherit",
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            {view === "gantt" && (
+              <>
+                <div style={{ paddingTop: 20 }}>
+                  <StatusReportPanel />
+                </div>
+                <GanttChart />
+              </>
+            )}
+            {view === "milestones" && <MilestonesView />}
+            {view === "client" && <ClientView />}
+            {view === "materials" && <MaterialsView />}
+          </div>
+        </div>
+      </TimelineLiveContext.Provider>
+    </TimelineProjectNameContext.Provider>
   );
 }

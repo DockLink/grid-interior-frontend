@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
-import { DemoCaption } from "@/components/demo/demo-caption";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { AddSupplierModal } from "@/components/suppliers/add-supplier-modal";
 import {
@@ -14,13 +14,16 @@ import {
   InitialsAvatar,
   StatusToggle,
 } from "@/components/suppliers/supplier-ui";
+import { useSubVendors } from "@/hooks/use-sub-vendors";
+import { useSuppliers } from "@/hooks/use-suppliers";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { CATEGORY_CFG } from "@/lib/projects/link-categories";
 import {
-  CATEGORY_CFG,
-  SUB_VENDORS,
-  SUPPLIERS,
-  type SubVendor,
-  type Supplier,
-} from "@/lib/suppliers/mock-suppliers";
+  downloadSubVendorsCsv,
+  downloadSuppliersCsv,
+  slugForFilename,
+} from "@/lib/suppliers/suppliers-export";
+import type { SubVendor, Supplier } from "@/types/suppliers";
 import { subVendorRoute, supplierRoute } from "@/types/navigation";
 import { cn } from "@/lib/utils";
 
@@ -29,12 +32,14 @@ type TabView = "suppliers" | "subvendors";
 function SupplierRow({
   supplier,
   onSelect,
+  onStatusChange,
 }: {
   supplier: Supplier;
   onSelect: () => void;
+  onStatusChange: (active: boolean) => void;
 }) {
   const [hov, setHov] = useState(false);
-  const [active, setActive] = useState(supplier.status === "Active");
+  const active = supplier.status === "Active";
 
   return (
     <tr
@@ -83,7 +88,12 @@ function SupplierRow({
       <td className="px-4 py-3 text-[12px] text-[var(--figma-gray500)]">{supplier.avgLeadTime}</td>
       <td className="px-4 py-3 text-[12px] text-[var(--figma-gray500)]">{supplier.creditTerms}</td>
       <td className="px-4 py-3">
-        <StatusToggle active={active} onChange={setActive} />
+        <StatusToggle
+          active={active}
+          onChange={(next) => {
+            onStatusChange(next);
+          }}
+        />
       </td>
       <td className="px-4 py-3">
         <button
@@ -189,24 +199,41 @@ function SubVendorRow({
 
 export function SupplierListScreen({ initialTab = "suppliers" }: { initialTab?: TabView }) {
   const router = useRouter();
+  const authDisabled = isAuthDisabled();
   const [tab, setTab] = useState<TabView>(initialTab);
   const [search, setSearch] = useState("");
   const [searchFocus, setSearchFocus] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [showAdd, setShowAdd] = useState(false);
 
+  const {
+    suppliers,
+    isLoading: suppliersLoading,
+    error: suppliersError,
+    updateSupplier,
+    createSupplier,
+    isCreating: isCreatingSupplier,
+  } = useSuppliers({ page: 1, limit: 100 });
+  const {
+    subVendors,
+    isLoading: subVendorsLoading,
+    error: subVendorsError,
+    createSubVendor,
+    isCreating: isCreatingSubVendor,
+  } = useSubVendors({ page: 1, limit: 100 });
+
   const supplierCategories = useMemo(
-    () => ["All", ...Array.from(new Set(SUPPLIERS.map((s) => s.category)))],
-    [],
+    () => ["All", ...Array.from(new Set(suppliers.map((s) => s.category)))],
+    [suppliers],
   );
   const subVendorSpecialties = useMemo(
-    () => ["All", ...Array.from(new Set(SUB_VENDORS.map((s) => s.specialty)))],
-    [],
+    () => ["All", ...Array.from(new Set(subVendors.map((s) => s.specialty)))],
+    [subVendors],
   );
 
   const filteredSuppliers = useMemo(
     () =>
-      SUPPLIERS.filter((s) => {
+      suppliers.filter((s) => {
         const q = search.toLowerCase();
         const matchQ =
           !q ||
@@ -216,12 +243,12 @@ export function SupplierListScreen({ initialTab = "suppliers" }: { initialTab?: 
         const matchCat = categoryFilter === "All" || s.category === categoryFilter;
         return matchQ && matchCat;
       }),
-    [search, categoryFilter],
+    [suppliers, search, categoryFilter],
   );
 
   const filteredVendors = useMemo(
     () =>
-      SUB_VENDORS.filter((v) => {
+      subVendors.filter((v) => {
         const q = search.toLowerCase();
         const matchQ =
           !q ||
@@ -231,10 +258,12 @@ export function SupplierListScreen({ initialTab = "suppliers" }: { initialTab?: 
         const matchCat = categoryFilter === "All" || v.specialty === categoryFilter;
         return matchQ && matchCat;
       }),
-    [search, categoryFilter],
+    [subVendors, search, categoryFilter],
   );
 
   const isSuppliers = tab === "suppliers";
+  const isLoading = isSuppliers ? suppliersLoading : subVendorsLoading;
+  const error = isSuppliers ? suppliersError : subVendorsError;
 
   return (
     <div>
@@ -242,10 +271,16 @@ export function SupplierListScreen({ initialTab = "suppliers" }: { initialTab?: 
         <div>
           <h1 className="mb-1.5 text-[28px] font-bold text-[var(--figma-navy)]">Suppliers</h1>
           <p className="text-[14px] text-[var(--figma-gray500)]">
-            Manage supplier records, rates, and project links · {SUPPLIERS.length} suppliers ·{" "}
-            {SUB_VENDORS.length} sub-vendors
+            Manage supplier records, rates, and project links · {suppliers.length} suppliers ·{" "}
+            {subVendors.length} sub-vendors
           </p>
-          <DemoCaption className="mt-1" />
+          {authDisabled && (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+              Live supplier data requires auth. Copy <code className="font-mono">.env.local.example</code> to{" "}
+              <code className="font-mono">.env.local</code> and set{" "}
+              <code className="font-mono">NEXT_PUBLIC_ENABLE_AUTH=true</code>.
+            </div>
+          )}
         </div>
         <GradientButton onClick={() => setShowAdd(true)}>
           <MaterialIcon name="add" outlined size={16} />
@@ -260,8 +295,8 @@ export function SupplierListScreen({ initialTab = "suppliers" }: { initialTab?: 
         >
           {(
             [
-              { id: "suppliers" as TabView, label: "Suppliers", icon: "storefront", count: SUPPLIERS.length },
-              { id: "subvendors" as TabView, label: "Sub-Vendors", icon: "engineering", count: SUB_VENDORS.length },
+              { id: "suppliers" as TabView, label: "Suppliers", icon: "storefront", count: suppliers.length },
+              { id: "subvendors" as TabView, label: "Sub-Vendors", icon: "engineering", count: subVendors.length },
             ] as const
           ).map((t) => {
             const isActive = tab === t.id;
@@ -358,88 +393,118 @@ export function SupplierListScreen({ initialTab = "suppliers" }: { initialTab?: 
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-[var(--figma-border)] bg-white">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[13px]">
-            <thead>
-              <tr className="bg-[var(--figma-gray50)]">
-                {(isSuppliers
-                  ? ["Supplier", "Category", "Contact", "Active Projects", "Lead Time", "Credit Terms", "Status", ""]
-                  : ["Sub-Vendor", "Specialty", "Availability", "Past Projects", "Payment Record", ""]
-                ).map((col) => (
-                  <th
-                    key={col}
-                    className="border-b border-[var(--figma-border)] px-4 py-[11px] text-left text-[12px] font-semibold tracking-wide whitespace-nowrap text-[var(--figma-navy)]"
-                  >
-                    <div className="flex items-center gap-1">
-                      {col}
-                      {["Supplier", "Category", "Sub-Vendor", "Specialty"].includes(col) && (
-                        <MaterialIcon name="unfold_more" outlined size={13} className="text-[var(--figma-gray400)]" />
-                      )}
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {isSuppliers
-                ? filteredSuppliers.map((s) => (
-                    <SupplierRow
-                      key={s.id}
-                      supplier={s}
-                      onSelect={() => router.push(supplierRoute(s.id))}
-                    />
-                  ))
-                : filteredVendors.map((v) => (
-                    <SubVendorRow
-                      key={v.id}
-                      vendor={v}
-                      onSelect={() => router.push(subVendorRoute(v.id))}
-                    />
-                  ))}
-              {((isSuppliers && filteredSuppliers.length === 0) ||
-                (!isSuppliers && filteredVendors.length === 0)) && (
-                <tr>
-                  <td colSpan={8}>
-                    <div className="px-6 py-14 text-center">
-                      <MaterialIcon
-                        name="search_off"
-                        outlined
-                        size={40}
-                        className="mx-auto mb-3 block text-[var(--figma-border)]"
-                      />
-                      <div className="mb-1.5 text-[15px] font-semibold text-[var(--figma-navy)]">
-                        No results found
-                      </div>
-                      <div className="text-[13px] text-[var(--figma-gray500)]">
-                        Try adjusting your search or filter
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {isLoading ? (
+          <div className="px-6 py-14 text-center text-[13px] text-[var(--figma-gray500)]">Loading…</div>
+        ) : error ? (
+          <div className="px-6 py-14 text-center text-[13px] text-[var(--figma-alert)]">{error}</div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-[13px]">
+                <thead>
+                  <tr className="bg-[var(--figma-gray50)]">
+                    {(isSuppliers
+                      ? ["Supplier", "Category", "Contact", "Active Projects", "Lead Time", "Credit Terms", "Status", ""]
+                      : ["Sub-Vendor", "Specialty", "Availability", "Past Projects", "Payment Record", ""]
+                    ).map((col) => (
+                      <th
+                        key={col}
+                        className="border-b border-[var(--figma-border)] px-4 py-[11px] text-left text-[12px] font-semibold tracking-wide whitespace-nowrap text-[var(--figma-navy)]"
+                      >
+                        <div className="flex items-center gap-1">
+                          {col}
+                          {["Supplier", "Category", "Sub-Vendor", "Specialty"].includes(col) && (
+                            <MaterialIcon name="unfold_more" outlined size={13} className="text-[var(--figma-gray400)]" />
+                          )}
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {isSuppliers
+                    ? filteredSuppliers.map((s) => (
+                        <SupplierRow
+                          key={s.id}
+                          supplier={s}
+                          onSelect={() => router.push(supplierRoute(s.id))}
+                          onStatusChange={(active) => {
+                            void updateSupplier(s.id, { status: active ? "Active" : "Inactive" });
+                          }}
+                        />
+                      ))
+                    : filteredVendors.map((v) => (
+                        <SubVendorRow
+                          key={v.id}
+                          vendor={v}
+                          onSelect={() => router.push(subVendorRoute(v.id))}
+                        />
+                      ))}
+                  {((isSuppliers && filteredSuppliers.length === 0) ||
+                    (!isSuppliers && filteredVendors.length === 0)) && (
+                    <tr>
+                      <td colSpan={8}>
+                        <div className="px-6 py-14 text-center">
+                          <MaterialIcon
+                            name="search_off"
+                            outlined
+                            size={40}
+                            className="mx-auto mb-3 block text-[var(--figma-border)]"
+                          />
+                          <div className="mb-1.5 text-[15px] font-semibold text-[var(--figma-navy)]">
+                            No results found
+                          </div>
+                          <div className="text-[13px] text-[var(--figma-gray500)]">
+                            Try adjusting your search or filter
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-        <div className="flex items-center justify-between border-t border-[var(--figma-border)] px-5 py-3">
-          <span className="text-[12px] text-[var(--figma-gray400)]">
-            Showing {isSuppliers ? filteredSuppliers.length : filteredVendors.length}{" "}
-            {isSuppliers ? "suppliers" : "sub-vendors"}
-          </span>
-          <button
-            type="button"
-            className="flex cursor-pointer items-center gap-1 rounded-lg border border-[var(--figma-border)] bg-transparent px-3.5 py-1.5 text-[12px] font-medium text-[var(--figma-navy)]"
-          >
-            Export CSV
-            <MaterialIcon name="file_download" outlined size={13} />
-          </button>
-        </div>
+            <div className="flex items-center justify-between border-t border-[var(--figma-border)] px-5 py-3">
+              <span className="text-[12px] text-[var(--figma-gray400)]">
+                Showing {isSuppliers ? filteredSuppliers.length : filteredVendors.length}{" "}
+                {isSuppliers ? "suppliers" : "sub-vendors"}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isSuppliers) {
+                    downloadSuppliersCsv(filteredSuppliers, `${slugForFilename("suppliers")}.csv`);
+                    toast.success(`Exported ${filteredSuppliers.length} suppliers`);
+                  } else {
+                    downloadSubVendorsCsv(filteredVendors, `${slugForFilename("sub-vendors")}.csv`);
+                    toast.success(`Exported ${filteredVendors.length} sub-vendors`);
+                  }
+                }}
+                className="flex cursor-pointer items-center gap-1 rounded-lg border border-[var(--figma-border)] bg-transparent px-3.5 py-1.5 text-[12px] font-medium text-[var(--figma-navy)]"
+              >
+                Export CSV
+                <MaterialIcon name="file_download" outlined size={13} />
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       <AddSupplierModal
         open={showAdd}
         onClose={() => setShowAdd(false)}
         defaultMode={isSuppliers ? "supplier" : "subvendor"}
+        isDemo={authDisabled}
+        isCreating={isCreatingSupplier || isCreatingSubVendor}
+        onCreateSupplier={async (payload) => {
+          if (authDisabled) return;
+          await createSupplier(payload);
+        }}
+        onCreateSubVendor={async (payload) => {
+          if (authDisabled) return;
+          await createSubVendor(payload);
+        }}
       />
     </div>
   );

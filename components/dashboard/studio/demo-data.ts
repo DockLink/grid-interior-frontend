@@ -2,6 +2,8 @@
 
 export type AttentionItem = {
   id: number;
+  /** Original API id for approve/decline actions */
+  sourceId?: string;
   type: "access" | "hold" | "task";
   requester: string;
   initials: string;

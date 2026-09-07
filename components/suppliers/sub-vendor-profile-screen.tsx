@@ -3,27 +3,23 @@
 import { useState } from "react";
 import Link from "next/link";
 
-import { DemoCaption } from "@/components/demo/demo-caption";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { NeuTabToggle } from "@/components/projects/hub/neu-tab-toggle";
+import { AddSupplierModal } from "@/components/suppliers/add-supplier-modal";
 import {
   AvailabilityDot,
   CategoryBadge,
   StatusPill,
 } from "@/components/suppliers/supplier-ui";
 import { VendorTasksTab } from "@/components/suppliers/vendor-tasks-tab";
+import { useSubVendor } from "@/hooks/use-sub-vendor";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { CATEGORY_CFG } from "@/lib/projects/link-categories";
 import {
   AVAILABILITY_CFG,
-  CATEGORY_CFG,
   PAYMENT_STATUS_CFG,
-  SUBVENDOR_HISTORY,
-  SUBVENDOR_PAYMENTS,
-  SUB_VENDORS,
-  type AvailabilityStatus,
-  type SubVendor,
-  type SubVendorHistory,
-  type SubVendorPayment,
-} from "@/lib/suppliers/mock-suppliers";
+} from "@/lib/suppliers/map-suppliers";
+import type { AvailabilityStatus, SubVendor, SubVendorPayment } from "@/types/suppliers";
 import { NAV_ROUTES } from "@/types/navigation";
 import { cn } from "@/lib/utils";
 
@@ -35,12 +31,6 @@ const TABS = [
   { id: "payments" as Tab, label: "Payment Records", icon: "receipt_long" },
   { id: "tasks" as Tab, label: "Tasks & Deadlines", icon: "task_alt" },
 ];
-
-const COMPLETION_CFG: Record<string, { color: string; bg: string }> = {
-  Completed: { color: "var(--figma-success)", bg: "rgba(63,166,107,0.10)" },
-  "In Progress": { color: "var(--figma-navy)", bg: "rgba(27,42,74,0.09)" },
-  Cancelled: { color: "var(--figma-alert)", bg: "rgba(242,109,109,0.10)" },
-};
 
 function OverviewTab({ vendor }: { vendor: SubVendor }) {
   const specColor = CATEGORY_CFG[vendor.specialty]?.color ?? "var(--figma-teal)";
@@ -125,90 +115,16 @@ function OverviewTab({ vendor }: { vendor: SubVendor }) {
   );
 }
 
-function HistoryEntry({
-  entry,
-  cfg,
-  isLast,
-}: {
-  entry: SubVendorHistory;
-  cfg: { color: string; bg: string };
-  isLast: boolean;
-}) {
-  const [hov, setHov] = useState(false);
-
+function HistoryTab({ vendor }: { vendor: SubVendor }) {
   return (
-    <div className="relative flex gap-4">
-      {!isLast && (
-        <div
-          className="absolute top-11 bottom-[-12px] left-[19px] z-0 w-0.5"
-          style={{
-            background: `linear-gradient(to bottom, ${cfg.color}30, var(--figma-border))`,
-          }}
-        />
-      )}
-      <div
-        className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-white/90 neu-card"
-        style={{ background: cfg.bg }}
-      >
-        <MaterialIcon
-          name={
-            entry.status === "Completed"
-              ? "check_circle"
-              : entry.status === "In Progress"
-                ? "pending"
-                : "cancel"
-          }
-          outlined
-          size={18}
-          style={{ color: cfg.color }}
-        />
+    <div className="rounded-2xl border border-[var(--figma-border)] bg-white px-6 py-12 text-center">
+      <MaterialIcon name="history" outlined size={40} className="mx-auto mb-3 block text-[var(--figma-border)]" />
+      <div className="mb-1 text-[14px] font-medium text-[var(--figma-navy)]">No project history yet</div>
+      <div className="mx-auto max-w-sm text-[13px] text-[var(--figma-gray500)]">
+        Detailed project history is not available from the API yet. Overview shows{" "}
+        <strong className="font-semibold text-[var(--figma-navy)]">{vendor.pastProjects}</strong> past
+        project{vendor.pastProjects === 1 ? "" : "s"} as a summary count.
       </div>
-      <div
-        onMouseEnter={() => setHov(true)}
-        onMouseLeave={() => setHov(false)}
-        className={cn(
-          "mb-3.5 flex-1 rounded-[14px] border border-[rgba(229,231,235,0.5)] bg-white p-4 transition-all duration-200 neu-card",
-          hov && "neu-card-hover -translate-y-px",
-        )}
-      >
-        <div className="mb-2 flex items-start justify-between">
-          <div className="text-[14px] font-semibold text-[var(--figma-navy)]">{entry.project}</div>
-          <StatusPill label={entry.status} color={cfg.color} bg={cfg.bg} />
-        </div>
-        <div className="mb-2 flex items-center gap-1.5">
-          <MaterialIcon name="date_range" outlined size={14} className="text-[var(--figma-gray400)]" />
-          <span className="text-[12px] text-[var(--figma-gray500)]">
-            {entry.startDate} — {entry.endDate}
-          </span>
-        </div>
-        <div className="text-[13px] leading-normal text-[var(--figma-gray500)]">{entry.scope}</div>
-      </div>
-    </div>
-  );
-}
-
-function HistoryTab({ vendorId }: { vendorId: number }) {
-  const history = SUBVENDOR_HISTORY[vendorId] ?? [];
-
-  if (history.length === 0) {
-    return (
-      <div className="py-16 text-center">
-        <MaterialIcon name="history" outlined size={40} className="mx-auto mb-3 block text-[var(--figma-border)]" />
-        <div className="text-[14px] text-[var(--figma-gray500)]">No project history yet</div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-[760px]">
-      {history.map((entry, i) => (
-        <HistoryEntry
-          key={entry.id}
-          entry={entry}
-          cfg={COMPLETION_CFG[entry.status]!}
-          isLast={i === history.length - 1}
-        />
-      ))}
     </div>
   );
 }
@@ -246,8 +162,8 @@ function PaymentRow({
   );
 }
 
-function PaymentsTab({ vendorId }: { vendorId: number }) {
-  const payments = SUBVENDOR_PAYMENTS[vendorId] ?? [];
+function PaymentsTab({ vendor }: { vendor: SubVendor }) {
+  const payments: SubVendorPayment[] = [];
   const total = payments.reduce((sum, p) => sum + parseAmount(p.amount), 0);
 
   return (
@@ -255,20 +171,17 @@ function PaymentsTab({ vendorId }: { vendorId: number }) {
       <div className="mb-5 flex gap-4">
         {[
           {
+            label: "Payment Record",
+            value: vendor.paymentRecord,
+            color: "var(--figma-success)",
+          },
+          {
             label: "Total Paid",
             value: `€ ${payments
               .filter((p) => p.status === "Paid")
               .reduce((s, p) => s + parseAmount(p.amount), 0)
               .toLocaleString()}`,
             color: "var(--figma-success)",
-          },
-          {
-            label: "Partial",
-            value: `€ ${payments
-              .filter((p) => p.status === "Partial")
-              .reduce((s, p) => s + parseAmount(p.amount), 0)
-              .toLocaleString()}`,
-            color: "var(--figma-navy)",
           },
           { label: "Total (All)", value: `€ ${total.toLocaleString()}`, color: "var(--figma-teal)" },
         ].map((tile) => (
@@ -303,8 +216,14 @@ function PaymentsTab({ vendorId }: { vendorId: number }) {
             <tbody>
               {payments.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-[13px] text-[var(--figma-gray400)]">
-                    No payment records
+                  <td colSpan={4} className="px-6 py-12 text-center">
+                    <div className="mb-1 text-[14px] font-medium text-[var(--figma-navy)]">
+                      No payment records
+                    </div>
+                    <div className="mx-auto max-w-sm text-[13px] text-[var(--figma-gray400)]">
+                      Line-item payment history is not available from the API yet. The overview rating (
+                      {vendor.paymentRecord}) is the summary field returned by the backend.
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -325,12 +244,36 @@ function PaymentsTab({ vendorId }: { vendorId: number }) {
   );
 }
 
-export function SubVendorProfileScreen({ vendorId }: { vendorId: number }) {
+export function SubVendorProfileScreen({ vendorId }: { vendorId: string }) {
+  const authDisabled = isAuthDisabled();
   const [tab, setTab] = useState<Tab>("overview");
-  const vendor = SUB_VENDORS.find((v) => v.id === vendorId) ?? SUB_VENDORS[0]!;
+  const [editOpen, setEditOpen] = useState(false);
+  const { subVendor: vendor, isLoading, error, updateSubVendor, isUpdating } = useSubVendor(vendorId);
+
+  if (authDisabled) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+        Live sub-vendor profiles require auth. Copy <code className="font-mono">.env.local.example</code> to{" "}
+        <code className="font-mono">.env.local</code> and set{" "}
+        <code className="font-mono">NEXT_PUBLIC_ENABLE_AUTH=true</code>.
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return <div className="py-10 text-center text-[13px] text-[var(--figma-gray500)]">Loading sub-vendor…</div>;
+  }
+
+  if (error || !vendor) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800">
+        {error ?? "Sub-vendor not found"}
+      </div>
+    );
+  }
+
   const specColor = CATEGORY_CFG[vendor.specialty]?.color ?? "var(--figma-teal)";
-  const [availability, setAvailability] = useState<AvailabilityStatus>(vendor.availability);
-  const avCfg = AVAILABILITY_CFG[availability];
+  const avCfg = AVAILABILITY_CFG[vendor.availability];
 
   return (
     <div>
@@ -360,19 +303,21 @@ export function SubVendorProfileScreen({ vendorId }: { vendorId: number }) {
           </div>
           <div className="mb-1.5 text-[14px] text-[var(--figma-gray500)]">{vendor.company}</div>
           <div className="flex flex-wrap items-center gap-3.5">
-            <AvailabilityDot status={availability} />
+            <AvailabilityDot status={vendor.availability} />
             <div className="flex items-center gap-1.5">
               <MaterialIcon name="email" outlined size={15} className="text-[var(--figma-gray400)]" />
               <span className="text-[13px] text-[var(--figma-gray500)]">{vendor.email}</span>
             </div>
           </div>
-          <DemoCaption className="mt-2" />
         </div>
         <div className="flex shrink-0 gap-2.5">
           <div className="relative">
             <select
-              value={availability}
-              onChange={(e) => setAvailability(e.target.value as AvailabilityStatus)}
+              value={vendor.availability}
+              disabled={isUpdating}
+              onChange={(e) => {
+                void updateSubVendor({ availability: e.target.value as AvailabilityStatus });
+              }}
               className="cursor-pointer appearance-none rounded-full py-2 pr-8 pl-3 text-[12px] font-semibold outline-none"
               style={{
                 color: avCfg.color,
@@ -394,6 +339,8 @@ export function SubVendorProfileScreen({ vendorId }: { vendorId: number }) {
           </div>
           <button
             type="button"
+            disabled={isUpdating}
+            onClick={() => setEditOpen(true)}
             className="flex cursor-pointer items-center gap-1.5 rounded-[10px] border border-[var(--figma-border)] bg-white px-4 py-2 text-[13px] font-medium text-[var(--figma-navy)] neu-raised"
           >
             <MaterialIcon name="edit" outlined size={16} />
@@ -407,9 +354,19 @@ export function SubVendorProfileScreen({ vendorId }: { vendorId: number }) {
       </div>
 
       {tab === "overview" && <OverviewTab vendor={vendor} />}
-      {tab === "history" && <HistoryTab vendorId={vendorId} />}
-      {tab === "payments" && <PaymentsTab vendorId={vendorId} />}
+      {tab === "history" && <HistoryTab vendor={vendor} />}
+      {tab === "payments" && <PaymentsTab vendor={vendor} />}
       {tab === "tasks" && <VendorTasksTab partyKind="subvendor" partyId={vendorId} />}
+
+      <AddSupplierModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        editSubVendor={vendor}
+        isCreating={isUpdating}
+        onUpdateSubVendor={async (payload) => {
+          await updateSubVendor(payload);
+        }}
+      />
     </div>
   );
 }

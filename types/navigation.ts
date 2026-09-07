@@ -104,6 +104,9 @@ export type ProjectTab =
   | "tasks"
   | "minutes"
   | "timeline"
+  | "milestones"
+  | "client-view"
+  | "materials"
   | "links"
   | "hold-requests";
 
@@ -113,6 +116,9 @@ export const PROJECT_TABS: { key: ProjectTab; label: string; adminOnly?: boolean
   { key: "tasks", label: "Tasks" },
   { key: "minutes", label: "Minutes" },
   { key: "timeline", label: "Timeline" },
+  { key: "milestones", label: "Milestones" },
+  { key: "client-view", label: "Client View" },
+  { key: "materials", label: "Materials" },
   { key: "links", label: "Suppliers & Clients" },
   { key: "hold-requests", label: "Hold Requests", adminOnly: true },
 ];

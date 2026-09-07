@@ -52,7 +52,11 @@ export function TaskMilestoneView({
   }, [stages, grouped]);
 
   if (tasks.length === 0) {
-    return <div className="py-10 text-center text-sm text-[#C4B5A5]">No tasks match the current filters.</div>;
+    return (
+      <div className="py-10 text-center text-sm text-[var(--figma-gray400)]">
+        No tasks match the current filters.
+      </div>
+    );
   }
 
   return (
@@ -72,7 +76,10 @@ export function TaskMilestoneView({
               <span className="text-[15px] font-medium text-[var(--ds-label)]">
                 {stageName === UNASSIGNED_STAGE ? "Unassigned" : stageName}
               </span>
-              <Badge variant="secondary" className="bg-[#EDE3D4] text-[var(--ds-secondary-label)]">
+              <Badge
+                variant="secondary"
+                className="bg-[var(--figma-gray100)] text-[var(--figma-gray500)]"
+              >
                 {stageTaskCount} task{stageTaskCount === 1 ? "" : "s"}
               </Badge>
             </div>

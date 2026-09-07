@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { AttentionPanel } from "@/components/dashboard/studio/attention-panel";
 import { useAuth } from "@/hooks/use-auth";
 import type {
   AttentionItem,
+  FileActivityItem,
   ProjectOverviewItem,
   StatItem,
   TodaysTaskItem,
@@ -22,10 +23,13 @@ export function RoleDashboard({
   projects,
   projectsTitle,
   activityTitle,
+  fileActivity,
   todaysTasks,
   todaysTasksTitle,
   showTodaysTasks = true,
   showActions = true,
+  isLoading = false,
+  onAttentionAction,
 }: {
   stats: StatItem[];
   attention: AttentionItem[];
@@ -33,14 +37,15 @@ export function RoleDashboard({
   projects?: ProjectOverviewItem[];
   projectsTitle?: string;
   activityTitle?: string;
+  fileActivity?: FileActivityItem[];
   todaysTasks?: TodaysTaskItem[];
   todaysTasksTitle?: string;
   showTodaysTasks?: boolean;
   showActions?: boolean;
+  isLoading?: boolean;
+  onAttentionAction?: (item: AttentionItem, action: "approve" | "decline") => void;
 }) {
   const { user } = useAuth();
-  const [isLoading, setIsLoading] = useState(true);
-  const [attentionItems, setAttentionItems] = useState(attention);
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -53,19 +58,6 @@ export function RoleDashboard({
     });
     return { hello, first, today };
   }, [user?.first_name]);
-
-  useEffect(() => {
-    setAttentionItems(attention);
-  }, [attention]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 600);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleAction = (id: number, _action: "approve" | "decline") => {
-    setAttentionItems((prev) => prev.filter((item) => item.id !== id));
-  };
 
   if (isLoading) {
     return (
@@ -119,11 +111,11 @@ export function RoleDashboard({
 
       <div className="grid gap-5 lg:grid-cols-[1.65fr_1fr]">
         <AttentionPanel
-          items={attentionItems}
+          items={attention}
           title={attentionTitle}
-          onAction={showActions ? handleAction : undefined}
+          onAction={showActions ? onAttentionAction : undefined}
         />
-        <FileActivityPanel title={activityTitle} />
+        <FileActivityPanel items={fileActivity} title={activityTitle} />
       </div>
     </div>
   );

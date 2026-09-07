@@ -3,21 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogBody,
-  DialogCloseButton,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+  HubField,
+  HubModal,
+  hubInputClass,
+} from "@/components/projects/hub/hub-modal";
+import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { formatBoardDate } from "@/lib/tasks/task-board";
 import type { ProjectTaskView } from "@/lib/tasks/task-board";
+import { cn } from "@/lib/utils";
 
 function clampDate(dateIso: string, min: string, max: string): string {
   if (dateIso < min) return min;
@@ -50,9 +44,6 @@ export function TaskHoldRequestDialog({
     note?: string;
   }) => Promise<unknown>;
 }) {
-  // A hold may fall OUTSIDE the milestone/task window, but must stay within the
-  // parent STAGE range. Fall back to the task's own window if the stage range
-  // isn't available.
   const hasStage = Boolean(stageRange);
   const taskStart = stageRange ? stageRange.start.slice(0, 10) : task.startDate.slice(0, 10);
   const taskEnd = stageRange ? stageRange.end.slice(0, 10) : task.dueDate;
@@ -61,7 +52,7 @@ export function TaskHoldRequestDialog({
 
   const defaultStart = useMemo(
     () => clampDate(today < taskStart ? taskStart : today, taskStart, taskEnd),
-    [today, taskStart, taskEnd]
+    [today, taskStart, taskEnd],
   );
   const defaultEnd = useMemo(() => {
     const suggested = addDays(defaultStart, 3);
@@ -91,11 +82,15 @@ export function TaskHoldRequestDialog({
       return;
     }
     if (startDate < taskStart || startDate > taskEnd) {
-      toast.error(`Hold must start within the ${windowLabel} period (${formatBoardDate(taskStart)} – ${formatBoardDate(taskEnd)})`);
+      toast.error(
+        `Hold must start within the ${windowLabel} period (${formatBoardDate(taskStart)} – ${formatBoardDate(taskEnd)})`,
+      );
       return;
     }
     if (endDate > taskEnd) {
-      toast.error(`Hold must end within the ${windowLabel} period (${formatBoardDate(taskStart)} – ${formatBoardDate(taskEnd)})`);
+      toast.error(
+        `Hold must end within the ${windowLabel} period (${formatBoardDate(taskStart)} – ${formatBoardDate(taskEnd)})`,
+      );
       return;
     }
 
@@ -117,80 +112,85 @@ export function TaskHoldRequestDialog({
     }
   }
 
+  if (!open) return null;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-[rgba(90,60,30,0.10)] bg-[var(--ds-surface-elevated)]">
-        <DialogHeader className="relative border-[rgba(90,60,30,0.10)]">
-          <DialogTitle>Request task hold</DialogTitle>
-          <DialogCloseButton onClick={() => onOpenChange(false)} />
-        </DialogHeader>
-
-        <DialogBody className="space-y-3.5">
-          <p className="text-sm text-[var(--ds-secondary-label)]">
-            Request a pause on <span className="font-medium text-[var(--ds-label)]">{task.title}</span>. The hold
-            period must fall within the {windowLabel} window ({formatBoardDate(taskStart)} – {formatBoardDate(taskEnd)}).
-          </p>
-
-          <div>
-            <Label className="mb-1.5 text-xs text-[var(--ds-secondary-label)]">Reason</Label>
-            <Textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Why does this task need to be on hold?"
-              className="min-h-[72px] resize-none border-[var(--ds-separator)] bg-[var(--ds-bg)]"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="mb-1.5 text-xs text-[var(--ds-secondary-label)]">Hold starts</Label>
-              <Input
-                type="date"
-                min={taskStart}
-                max={taskEnd}
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="h-9 border-[var(--ds-separator)] bg-[var(--ds-bg)]"
-              />
-            </div>
-            <div>
-              <Label className="mb-1.5 text-xs text-[var(--ds-secondary-label)]">Hold ends</Label>
-              <Input
-                type="date"
-                min={startDate || taskStart}
-                max={taskEnd}
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="h-9 border-[var(--ds-separator)] bg-[var(--ds-bg)]"
-              />
-            </div>
-          </div>
-
-          <div>
-            <Label className="mb-1.5 text-xs text-[var(--ds-secondary-label)]">Additional note (optional)</Label>
-            <Textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Any extra context for the reviewer…"
-              className="min-h-[56px] resize-none border-[var(--ds-separator)] bg-[var(--ds-bg)]"
-            />
-          </div>
-        </DialogBody>
-
-        <DialogFooter className="border-[rgba(90,60,30,0.10)] bg-[var(--ds-bg)]">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+    <HubModal
+      onClose={() => onOpenChange(false)}
+      title="Request task hold"
+      subtitle={`Pause work on “${task.title}”`}
+      icon="pause_circle"
+      maxWidth={480}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="flex cursor-pointer items-center gap-1 border-none bg-transparent p-2 font-[inherit] text-[13px] text-[var(--figma-gray500)] transition-colors hover:text-[var(--figma-navy)]"
+          >
             Cancel
-          </Button>
-          <Button
+          </button>
+          <button
             type="button"
             disabled={!canSubmit || isSaving}
             onClick={() => void handleSubmit()}
-            className="bg-[var(--ds-accent)] text-white hover:bg-[var(--ds-accent-hover)]"
+            className="gi-gradient-cta flex cursor-pointer items-center gap-2 rounded-[24px] px-7 py-[11px] text-sm font-semibold disabled:cursor-default disabled:opacity-70"
           >
             {isSaving ? "Submitting…" : "Submit request"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            {!isSaving && <MaterialIcon name="send" outlined size={16} />}
+          </button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-[18px]">
+        <p className="m-0 text-[13px] leading-relaxed text-[var(--figma-gray500)]">
+          The hold period must fall within the {windowLabel} window (
+          {formatBoardDate(taskStart)} – {formatBoardDate(taskEnd)}).
+        </p>
+
+        <HubField label="Reason">
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Why does this task need to be on hold?"
+            rows={3}
+            className={cn(hubInputClass, "min-h-[72px] resize-none leading-relaxed")}
+          />
+        </HubField>
+
+        <div className="grid grid-cols-2 gap-3">
+          <HubField label="Hold starts">
+            <input
+              type="date"
+              min={taskStart}
+              max={taskEnd}
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className={hubInputClass}
+            />
+          </HubField>
+          <HubField label="Hold ends">
+            <input
+              type="date"
+              min={startDate || taskStart}
+              max={taskEnd}
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className={hubInputClass}
+            />
+          </HubField>
+        </div>
+
+        <HubField label="Additional note (optional)">
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Any extra context for the reviewer…"
+            rows={2}
+            className={cn(hubInputClass, "min-h-[56px] resize-none leading-relaxed")}
+          />
+        </HubField>
+      </div>
+    </HubModal>
   );
 }

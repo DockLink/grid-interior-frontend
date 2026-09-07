@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/use-auth";
 import type { ProcessHoldRequestPayload } from "@/hooks/use-project-hold-requests";
 import { authApiClient } from "@/lib/api/authenticated-client";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { toProcessHoldRequestBody, mapHoldRequestsList } from "@/lib/hold-requests/map-hold-request";
 import { accessRequestToNotification } from "@/lib/notifications/access-request-map";
 import { fileVersionToNotification } from "@/lib/notifications/file-version-map";
 import { shareLinkToNotification } from "@/lib/notifications/share-link-map";
@@ -137,7 +138,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const processHoldRequest = useCallback(async (payload: ProcessHoldRequestPayload) => {
     await authApiClient("/taskable-hold-requests/process", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(toProcessHoldRequestBody(payload)),
     });
     await fetchRef.current();
   }, []);
@@ -206,7 +207,9 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         const holdRes = await authApiClient<HoldRequestsListResponse>(
           `/taskable-hold-requests?${holdQs}`
         );
-        mapped.push(...(holdRes.data ?? []).map((r) => holdRequestToNotification(r, canReviewHolds)));
+        mapped.push(
+          ...mapHoldRequestsList(holdRes).map((r) => holdRequestToNotification(r, canReviewHolds)),
+        );
       } catch {
         /* non-critical */
       }

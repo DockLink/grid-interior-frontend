@@ -30,12 +30,10 @@ interface PartUrl {
   url: string;
 }
 
-interface InitiateResponse {
-  data: { uploadId: string; key: string; partSize: number };
-}
-
-interface PresignResponse {
-  data: { urls: PartUrl[] };
+interface InitiateFields {
+  uploadId: string;
+  key: string;
+  partSize: number;
 }
 
 /** Parallel S3 part uploads per file. */
@@ -43,6 +41,78 @@ const PART_CONCURRENCY = 6;
 
 /** Presign this many parts at a time so JWT stays fresh on very large files. */
 const PRESIGN_BATCH_SIZE = 24;
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function pickField(obj: Record<string, unknown>, ...keys: string[]): unknown {
+  for (const key of keys) {
+    if (obj[key] !== undefined && obj[key] !== null) return obj[key];
+  }
+  return undefined;
+}
+
+/** Accepts `{ data: { uploadId } }`, top-level camel, or snake_case Nest shapes. */
+function parseInitiateResponse(raw: unknown): InitiateFields {
+  const root = asRecord(raw);
+  const nested = asRecord(root.data);
+  const source = Object.keys(nested).length > 0 ? nested : root;
+
+  const uploadId = pickField(source, "uploadId", "upload_id");
+  const key = pickField(source, "key");
+  const partSizeRaw = pickField(source, "partSize", "part_size");
+
+  if (typeof uploadId !== "string" || !uploadId) {
+    throw new Error("Multipart initiate response missing uploadId.");
+  }
+  if (typeof key !== "string" || !key) {
+    throw new Error("Multipart initiate response missing key.");
+  }
+
+  const partSize =
+    typeof partSizeRaw === "number"
+      ? partSizeRaw
+      : typeof partSizeRaw === "string"
+        ? Number(partSizeRaw)
+        : NaN;
+  if (!Number.isFinite(partSize) || partSize <= 0) {
+    throw new Error("Multipart initiate response missing partSize.");
+  }
+
+  return { uploadId, key, partSize };
+}
+
+function parsePresignUrls(raw: unknown): PartUrl[] {
+  const root = asRecord(raw);
+  const nested = asRecord(root.data);
+  const source = Object.keys(nested).length > 0 ? nested : root;
+  const urlsRaw = pickField(source, "urls");
+  if (!Array.isArray(urlsRaw)) {
+    throw new Error("Multipart presign response missing urls.");
+  }
+
+  return urlsRaw.map((item) => {
+    const row = asRecord(item);
+    const partNumberRaw = pickField(row, "partNumber", "part_number");
+    const url = pickField(row, "url");
+    const partNumber =
+      typeof partNumberRaw === "number"
+        ? partNumberRaw
+        : typeof partNumberRaw === "string"
+          ? Number(partNumberRaw)
+          : NaN;
+    if (!Number.isFinite(partNumber) || typeof url !== "string" || !url) {
+      throw new Error("Multipart presign response has an invalid part URL.");
+    }
+    return { partNumber, url };
+  });
+}
+
+function parseCompleteData(raw: unknown): unknown {
+  const root = asRecord(raw);
+  return root.data !== undefined ? root.data : raw;
+}
 
 async function controlRequest<T>(path: string, body: unknown): Promise<T> {
   const attempt = async (token: string): Promise<T> => {
@@ -129,12 +199,14 @@ export async function uploadFileMultipart(opts: {
 
   const base = `/api/projects/${projectId}/files/multipart`;
 
-  const init = await controlRequest<InitiateResponse>(`${base}/initiate`, {
-    folderPath,
-    fileName: file.name,
-    mimeType: file.type || "application/octet-stream",
-  });
-  const { uploadId, key, partSize } = init.data;
+  const init = parseInitiateResponse(
+    await controlRequest<unknown>(`${base}/initiate`, {
+      folderPath,
+      fileName: file.name,
+      mimeType: file.type || "application/octet-stream",
+    }),
+  );
+  const { uploadId, key, partSize } = init;
 
   try {
     const totalParts = Math.max(1, Math.ceil(file.size / partSize));
@@ -165,14 +237,14 @@ export async function uploadFileMultipart(opts: {
     // Presign and upload in rolling batches so control calls use fresh tokens.
     for (let batchStart = 0; batchStart < partNumbers.length; batchStart += PRESIGN_BATCH_SIZE) {
       const batch = partNumbers.slice(batchStart, batchStart + PRESIGN_BATCH_SIZE);
-      const presigned = await controlRequest<PresignResponse>(`${base}/presign`, {
-        key,
-        uploadId,
-        partNumbers: batch,
-      });
-      const urlByPart = new Map(
-        presigned.data.urls.map((u) => [u.partNumber, u.url])
+      const urls = parsePresignUrls(
+        await controlRequest<unknown>(`${base}/presign`, {
+          key,
+          uploadId,
+          partNumbers: batch,
+        }),
       );
+      const urlByPart = new Map(urls.map((u) => [u.partNumber, u.url]));
 
       let cursor = 0;
       const worker = async () => {
@@ -190,19 +262,21 @@ export async function uploadFileMultipart(opts: {
 
     parts.sort((a, b) => a.partNumber - b.partNumber);
 
-    const completed = await controlRequest<{ data: unknown }>(`${base}/complete`, {
-      folderPath,
-      fileName: file.name,
-      mimeType: file.type || "application/octet-stream",
-      replaceFileId,
-      key,
-      uploadId,
-      parts,
-      fileSize: file.size,
-    });
+    const completed = parseCompleteData(
+      await controlRequest<unknown>(`${base}/complete`, {
+        folderPath,
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        replaceFileId,
+        key,
+        uploadId,
+        parts,
+        fileSize: file.size,
+      }),
+    );
 
     onProgress?.(100);
-    return completed.data;
+    return completed;
   } catch (err) {
     // Best-effort cleanup so we don't leave dangling multipart uploads in S3.
     await controlRequest(`${base}/abort`, { key, uploadId }).catch(() => undefined);

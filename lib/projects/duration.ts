@@ -16,6 +16,22 @@ export function addIsoDuration(startDate: string, duration: string): Date {
   return result;
 }
 
+/** Resolve project end ISO date from end_date or start_date + duration. */
+export function resolveProjectEndDate(project: {
+  start_date: string;
+  end_date?: string | null;
+  duration?: string | null;
+}): string | null {
+  if (project.end_date) {
+    const d = new Date(project.end_date);
+    if (!Number.isNaN(d.getTime())) return project.end_date.slice(0, 10);
+  }
+  if (project.start_date && project.duration) {
+    return addIsoDuration(project.start_date, project.duration).toISOString().slice(0, 10);
+  }
+  return null;
+}
+
 export function formatRelativeTime(dateStr: string): string {
   const date = new Date(dateStr);
   if (Number.isNaN(date.getTime())) return "—";

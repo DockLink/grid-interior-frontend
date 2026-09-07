@@ -1,13 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
-import { HUB_CLIENTS } from "@/lib/projects/hub-clients";
+import { useClients } from "@/hooks/use-clients";
+import { useCreateProject } from "@/hooks/use-create-project";
+import { useUsers } from "@/hooks/use-users";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { PHASE_CFG, PHASES, PROJECT_TYPES, type ProjectPhase } from "@/lib/projects/design-tokens";
-import { addActiveProject, TEAM_MEMBERS } from "@/lib/projects/mock-projects";
-import type { ActiveProjectView } from "@/types/project-hub";
+import { queryKeys } from "@/lib/query/keys";
+import { getUserInitials, getUserListPrimaryLabel } from "@/lib/user/display";
+import type { CreateProjectRequest } from "@/types/projects";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -143,23 +149,59 @@ function FInput({
   );
 }
 
+const MEMBER_COLORS = ["#0E7C86", "#7C3AED", "#0891B2", "#D97706", "#1B2A4A", "#BE185D"];
+
+function memberColor(userId: string): string {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i += 1) {
+    hash = (hash + userId.charCodeAt(i)) % MEMBER_COLORS.length;
+  }
+  return MEMBER_COLORS[hash] ?? MEMBER_COLORS[0];
+}
+
 export function NewProjectModal({
   onClose,
   onCreate,
+  onCreated,
+  preselectedClientId,
+  redirectOnCreate = true,
 }: {
   onClose: () => void;
-  onCreate: () => void;
+  onCreate?: () => void;
+  onCreated?: (projectId: string) => void;
+  preselectedClientId?: string;
+  redirectOnCreate?: boolean;
 }) {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const { createProject } = useCreateProject();
+  const { users, isLoading: usersLoading } = useUsers({ page: 1, limit: 100, status: "ACTIVE" });
+  const { clients, isLoading: clientsLoading } = useClients({ page: 1, limit: 100 });
+
+  const studioMembers = useMemo(
+    () => users.filter((u) => u.status === "ACTIVE"),
+    [users],
+  );
+  const defaultDates = useMemo(() => {
+    const today = new Date();
+    const start = today.toISOString().slice(0, 10);
+    const end = new Date(today);
+    end.setFullYear(end.getFullYear() + 1);
+    return { start, end: end.toISOString().slice(0, 10) };
+  }, []);
+
   const [step, setStep] = useState<Step>(1);
   const [projectName, setProjectName] = useState("");
   const [clientSearch, setClientSearch] = useState("");
-  const [selectedClient, setSelectedClient] = useState<number | null>(null);
+  const [selectedClient, setSelectedClient] = useState<string | null>(preselectedClientId ?? null);
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [projectType, setProjectType] = useState("");
+  const [startDate, setStartDate] = useState(defaultDates.start);
+  const [endDate, setEndDate] = useState(defaultDates.end);
   const [selectedPhase, setSelectedPhase] = useState<ProjectPhase | null>(null);
   const [address, setAddress] = useState("");
-  const [selectedTeam, setSelectedTeam] = useState<number[]>([1]);
-  const [coordinator, setCoordinator] = useState(1);
+  const [selectedTeam, setSelectedTeam] = useState<string[]>([]);
+  const [coordinator, setCoordinator] = useState<string>("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [clientFocused, setClientFocused] = useState(false);
@@ -167,19 +209,25 @@ export function NewProjectModal({
   const distanceKm = address.length > 5 ? 3.6 : null;
   const eligibleFree = distanceKm !== null && distanceKm <= 10;
 
-  const filteredClients = HUB_CLIENTS.filter((c) =>
-    c.name.toLowerCase().includes(clientSearch.toLowerCase()),
-  ).slice(0, 6);
+  const filteredClients = clients
+    .filter((c) => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
+    .slice(0, 6);
 
-  const selectedClientName = selectedClient
-    ? HUB_CLIENTS.find((c) => c.id === selectedClient)?.name ?? ""
-    : "";
+  const selectedClientRecord = selectedClient
+    ? clients.find((c) => c.id === selectedClient)
+    : undefined;
+  const selectedClientName = selectedClientRecord?.name ?? "";
 
   const validate1 = () => {
     const e: Record<string, string> = {};
     if (!projectName.trim()) e.name = "This field is required";
     if (!selectedClient) e.client = "Please select a client";
     if (!projectType) e.type = "Please select a project type";
+    if (!startDate) e.startDate = "Start date is required";
+    if (!endDate) e.endDate = "End date is required";
+    if (startDate && endDate && endDate <= startDate) {
+      e.endDate = "End date must be after start date";
+    }
     return e;
   };
 
@@ -199,47 +247,72 @@ export function NewProjectModal({
     setStep((s) => (s + 1) as Step);
   };
 
-  const handleCreate = () => {
+  useEffect(() => {
+    if (preselectedClientId) setSelectedClient(preselectedClientId);
+  }, [preselectedClientId]);
+
+  useEffect(() => {
+    if (studioMembers.length === 0) return;
+    setSelectedTeam((prev) => (prev.length ? prev : [studioMembers[0].id]));
+    setCoordinator((prev) => prev || studioMembers[0].id);
+  }, [studioMembers]);
+
+  const handleCreate = async () => {
+    if (isAuthDisabled()) {
+      toast.error("Enable auth in .env.local to create projects on the server.");
+      return;
+    }
+
+    const client = clients.find((c) => c.id === selectedClient);
+
+    const payload: CreateProjectRequest = {
+      name: projectName.trim(),
+      description: projectType || undefined,
+      start_date: startDate,
+      end_date: endDate,
+      location: address.trim() || undefined,
+      client: {
+        name: client?.name ?? "Unknown Client",
+        contact_email: client?.email || undefined,
+        contact_number: client?.phone || undefined,
+      },
+    };
+
     setSaving(true);
-    setTimeout(() => {
-      const phaseIndex = selectedPhase ? PHASES.indexOf(selectedPhase) : 0;
-      const client = HUB_CLIENTS.find((c) => c.id === selectedClient);
-      const newProject: ActiveProjectView = {
-        id: `mock-new-${Date.now()}`,
-        name: projectName.trim(),
-        clientId: selectedClient ?? 1,
-        clientName: client?.name ?? "Unknown Client",
-        phase: selectedPhase ?? "Consultation",
-        phaseIndex,
-        status: "In Progress",
-        progress: 0,
-        nextDeadline: "TBD",
-        teamIds: selectedTeam.length ? selectedTeam : [coordinator],
-        startDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
-        location: address || "TBD",
-        distanceKm: distanceKm ?? 0,
-        projectType,
-        tasksTotal: 0,
-        tasksDone: 0,
-        daysActive: 0,
-        description: `New ${projectType.toLowerCase()} project for ${client?.name ?? "client"}.`,
-        activity: [
-          {
-            icon: "rocket_launch",
-            iconColor: "#0E7C86",
-            text: "Project created",
-            time: "Just now",
-          },
-        ],
-      };
-      addActiveProject(newProject);
-      setSaving(false);
+    try {
+      const created = await createProject(payload, {
+        clientId: selectedClient || undefined,
+        memberUserIds: selectedTeam.length ? selectedTeam : undefined,
+        projectLeadUserId: coordinator || null,
+        stages: selectedPhase
+          ? [
+              {
+                name: selectedPhase,
+                start_date: startDate,
+                end_date: endDate,
+                order: 0,
+              },
+            ]
+          : undefined,
+      });
+
+      await qc.invalidateQueries({ queryKey: queryKeys.projects.all });
       toast.success(`"${projectName}" created`);
-      onCreate();
-    }, 1000);
+      onCreate?.();
+      onCreated?.(created.id);
+      if (redirectOnCreate) {
+        router.push(`/projects/${created.id}`);
+      } else {
+        onClose();
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create project");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const toggleTeamMember = (id: number) => {
+  const toggleTeamMember = (id: string) => {
     setSelectedTeam((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
   };
 
@@ -333,39 +406,59 @@ export function NewProjectModal({
                   {errors.client}
                 </div>
               )}
-              {showClientDropdown && filteredClients.length > 0 && (
+              {showClientDropdown && (
                 <div
                   className="absolute top-full right-0 left-0 z-50 mt-1 overflow-hidden rounded-xl border border-[var(--figma-border)] bg-white"
                   style={{ boxShadow: "var(--neu-dropdown)" }}
                 >
-                  {filteredClients.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onMouseDown={() => {
-                        setSelectedClient(c.id);
-                        setClientSearch("");
-                        setShowClientDropdown(false);
-                        setErrors((p) => ({ ...p, client: "" }));
-                      }}
-                      className="flex w-full cursor-pointer items-center gap-2.5 border-b border-[var(--figma-border)] bg-transparent px-4 py-2.5 text-left font-[inherit] text-[13px] text-[var(--figma-navy)] last:border-b-0 hover:bg-[var(--figma-gray50)]"
-                    >
-                      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--figma-navy)] to-[var(--figma-teal)] text-[10px] font-bold text-white">
-                        {c.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .slice(0, 2)
-                          .join("")}
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium">{c.name}</div>
-                        <div className="text-[11px] text-[var(--figma-gray500)]">{c.email}</div>
-                      </div>
-                      {selectedClient === c.id && (
-                        <MaterialIcon name="check" size={16} className="ml-auto text-[var(--figma-teal)]" />
-                      )}
-                    </button>
-                  ))}
+                  {clientsLoading ? (
+                    <div className="px-4 py-3 text-[12px] text-[var(--figma-gray500)]">
+                      Loading clients…
+                    </div>
+                  ) : filteredClients.length === 0 ? (
+                    <div className="px-4 py-3 text-[12px] text-[var(--figma-gray500)]">
+                      {clientSearch.trim() ? "No clients match your search" : "No clients found"}
+                    </div>
+                  ) : (
+                    filteredClients.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onMouseDown={() => {
+                          setSelectedClient(c.id);
+                          setClientSearch("");
+                          setShowClientDropdown(false);
+                          setErrors((p) => ({ ...p, client: "" }));
+                        }}
+                        className="flex w-full cursor-pointer items-center gap-2.5 border-b border-[var(--figma-border)] bg-transparent px-4 py-2.5 text-left font-[inherit] text-[13px] text-[var(--figma-navy)] last:border-b-0 hover:bg-[var(--figma-gray50)]"
+                      >
+                        <div
+                          className="flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                          style={{
+                            background: c.color
+                              ? c.color
+                              : "linear-gradient(135deg, var(--figma-navy), var(--figma-teal))",
+                          }}
+                        >
+                          {c.initials ||
+                            c.name
+                              .split(" ")
+                              .map((n) => n[0])
+                              .slice(0, 2)
+                              .join("")}
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-medium">{c.name}</div>
+                          <div className="text-[11px] text-[var(--figma-gray500)]">
+                            {c.email || c.company || "—"}
+                          </div>
+                        </div>
+                        {selectedClient === c.id && (
+                          <MaterialIcon name="check" size={16} className="ml-auto text-[var(--figma-teal)]" />
+                        )}
+                      </button>
+                    ))
+                  )}
                 </div>
               )}
             </div>
@@ -402,6 +495,57 @@ export function NewProjectModal({
                 })}
               </div>
               {errors.type && <div className="text-[11px] text-[var(--figma-alert)]">{errors.type}</div>}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label
+                  className="text-[13px] font-medium"
+                  style={{ color: errors.startDate ? "var(--figma-alert)" : "var(--figma-navy)" }}
+                >
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setErrors((p) => ({ ...p, startDate: "", endDate: "" }));
+                  }}
+                  className="rounded-xl border-[1.5px] bg-white px-3.5 py-2.5 font-[inherit] text-[13px] text-[var(--figma-navy)] outline-none"
+                  style={{
+                    borderColor: errors.startDate ? "var(--figma-alert)" : "var(--figma-border)",
+                    boxShadow: "var(--neu-inset)",
+                  }}
+                />
+                {errors.startDate && (
+                  <div className="text-[11px] text-[var(--figma-alert)]">{errors.startDate}</div>
+                )}
+              </div>
+              <div className="flex flex-col gap-1">
+                <label
+                  className="text-[13px] font-medium"
+                  style={{ color: errors.endDate ? "var(--figma-alert)" : "var(--figma-navy)" }}
+                >
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setErrors((p) => ({ ...p, endDate: "" }));
+                  }}
+                  className="rounded-xl border-[1.5px] bg-white px-3.5 py-2.5 font-[inherit] text-[13px] text-[var(--figma-navy)] outline-none"
+                  style={{
+                    borderColor: errors.endDate ? "var(--figma-alert)" : "var(--figma-border)",
+                    boxShadow: "var(--neu-inset)",
+                  }}
+                />
+                {errors.endDate && (
+                  <div className="text-[11px] text-[var(--figma-alert)]">{errors.endDate}</div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -564,8 +708,17 @@ export function NewProjectModal({
                 Assign Team Members
               </label>
               <div className="flex flex-col gap-2">
-                {TEAM_MEMBERS.map((m) => {
+                {usersLoading && (
+                  <div className="text-[13px] text-[var(--figma-gray500)]">Loading team members…</div>
+                )}
+                {!usersLoading && studioMembers.length === 0 && (
+                  <div className="text-[13px] text-[var(--figma-gray500)]">No active users found.</div>
+                )}
+                {studioMembers.map((m) => {
                   const isSelected = selectedTeam.includes(m.id);
+                  const initials = getUserInitials(m);
+                  const name = getUserListPrimaryLabel(m);
+                  const role = m.roles[0] ?? "Member";
                   return (
                     <button
                       key={m.id}
@@ -580,13 +733,13 @@ export function NewProjectModal({
                     >
                       <div
                         className="flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                        style={{ background: m.color }}
+                        style={{ background: memberColor(m.id) }}
                       >
-                        {m.initials}
+                        {initials}
                       </div>
                       <div className="flex-1">
-                        <div className="text-[13px] font-semibold text-[var(--figma-navy)]">{m.name}</div>
-                        <div className="text-[11px] text-[var(--figma-gray500)]">{m.role}</div>
+                        <div className="text-[13px] font-semibold text-[var(--figma-navy)]">{name}</div>
+                        <div className="text-[11px] text-[var(--figma-gray500)]">{role}</div>
                       </div>
                       <div
                         className="flex size-5 shrink-0 items-center justify-center rounded-full transition-all duration-150"
@@ -614,12 +767,12 @@ export function NewProjectModal({
                 />
                 <select
                   value={coordinator}
-                  onChange={(e) => setCoordinator(Number(e.target.value))}
+                  onChange={(e) => setCoordinator(e.target.value)}
                   className="w-full cursor-pointer appearance-none rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white py-2.5 pr-9 pl-9 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
                 >
-                  {TEAM_MEMBERS.map((m) => (
+                  {studioMembers.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name} — {m.role}
+                      {getUserListPrimaryLabel(m)} — {m.roles[0] ?? "Member"}
                     </option>
                   ))}
                 </select>

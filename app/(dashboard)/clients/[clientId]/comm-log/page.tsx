@@ -6,5 +6,5 @@ export default async function ClientCommLogPage({
   params: Promise<{ clientId: string }>;
 }) {
   const { clientId } = await params;
-  return <CommLogScreen clientId={Number(clientId)} />;
+  return <CommLogScreen clientId={clientId} />;
 }

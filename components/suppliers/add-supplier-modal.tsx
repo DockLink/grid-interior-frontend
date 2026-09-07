@@ -1,11 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { GradientButton } from "@/components/suppliers/supplier-ui";
+import { handleApiError } from "@/lib/api/handle-api-error";
 import { cn } from "@/lib/utils";
+import type {
+  AvailabilityStatus,
+  CreateSubVendorPayload,
+  CreateSupplierPayload,
+  SubVendor,
+  SubVendorSpecialty,
+  Supplier,
+  SupplierCategory,
+  UpdateSubVendorPayload,
+  UpdateSupplierPayload,
+} from "@/types/suppliers";
 
 type FormMode = "supplier" | "subvendor";
 
@@ -41,8 +53,6 @@ interface FormData {
   phone: string;
   email: string;
   address: string;
-  rate: string;
-  unit: string;
   creditTerms: string;
   leadTime: string;
   specialty: string;
@@ -58,8 +68,6 @@ const EMPTY_FORM: FormData = {
   phone: "",
   email: "",
   address: "",
-  rate: "",
-  unit: "",
   creditTerms: "Net 30",
   leadTime: "",
   specialty: "",
@@ -67,6 +75,36 @@ const EMPTY_FORM: FormData = {
   website: "",
   notes: "",
 };
+
+function supplierToForm(supplier: Supplier): FormData {
+  return {
+    ...EMPTY_FORM,
+    name: supplier.name,
+    category: supplier.category,
+    contactPerson: supplier.contactPerson === "—" ? "" : supplier.contactPerson,
+    phone: supplier.phone === "—" ? "" : supplier.phone,
+    email: supplier.email === "—" ? "" : supplier.email,
+    address: supplier.address === "—" ? "" : supplier.address,
+    website: supplier.website ?? "",
+    creditTerms: supplier.creditTerms === "—" ? "Net 30" : supplier.creditTerms,
+    leadTime: supplier.avgLeadTime === "—" ? "" : supplier.avgLeadTime,
+    notes: supplier.notes ?? "",
+  };
+}
+
+function subVendorToForm(vendor: SubVendor): FormData {
+  return {
+    ...EMPTY_FORM,
+    name: vendor.name,
+    specialty: vendor.specialty,
+    contactPerson: vendor.company === "—" ? "" : vendor.company,
+    phone: vendor.phone === "—" ? "" : vendor.phone,
+    email: vendor.email === "—" ? "" : vendor.email,
+    address: vendor.address === "—" ? "" : vendor.address,
+    availability: vendor.availability,
+    notes: vendor.notes ?? "",
+  };
+}
 
 function FormInput({
   label,
@@ -222,19 +260,59 @@ function FormSection({
   );
 }
 
+type AddSupplierModalProps = {
+  open: boolean;
+  onClose: () => void;
+  defaultMode?: FormMode;
+  isCreating?: boolean;
+  isDemo?: boolean;
+  /** When set, modal opens in edit mode for that party (mode toggle hidden). */
+  editSupplier?: Supplier | null;
+  editSubVendor?: SubVendor | null;
+  onCreateSupplier?: (payload: CreateSupplierPayload) => Promise<unknown>;
+  onCreateSubVendor?: (payload: CreateSubVendorPayload) => Promise<unknown>;
+  onUpdateSupplier?: (payload: UpdateSupplierPayload) => Promise<unknown>;
+  onUpdateSubVendor?: (payload: UpdateSubVendorPayload) => Promise<unknown>;
+};
+
 export function AddSupplierModal({
   open,
   onClose,
   defaultMode = "supplier",
-}: {
-  open: boolean;
-  onClose: () => void;
-  defaultMode?: FormMode;
-}) {
-  const [mode, setMode] = useState<FormMode>(defaultMode);
+  onCreateSupplier,
+  onCreateSubVendor,
+  onUpdateSupplier,
+  onUpdateSubVendor,
+  isCreating = false,
+  isDemo = false,
+  editSupplier = null,
+  editSubVendor = null,
+}: AddSupplierModalProps) {
+  const isEdit = Boolean(editSupplier || editSubVendor);
+  const [mode, setMode] = useState<FormMode>(
+    editSubVendor ? "subvendor" : editSupplier ? "supplier" : defaultMode,
+  );
   const [form, setForm] = useState<FormData>({ ...EMPTY_FORM });
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
-  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    if (editSupplier) {
+      setMode("supplier");
+      setForm(supplierToForm(editSupplier));
+      setErrors({});
+      return;
+    }
+    if (editSubVendor) {
+      setMode("subvendor");
+      setForm(subVendorToForm(editSubVendor));
+      setErrors({});
+      return;
+    }
+    setMode(defaultMode);
+    setForm({ ...EMPTY_FORM });
+    setErrors({});
+  }, [open, defaultMode, editSupplier, editSubVendor]);
 
   const set = (field: keyof FormData) => (v: string) => {
     setForm((p) => ({ ...p, [field]: v }));
@@ -247,29 +325,81 @@ export function AddSupplierModal({
     if (mode === "supplier" && !form.category) errs.category = "This field is required";
     if (mode === "subvendor" && !form.specialty) errs.specialty = "This field is required";
     if (!form.email.trim()) errs.email = "This field is required";
-    if (!form.contactPerson.trim()) errs.contactPerson = "This field is required";
+    if (mode === "supplier" && !form.contactPerson.trim()) {
+      errs.contactPerson = "This field is required";
+    }
     return errs;
   };
 
-  const handleSave = () => {
+  const resetAndClose = () => {
+    onClose();
+    setForm({ ...EMPTY_FORM });
+    setErrors({});
+  };
+
+  const handleSave = async () => {
     const errs = validate();
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
       return;
     }
-    setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
-      toast.success(`${mode === "supplier" ? "Supplier" : "Sub-vendor"} saved (demo)`);
-      onClose();
-      setForm({ ...EMPTY_FORM });
-      setErrors({});
-    }, 900);
+
+    if (isDemo) {
+      toast.message("Demo mode — enable auth to save to the backend");
+      resetAndClose();
+      return;
+    }
+
+    try {
+      if (mode === "supplier") {
+        const payload = {
+          name: form.name.trim(),
+          category: form.category as SupplierCategory,
+          contact_person: form.contactPerson.trim() || undefined,
+          phone: form.phone.trim() || undefined,
+          email: form.email.trim() || undefined,
+          address: form.address.trim() || undefined,
+          website: form.website.trim() || undefined,
+          notes: form.notes.trim() || undefined,
+          credit_terms: form.creditTerms || undefined,
+          avg_lead_time: form.leadTime.trim() || undefined,
+        };
+        if (isEdit) {
+          await onUpdateSupplier?.(payload);
+          toast.success("Supplier updated");
+        } else {
+          await onCreateSupplier?.(payload);
+          toast.success("Supplier created");
+        }
+      } else {
+        const payload = {
+          name: form.name.trim(),
+          specialty: form.specialty as SubVendorSpecialty,
+          company: form.contactPerson.trim() || undefined,
+          phone: form.phone.trim() || undefined,
+          email: form.email.trim() || undefined,
+          address: form.address.trim() || undefined,
+          availability: (form.availability as AvailabilityStatus) || "Available",
+          notes: form.notes.trim() || undefined,
+        };
+        if (isEdit) {
+          await onUpdateSubVendor?.(payload);
+          toast.success("Sub-vendor updated");
+        } else {
+          await onCreateSubVendor?.(payload);
+          toast.success("Sub-vendor created");
+        }
+      }
+      resetAndClose();
+    } catch (error) {
+      handleApiError(error, { toast: true });
+    }
   };
 
   if (!open) return null;
 
   const isSupplier = mode === "supplier";
+  const saving = isCreating;
 
   return (
     <div
@@ -284,10 +414,12 @@ export function AddSupplierModal({
         <div className="mb-6 flex items-start justify-between">
           <div>
             <h2 className="mb-1 text-[20px] font-bold text-[var(--figma-navy)]">
-              Add New {isSupplier ? "Supplier" : "Sub-Vendor"}
+              {isEdit ? "Edit" : "Add New"} {isSupplier ? "Supplier" : "Sub-Vendor"}
             </h2>
             <p className="text-[13px] text-[var(--figma-gray500)]">
-              Fill in the details below to create a new record
+              {isEdit
+                ? "Update the details below and save your changes"
+                : "Fill in the details below to create a new record"}
             </p>
           </div>
           <button
@@ -299,44 +431,46 @@ export function AddSupplierModal({
           </button>
         </div>
 
-        <div
-          className="mb-7 flex gap-0.5 rounded-xl p-1 neu-inset"
-          style={{ background: "var(--figma-gray100)" }}
-        >
-          {(
-            [
-              { id: "supplier" as FormMode, icon: "storefront", label: "Supplier" },
-              { id: "subvendor" as FormMode, icon: "engineering", label: "Sub-Vendor" },
-            ] as const
-          ).map((opt) => {
-            const isActive = mode === opt.id;
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => {
-                  setMode(opt.id);
-                  setForm({ ...EMPTY_FORM });
-                  setErrors({});
-                }}
-                className={cn(
-                  "flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-[9px] border-none py-2.5 text-[14px] transition-all duration-200",
-                  isActive
-                    ? "bg-white font-semibold text-[var(--figma-navy)] neu-raised"
-                    : "bg-transparent font-normal text-[var(--figma-gray500)]",
-                )}
-              >
-                <MaterialIcon
-                  name={opt.icon}
-                  outlined={!isActive}
-                  size={18}
-                  className={isActive ? "text-[var(--figma-teal)]" : "text-[var(--figma-gray400)]"}
-                />
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
+        {!isEdit && (
+          <div
+            className="mb-7 flex gap-0.5 rounded-xl p-1 neu-inset"
+            style={{ background: "var(--figma-gray100)" }}
+          >
+            {(
+              [
+                { id: "supplier" as FormMode, icon: "storefront", label: "Supplier" },
+                { id: "subvendor" as FormMode, icon: "engineering", label: "Sub-Vendor" },
+              ] as const
+            ).map((opt) => {
+              const isActive = mode === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => {
+                    setMode(opt.id);
+                    setForm({ ...EMPTY_FORM });
+                    setErrors({});
+                  }}
+                  className={cn(
+                    "flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-[9px] border-none py-2.5 text-[14px] transition-all duration-200",
+                    isActive
+                      ? "bg-white font-semibold text-[var(--figma-navy)] neu-raised"
+                      : "bg-transparent font-normal text-[var(--figma-gray500)]",
+                  )}
+                >
+                  <MaterialIcon
+                    name={opt.icon}
+                    outlined={!isActive}
+                    size={18}
+                    className={isActive ? "text-[var(--figma-teal)]" : "text-[var(--figma-gray400)]"}
+                  />
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <div className="flex flex-col gap-6">
           <FormSection icon="info" title="Basic Information">
@@ -388,10 +522,10 @@ export function AddSupplierModal({
 
           <FormSection icon="contact_page" title="Contact Information">
             <FormInput
-              label="Contact Person"
+              label={isSupplier ? "Contact Person" : "Company"}
               value={form.contactPerson}
               onChange={set("contactPerson")}
-              placeholder="Full name"
+              placeholder={isSupplier ? "Full name" : "Company name"}
               icon="person"
               error={errors.contactPerson}
             />
@@ -425,20 +559,6 @@ export function AddSupplierModal({
           {isSupplier ? (
             <FormSection icon="price_change" title="Rates & Terms">
               <div className="grid grid-cols-2 gap-3">
-                <FormInput
-                  label="Base Rate"
-                  value={form.rate}
-                  onChange={set("rate")}
-                  placeholder="e.g. € 185"
-                  icon="euro"
-                />
-                <FormInput
-                  label="Unit"
-                  value={form.unit}
-                  onChange={set("unit")}
-                  placeholder="e.g. per m²"
-                  icon="straighten"
-                />
                 <FormSelect
                   label="Credit Terms"
                   value={form.creditTerms}
@@ -457,22 +577,13 @@ export function AddSupplierModal({
             </FormSection>
           ) : (
             <FormSection icon="event_available" title="Availability">
-              <div className="grid grid-cols-2 gap-3">
-                <FormSelect
-                  label="Current Availability"
-                  value={form.availability}
-                  onChange={set("availability")}
-                  options={AVAILABILITY_OPTIONS}
-                  icon="event_available"
-                />
-                <FormInput
-                  label="Day Rate"
-                  value={form.rate}
-                  onChange={set("rate")}
-                  placeholder="e.g. € 450/day"
-                  icon="euro"
-                />
-              </div>
+              <FormSelect
+                label="Current Availability"
+                value={form.availability}
+                onChange={set("availability")}
+                options={AVAILABILITY_OPTIONS}
+                icon="event_available"
+              />
             </FormSection>
           )}
 
@@ -511,7 +622,7 @@ export function AddSupplierModal({
             ) : (
               <>
                 <MaterialIcon name="save" outlined size={16} />
-                Save {isSupplier ? "Supplier" : "Sub-Vendor"}
+                {isEdit ? "Save Changes" : `Save ${isSupplier ? "Supplier" : "Sub-Vendor"}`}
               </>
             )}
           </GradientButton>

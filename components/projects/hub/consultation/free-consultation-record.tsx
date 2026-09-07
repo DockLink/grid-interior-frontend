@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { SAMPLE_TASKS } from "@/lib/projects/mock-consultation";
-import { TEAM_MEMBERS } from "@/lib/projects/mock-projects";
+import { useHubTeam } from "@/lib/projects/hub-team-context";
 import type { ConsultTask, ModeType } from "@/types/consultation";
 import type { ActiveProjectView } from "@/types/project-hub";
 
@@ -30,6 +30,7 @@ export function FreeConsultationRecord({
   onBack: () => void;
   onConvertToPaid: () => void;
 }) {
+  const teamMembers = useHubTeam();
   const [tasks, setTasks] = useState<ConsultTask[]>(SAMPLE_TASKS);
   const [notes, setNotes] = useState("");
   const [dateVal, setDateVal] = useState("2026-07-24");
@@ -87,7 +88,7 @@ export function FreeConsultationRecord({
         />
         <div className="flex flex-col">
           {tasks.map((task, idx) => {
-            const m = TEAM_MEMBERS.find((t) => t.id === task.assigneeId);
+            const m = teamMembers.find((t) => t.id === task.assigneeId);
             return (
               <div
                 key={task.id}

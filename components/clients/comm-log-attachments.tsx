@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
-import type { CommLogAttachment, CommLogAttachmentKind } from "@/lib/clients/mock-clients";
+import type { CommLogAttachment, CommLogAttachmentKind } from "@/types/clients";
 import { cn } from "@/lib/utils";
 
 const ACCEPT =

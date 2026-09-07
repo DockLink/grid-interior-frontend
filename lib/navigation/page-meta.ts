@@ -1,29 +1,14 @@
 import { NAV_ROUTES, projectRoute } from "@/types/navigation";
-import { CLIENTS } from "@/lib/clients/mock-clients";
-import { getActiveProject } from "@/lib/projects/mock-projects";
-import { SUPPLIERS, SUB_VENDORS } from "@/lib/suppliers/mock-suppliers";
 
 export type PageMeta = {
   title: string;
   breadcrumb: string[];
 };
 
-function clientName(id: string): string {
-  const client = CLIENTS.find((c) => String(c.id) === id);
-  return client?.name ?? "Client Profile";
-}
-
-function supplierName(id: string): string {
-  const supplier = SUPPLIERS.find((s) => String(s.id) === id);
-  return supplier?.name ?? "Supplier Profile";
-}
-
-function subVendorName(id: string): string {
-  const vendor = SUB_VENDORS.find((v) => String(v.id) === id);
-  return vendor?.name ?? "Sub-Vendor Profile";
-}
-
-export function getPageMeta(pathname: string): PageMeta {
+export function getPageMeta(
+  pathname: string,
+  options: { skipEntityLookup?: boolean } = {},
+): PageMeta {
   if (pathname === NAV_ROUTES.superAdminDashboard || pathname === NAV_ROUTES.adminDashboard) {
     return { title: "Dashboard", breadcrumb: ["GRID CRM", "Dashboard"] };
   }
@@ -64,81 +49,70 @@ export function getPageMeta(pathname: string): PageMeta {
     return { title: "Settings", breadcrumb: ["GRID CRM", "Settings"] };
   }
 
-  const commLogMatch = pathname.match(/^\/clients\/(\d+)\/comm-log$/);
-  if (commLogMatch) {
-    const name = clientName(commLogMatch[1]!);
-    return {
-      title: "Communication Log",
-      breadcrumb: ["Clients", name, "Comm Log"],
-    };
-  }
-
-  const clientMatch = pathname.match(/^\/clients\/(\d+)$/);
-  if (clientMatch) {
-    const name = clientName(clientMatch[1]!);
-    return { title: name, breadcrumb: ["Clients", name] };
-  }
-
-  const subVendorMatch = pathname.match(/^\/suppliers\/sub-vendors\/(\d+)$/);
-  if (subVendorMatch) {
-    const name = subVendorName(subVendorMatch[1]!);
-    return { title: name, breadcrumb: ["Suppliers", "Sub-Vendors", name] };
-  }
-
-  const supplierMatch = pathname.match(/^\/suppliers\/(\d+)$/);
-  if (supplierMatch) {
-    const name = supplierName(supplierMatch[1]!);
-    return { title: "Supplier Profile", breadcrumb: ["Suppliers", name] };
-  }
-
-  if (pathname.startsWith(`${NAV_ROUTES.projects}/`)) {
-    const workspaceMatch = pathname.match(
-      /^\/projects\/([^/]+)\/(consultation|concept|layout|threed|detail|execution)$/,
-    );
-    if (workspaceMatch) {
-      const project = getActiveProject(workspaceMatch[1]!);
-      const name = project?.name ?? "Project";
-      const segment = workspaceMatch[2]!;
-      const titles: Record<string, string> = {
-        consultation: "Consultation",
-        concept: "Concept Design",
-        layout: "Layout",
-        threed: "3D Design",
-        detail: "Detail Drawings",
-        execution: "Execution",
-      };
-      const title = titles[segment] ?? "Workspace";
+  if (options.skipEntityLookup) {
+    const commLogMatch = pathname.match(/^\/clients\/([^/]+)\/comm-log$/);
+    if (commLogMatch) {
       return {
-        title,
-        breadcrumb: ["Projects", name, title],
+        title: "Communication Log",
+        breadcrumb: ["Clients", "Client Profile", "Comm Log"],
       };
     }
-    const overviewMatch = pathname.match(/^\/projects\/([^/]+)$/);
-    if (overviewMatch) {
-      const project = getActiveProject(overviewMatch[1]!);
+    const clientMatch = pathname.match(/^\/clients\/([^/]+)$/);
+    if (clientMatch) {
+      return { title: "Client Profile", breadcrumb: ["Clients", "Client Profile"] };
+    }
+    const subVendorMatch = pathname.match(/^\/suppliers\/sub-vendors\/([^/]+)$/);
+    if (subVendorMatch) {
       return {
-        title: project?.name ?? "Project Overview",
-        breadcrumb: ["Projects", project?.name ?? "Overview"],
+        title: "Sub-Vendor Profile",
+        breadcrumb: ["Suppliers", "Sub-Vendors", "Sub-Vendor Profile"],
       };
     }
-    const tabMatch = pathname.match(
-      /^\/projects\/([^/]+)\/(files|tasks|minutes|timeline|links|hold-requests)$/,
-    );
-    if (tabMatch) {
-      const project = getActiveProject(tabMatch[1]!);
-      const name = project?.name ?? "Project";
-      const titles: Record<string, string> = {
-        files: "Documents",
-        tasks: "Tasks",
-        minutes: "Minutes",
-        timeline: "Timeline",
-        links: "Suppliers & Clients",
-        "hold-requests": "Hold Requests",
-      };
-      const title = titles[tabMatch[2]!] ?? "Detail";
-      return { title, breadcrumb: ["Projects", name, title] };
+    const supplierMatch = pathname.match(/^\/suppliers\/([^/]+)$/);
+    if (supplierMatch) {
+      return { title: "Supplier Profile", breadcrumb: ["Suppliers", "Supplier Profile"] };
     }
-    return { title: "Project Detail", breadcrumb: ["Projects", "Overview"] };
+    if (pathname.startsWith(`${NAV_ROUTES.projects}/`)) {
+      const workspaceMatch = pathname.match(
+        /^\/projects\/([^/]+)\/(consultation|concept|layout|threed|detail|execution)$/,
+      );
+      if (workspaceMatch) {
+        const segment = workspaceMatch[2]!;
+        const titles: Record<string, string> = {
+          consultation: "Consultation",
+          concept: "Concept Design",
+          layout: "Layout",
+          threed: "3D Design",
+          detail: "Detail Drawings",
+          execution: "Execution",
+        };
+        const title = titles[segment] ?? "Workspace";
+        return { title, breadcrumb: ["Projects", "Project", title] };
+      }
+      const overviewMatch = pathname.match(/^\/projects\/([^/]+)$/);
+      if (overviewMatch) {
+        return { title: "Project Overview", breadcrumb: ["Projects", "Overview"] };
+      }
+      const tabMatch = pathname.match(
+        /^\/projects\/([^/]+)\/(files|tasks|minutes|timeline|milestones|client-view|materials|links|hold-requests)$/,
+      );
+      if (tabMatch) {
+        const titles: Record<string, string> = {
+          files: "Documents",
+          tasks: "Tasks",
+          minutes: "Minutes",
+          timeline: "Timeline",
+          milestones: "Milestones",
+          "client-view": "Client View",
+          materials: "Materials",
+          links: "Suppliers & Clients",
+          "hold-requests": "Hold Requests",
+        };
+        const title = titles[tabMatch[2]!] ?? "Detail";
+        return { title, breadcrumb: ["Projects", "Project", title] };
+      }
+      return { title: "Project Detail", breadcrumb: ["Projects", "Overview"] };
+    }
   }
 
   return { title: "Dashboard", breadcrumb: ["GRID CRM", "Dashboard"] };
