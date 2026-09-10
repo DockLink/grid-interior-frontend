@@ -1,7 +1,41 @@
 export type SupplierCategory =
-  | 'Furniture'
+  // New form options
+  | 'Furniture Manufacturing'
+  | 'Office Furniture'
+  | 'Fabrics & Textiles'
+  | 'Curtains & Blinds'
   | 'Flooring'
+  | 'Carpets & Rugs'
+  | 'Tiles & Stone'
+  | 'Sanitaryware & Bathroom Fittings'
+  | 'Plumbing Fixtures'
   | 'Lighting'
+  | 'Air Conditioning & Ventilation'
+  | 'Glass & Aluminium'
+  | 'Ceiling & Partition'
+  | 'Paint & Wall Finishes'
+  | 'Wallpaper & Wall Coverings'
+  | 'Wall Panels'
+  | 'Doors & Hardware'
+  | 'Locks & Ironmongery'
+  | 'Kitchen & Pantry Equipment'
+  | 'Appliances'
+  | 'Signage'
+  | 'Printing & Stickers'
+  | 'CNC / Laser Cutting'
+  | 'Acrylic & Display Fabrication'
+  | 'Mirrors'
+  | 'Décor & Accessories'
+  | 'Artwork & Framing'
+  | 'Indoor Plants & Landscaping'
+  | 'Soft Furnishings'
+  | 'Security & CCTV'
+  | 'Smart Home / Automation'
+  | 'Equipment / Tool Rental'
+  | 'General Hardware & Building Materials'
+  | 'Other'
+  // Legacy values (existing API / mock data)
+  | 'Furniture'
   | 'Fabrics'
   | 'Masonry'
   | 'Electrical'
@@ -11,16 +45,42 @@ export type SupplierCategory =
   | 'Ironmongery'
 
 export type SubVendorSpecialty =
-  | 'Masonry'
-  | 'Plumbing'
+  // New form options
+  | 'Civil & Masonry'
+  | 'Carpentry & Joinery'
   | 'Electrical'
+  | 'Plumbing'
+  | 'Painting'
+  | 'Wall Finishing'
+  | 'Tiling'
+  | 'Flooring Installation'
+  | 'Ceiling Work'
+  | 'Partition and Gypsum Work'
+  | 'Glass & Aluminium Installation'
+  | 'Steel & Metal Fabrication'
+  | 'Upholstery'
+  | 'Curtain & Blind Installation'
+  | 'Wallpaper Installation'
+  | 'Signage Installation'
+  | 'Sticker / Vinyl Installation'
+  | 'CNC / Laser Cutting'
+  | 'Air Conditioning & Ventilation'
+  | 'CCTV & Security'
+  | 'Automation / Smart Systems'
+  | 'Cleaning'
+  | 'Debris Removal'
+  | 'Transport & Delivery'
+  | 'General Labour'
+  | 'Handyman / Maintenance'
+  | 'Other'
+  // Legacy values (existing API / mock data)
+  | 'Masonry'
   | 'Plastering'
   | 'Joinery'
-  | 'Tiling'
-  | 'Painting'
   | 'HVAC'
 
 export type SupplierStatus = 'Active' | 'Inactive'
+export type SupplierRange = 'Budget' | 'Standard' | 'Premium'
 export type AvailabilityStatus = 'Available' | 'Busy' | 'Unknown'
 export type DeliveryStatus = 'Delivered' | 'Pending' | 'Delayed'
 export type PaymentStatus = 'Paid' | 'Partial' | 'Unpaid'
@@ -29,6 +89,7 @@ export interface Supplier {
   id: number
   name: string
   category: SupplierCategory
+  supplierRange: SupplierRange
   contactPerson: string
   phone: string
   email: string
@@ -99,6 +160,7 @@ export const SUPPLIERS: Supplier[] = [
     id: 1,
     name: 'Poliform Milano',
     category: 'Furniture',
+    supplierRange: 'Premium',
     contactPerson: 'Andrea Colombo',
     phone: '+39 031 628 111',
     email: 'trade@poliform.it',
@@ -115,6 +177,7 @@ export const SUPPLIERS: Supplier[] = [
     id: 2,
     name: 'Fiemme 3000',
     category: 'Flooring',
+    supplierRange: 'Premium',
     contactPerson: 'Marco Visintin',
     phone: '+39 0462 501 500',
     email: 'm.visintin@fiemme3000.it',
@@ -130,6 +193,7 @@ export const SUPPLIERS: Supplier[] = [
     id: 3,
     name: 'Flos Architectural',
     category: 'Lighting',
+    supplierRange: 'Premium',
     contactPerson: 'Elena Fusco',
     phone: '+39 030 329 3111',
     email: 'e.fusco@flos.com',
@@ -145,6 +209,7 @@ export const SUPPLIERS: Supplier[] = [
     id: 4,
     name: 'Rubelli Textiles',
     category: 'Fabrics',
+    supplierRange: 'Standard',
     contactPerson: 'Giulia Trevisan',
     phone: '+39 041 241 3111',
     email: 'contract@rubelli.com',
@@ -160,6 +225,7 @@ export const SUPPLIERS: Supplier[] = [
     id: 5,
     name: 'Gres Ceramiche',
     category: 'Tiles',
+    supplierRange: 'Standard',
     contactPerson: 'Roberto Mele',
     phone: '+39 0536 861 001',
     email: 'r.mele@gresceramiche.it',
@@ -174,6 +240,7 @@ export const SUPPLIERS: Supplier[] = [
     id: 6,
     name: 'Bertolotto Porte',
     category: 'Joinery',
+    supplierRange: 'Standard',
     contactPerson: 'Stefano Bertolotto',
     phone: '+39 0131 838 011',
     email: 's.bertolotto@bertolottoportе.it',
@@ -188,6 +255,7 @@ export const SUPPLIERS: Supplier[] = [
     id: 7,
     name: 'Cattaneo Illuminazione',
     category: 'Lighting',
+    supplierRange: 'Budget',
     contactPerson: 'Paola Cattaneo',
     phone: '+39 031 460 555',
     email: 'trade@cattaneo.it',
@@ -202,6 +270,7 @@ export const SUPPLIERS: Supplier[] = [
     id: 8,
     name: 'Roccia Naturale',
     category: 'Masonry',
+    supplierRange: 'Budget',
     contactPerson: 'Carlo Fontana',
     phone: '+39 02 4800 1234',
     email: 'c.fontana@roccia.it',
@@ -377,6 +446,38 @@ export const CATEGORY_CFG: Record<string, { color: string; bg: string }> = {
   Plastering:  { color: '#8B5CF6', bg: 'rgba(139,92,246,0.10)'  },
   Painting:    { color: '#059669', bg: 'rgba(5,150,105,0.10)'   },
   HVAC:        { color: '#0284C7', bg: 'rgba(2,132,199,0.10)'   },
+  'Furniture Manufacturing': { color: '#1B2A4A', bg: 'rgba(27,42,74,0.10)' },
+  'Office Furniture': { color: '#334155', bg: 'rgba(51,65,85,0.10)' },
+  'Fabrics & Textiles': { color: '#9B59B6', bg: 'rgba(155,89,182,0.10)' },
+  'Curtains & Blinds': { color: '#A855F7', bg: 'rgba(168,85,247,0.10)' },
+  'Carpets & Rugs': { color: '#0D9488', bg: 'rgba(13,148,136,0.10)' },
+  'Tiles & Stone': { color: '#2C7BB6', bg: 'rgba(44,123,182,0.10)' },
+  'Sanitaryware & Bathroom Fittings': { color: '#0891B2', bg: 'rgba(8,145,178,0.10)' },
+  'Plumbing Fixtures': { color: '#3FA66B', bg: 'rgba(63,166,107,0.10)' },
+  'Air Conditioning & Ventilation': { color: '#0284C7', bg: 'rgba(2,132,199,0.10)' },
+  'Glass & Aluminium': { color: '#64748B', bg: 'rgba(100,116,139,0.10)' },
+  'Ceiling & Partition': { color: '#78716C', bg: 'rgba(120,113,108,0.10)' },
+  'Paint & Wall Finishes': { color: '#059669', bg: 'rgba(5,150,105,0.10)' },
+  'Wallpaper & Wall Coverings': { color: '#DB2777', bg: 'rgba(219,39,119,0.10)' },
+  'Wall Panels': { color: '#B45309', bg: 'rgba(180,83,9,0.10)' },
+  'Doors & Hardware': { color: '#57534E', bg: 'rgba(87,83,78,0.10)' },
+  'Locks & Ironmongery': { color: '#374151', bg: 'rgba(55,65,81,0.10)' },
+  'Kitchen & Pantry Equipment': { color: '#EA580C', bg: 'rgba(234,88,12,0.10)' },
+  Appliances: { color: '#DC2626', bg: 'rgba(220,38,38,0.10)' },
+  Signage: { color: '#CA8A04', bg: 'rgba(202,138,4,0.10)' },
+  'Printing & Stickers': { color: '#E11D48', bg: 'rgba(225,29,72,0.10)' },
+  'CNC / Laser Cutting': { color: '#4F46E5', bg: 'rgba(79,70,229,0.10)' },
+  'Acrylic & Display Fabrication': { color: '#7C3AED', bg: 'rgba(124,58,237,0.10)' },
+  Mirrors: { color: '#0EA5E9', bg: 'rgba(14,165,233,0.10)' },
+  'Décor & Accessories': { color: '#C026D3', bg: 'rgba(192,38,211,0.10)' },
+  'Artwork & Framing': { color: '#BE185D', bg: 'rgba(190,24,93,0.10)' },
+  'Indoor Plants & Landscaping': { color: '#16A34A', bg: 'rgba(22,163,74,0.10)' },
+  'Soft Furnishings': { color: '#D946EF', bg: 'rgba(217,70,239,0.10)' },
+  'Security & CCTV': { color: '#1E293B', bg: 'rgba(30,41,59,0.10)' },
+  'Smart Home / Automation': { color: '#2563EB', bg: 'rgba(37,99,235,0.10)' },
+  'Equipment / Tool Rental': { color: '#9333EA', bg: 'rgba(147,51,234,0.10)' },
+  'General Hardware & Building Materials': { color: '#6B7280', bg: 'rgba(107,114,128,0.10)' },
+  Other: { color: '#9CA3AF', bg: 'rgba(156,163,175,0.10)' },
 }
 
 export const AVAILABILITY_CFG: Record<AvailabilityStatus, { color: string; label: string }> = {

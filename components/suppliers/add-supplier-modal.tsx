@@ -15,40 +15,91 @@ import type {
   SubVendorSpecialty,
   Supplier,
   SupplierCategory,
+  SupplierRange,
   UpdateSubVendorPayload,
   UpdateSupplierPayload,
 } from "@/types/suppliers";
+import { SUPPLIER_RANGES } from "@/lib/suppliers/map-suppliers";
 
 type FormMode = "supplier" | "subvendor";
 
 const SUPPLIER_CATEGORIES = [
-  "Furniture",
+  "Furniture Manufacturing",
+  "Office Furniture",
+  "Fabrics & Textiles",
+  "Curtains & Blinds",
   "Flooring",
+  "Carpets & Rugs",
+  "Tiles & Stone",
+  "Sanitaryware & Bathroom Fittings",
+  "Plumbing Fixtures",
   "Lighting",
-  "Fabrics",
-  "Masonry",
-  "Electrical",
-  "Plumbing",
-  "Tiles",
-  "Joinery",
-  "Ironmongery",
+  "Air Conditioning & Ventilation",
+  "Glass & Aluminium",
+  "Ceiling & Partition",
+  "Paint & Wall Finishes",
+  "Wallpaper & Wall Coverings",
+  "Wall Panels",
+  "Doors & Hardware",
+  "Locks & Ironmongery",
+  "Kitchen & Pantry Equipment",
+  "Appliances",
+  "Signage",
+  "Printing & Stickers",
+  "CNC / Laser Cutting",
+  "Acrylic & Display Fabrication",
+  "Mirrors",
+  "Décor & Accessories",
+  "Artwork & Framing",
+  "Indoor Plants & Landscaping",
+  "Soft Furnishings",
+  "Security & CCTV",
+  "Smart Home / Automation",
+  "Equipment / Tool Rental",
+  "General Hardware & Building Materials",
+  "Other",
 ];
 const SUBVENDOR_SPECIALTIES = [
-  "Masonry",
-  "Plumbing",
+  "Civil & Masonry",
+  "Carpentry & Joinery",
   "Electrical",
-  "Plastering",
-  "Joinery",
-  "Tiling",
+  "Plumbing",
   "Painting",
-  "HVAC",
+  "Wall Finishing",
+  "Tiling",
+  "Flooring Installation",
+  "Ceiling Work",
+  "Partition and Gypsum Work",
+  "Glass & Aluminium Installation",
+  "Steel & Metal Fabrication",
+  "Upholstery",
+  "Curtain & Blind Installation",
+  "Wallpaper Installation",
+  "Signage Installation",
+  "Sticker / Vinyl Installation",
+  "CNC / Laser Cutting",
+  "Air Conditioning & Ventilation",
+  "CCTV & Security",
+  "Automation / Smart Systems",
+  "Cleaning",
+  "Debris Removal",
+  "Transport & Delivery",
+  "General Labour",
+  "Handyman / Maintenance",
+  "Other",
 ];
-const CREDIT_TERMS = ["Net 15", "Net 30", "Net 45", "Net 60", "Due on completion", "Advance payment"];
+const CREDIT_TERMS = [
+  "Immediate Payment",
+  "50% Advance 50% Completion",
+  "Full Payment before dispatch",
+  "Due on Completion",
+];
 const AVAILABILITY_OPTIONS = ["Available", "Busy", "Unknown"];
 
 interface FormData {
   name: string;
   category: string;
+  supplierRange: string;
   contactPerson: string;
   phone: string;
   email: string;
@@ -64,11 +115,12 @@ interface FormData {
 const EMPTY_FORM: FormData = {
   name: "",
   category: "",
+  supplierRange: "",
   contactPerson: "",
   phone: "",
   email: "",
   address: "",
-  creditTerms: "Net 30",
+  creditTerms: "Due on Completion",
   leadTime: "",
   specialty: "",
   availability: "Available",
@@ -81,12 +133,13 @@ function supplierToForm(supplier: Supplier): FormData {
     ...EMPTY_FORM,
     name: supplier.name,
     category: supplier.category,
+    supplierRange: supplier.supplierRange,
     contactPerson: supplier.contactPerson === "—" ? "" : supplier.contactPerson,
     phone: supplier.phone === "—" ? "" : supplier.phone,
     email: supplier.email === "—" ? "" : supplier.email,
     address: supplier.address === "—" ? "" : supplier.address,
     website: supplier.website ?? "",
-    creditTerms: supplier.creditTerms === "—" ? "Net 30" : supplier.creditTerms,
+    creditTerms: supplier.creditTerms === "—" ? "Due on Completion" : supplier.creditTerms,
     leadTime: supplier.avgLeadTime === "—" ? "" : supplier.avgLeadTime,
     notes: supplier.notes ?? "",
   };
@@ -184,18 +237,26 @@ function FormSelect({
   onChange,
   options,
   icon,
+  error,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: string[];
   icon?: string;
+  error?: string;
 }) {
   const [focused, setFocused] = useState(false);
+  const hasError = !!error;
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-[13px] font-medium text-[var(--figma-navy)]">{label}</label>
+      <label
+        className="text-[13px] font-medium"
+        style={{ color: hasError ? "var(--figma-alert)" : "var(--figma-navy)" }}
+      >
+        {label}
+      </label>
       <div className="relative">
         {icon && (
           <MaterialIcon
@@ -204,7 +265,11 @@ function FormSelect({
             size={16}
             className={cn(
               "pointer-events-none absolute top-1/2 left-3 -translate-y-1/2",
-              focused ? "text-[var(--figma-teal)]" : "text-[var(--figma-gray400)]",
+              focused
+                ? "text-[var(--figma-teal)]"
+                : hasError
+                  ? "text-[var(--figma-alert)]"
+                  : "text-[var(--figma-gray400)]",
             )}
           />
         )}
@@ -217,9 +282,11 @@ function FormSelect({
             "w-full cursor-pointer appearance-none rounded-[10px] bg-white py-2.5 pr-9 text-[13px] outline-none transition-all duration-150 neu-inset",
             icon ? "pl-9" : "pl-3.5",
             value ? "text-[var(--figma-navy)]" : "text-[var(--figma-gray400)]",
-            focused
-              ? "border-2 border-[var(--figma-teal)] shadow-[var(--neu-inset),0_0_0_3px_rgba(14,124,134,0.08)]"
-              : "border-[1.5px] border-[var(--figma-border)]",
+            hasError
+              ? "border-2 border-[var(--figma-alert)] shadow-[var(--neu-inset),0_0_0_3px_rgba(242,109,109,0.08)]"
+              : focused
+                ? "border-2 border-[var(--figma-teal)] shadow-[var(--neu-inset),0_0_0_3px_rgba(14,124,134,0.08)]"
+                : "border-[1.5px] border-[var(--figma-border)]",
           )}
         >
           <option value="">Select…</option>
@@ -236,6 +303,12 @@ function FormSelect({
           className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[var(--figma-gray400)]"
         />
       </div>
+      {hasError && (
+        <div className="flex items-center gap-1.5 text-[11px] text-[var(--figma-alert)]">
+          <MaterialIcon name="error_outline" outlined size={13} />
+          {error}
+        </div>
+      )}
     </div>
   );
 }
@@ -323,6 +396,7 @@ export function AddSupplierModal({
     const errs: Partial<Record<keyof FormData, string>> = {};
     if (!form.name.trim()) errs.name = "This field is required";
     if (mode === "supplier" && !form.category) errs.category = "This field is required";
+    if (mode === "supplier" && !form.supplierRange) errs.supplierRange = "This field is required";
     if (mode === "subvendor" && !form.specialty) errs.specialty = "This field is required";
     if (!form.email.trim()) errs.email = "This field is required";
     if (mode === "supplier" && !form.contactPerson.trim()) {
@@ -355,6 +429,7 @@ export function AddSupplierModal({
         const payload = {
           name: form.name.trim(),
           category: form.category as SupplierCategory,
+          supplier_range: form.supplierRange as SupplierRange,
           contact_person: form.contactPerson.trim() || undefined,
           phone: form.phone.trim() || undefined,
           email: form.email.trim() || undefined,
@@ -400,6 +475,18 @@ export function AddSupplierModal({
 
   const isSupplier = mode === "supplier";
   const saving = isCreating;
+  const categoryOptions =
+    form.category && !SUPPLIER_CATEGORIES.includes(form.category)
+      ? [form.category, ...SUPPLIER_CATEGORIES]
+      : SUPPLIER_CATEGORIES;
+  const creditTermsOptions =
+    form.creditTerms && !CREDIT_TERMS.includes(form.creditTerms)
+      ? [form.creditTerms, ...CREDIT_TERMS]
+      : CREDIT_TERMS;
+  const specialtyOptions =
+    form.specialty && !SUBVENDOR_SPECIALTIES.includes(form.specialty)
+      ? [form.specialty, ...SUBVENDOR_SPECIALTIES]
+      : SUBVENDOR_SPECIALTIES;
 
   return (
     <div
@@ -488,25 +575,27 @@ export function AddSupplierModal({
                   label="Category"
                   value={form.category}
                   onChange={set("category")}
-                  options={SUPPLIER_CATEGORIES}
+                  options={categoryOptions}
                   icon="category"
+                  error={errors.category}
                 />
               ) : (
                 <FormSelect
                   label="Specialty"
                   value={form.specialty}
                   onChange={set("specialty")}
-                  options={SUBVENDOR_SPECIALTIES}
+                  options={specialtyOptions}
                   icon="engineering"
                 />
               )}
               {isSupplier ? (
-                <FormInput
-                  label="Website"
-                  value={form.website}
-                  onChange={set("website")}
-                  placeholder="e.g. poliform.it"
-                  icon="language"
+                <FormSelect
+                  label="Supplier Range"
+                  value={form.supplierRange}
+                  onChange={set("supplierRange")}
+                  options={[...SUPPLIER_RANGES]}
+                  icon="sell"
+                  error={errors.supplierRange}
                 />
               ) : (
                 <FormSelect
@@ -518,6 +607,15 @@ export function AddSupplierModal({
                 />
               )}
             </div>
+            {isSupplier && (
+              <FormInput
+                label="Website"
+                value={form.website}
+                onChange={set("website")}
+                placeholder="e.g. poliform.it"
+                icon="language"
+              />
+            )}
           </FormSection>
 
           <FormSection icon="contact_page" title="Contact Information">
@@ -563,7 +661,7 @@ export function AddSupplierModal({
                   label="Credit Terms"
                   value={form.creditTerms}
                   onChange={set("creditTerms")}
-                  options={CREDIT_TERMS}
+                  options={creditTermsOptions}
                   icon="account_balance"
                 />
                 <FormInput

@@ -22,6 +22,7 @@ export function downloadSuppliersCsv(suppliers: Supplier[], filename = "supplier
   const header = [
     "Name",
     "Category",
+    "Range",
     "Contact Person",
     "Email",
     "Phone",
@@ -36,6 +37,7 @@ export function downloadSuppliersCsv(suppliers: Supplier[], filename = "supplier
       [
         s.name,
         s.category,
+        s.supplierRange,
         s.contactPerson,
         s.email,
         s.phone,

@@ -71,7 +71,10 @@ export function mapProjectToOverviewView(
     endDate: formatShortDate(resolveProjectEndDate(project)),
     location: project.location ?? "—",
     distanceKm: null,
-    projectType: project.description?.trim() || "Interior Design",
+    projectType:
+      project.main_type && project.sub_type
+        ? `${project.main_type} · ${project.sub_type}`
+        : project.description?.trim() || "Interior Design",
     tasksTotal: tasks.length,
     tasksDone,
     daysActive: daysSince(project.start_date),

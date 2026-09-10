@@ -14,6 +14,7 @@ import {
   GradientButton,
   StatusPill,
   StatusToggle,
+  SupplierRangeBadge,
 } from "@/components/suppliers/supplier-ui";
 import { VendorTasksTab } from "@/components/suppliers/vendor-tasks-tab";
 import { useProjects } from "@/hooks/use-projects";
@@ -43,7 +44,12 @@ const TABS = [
   { id: "tasks" as Tab, label: "Tasks & Deadlines", icon: "task_alt" },
 ];
 
-const CREDIT_TERMS = ["Net 15", "Net 30", "Net 45", "Net 60", "Due on completion", "Advance payment"];
+const CREDIT_TERMS = [
+  "Immediate Payment",
+  "50% Advance 50% Completion",
+  "Full Payment before dispatch",
+  "Due on Completion",
+];
 
 const PROJECT_STATUS_CFG: Record<string, { label: string; color: string; bg: string }> = {
   "on-track": { label: "On Track", color: "var(--figma-success)", bg: "rgba(63,166,107,0.10)" },
@@ -139,7 +145,7 @@ function RatesTab({
   isSaving: boolean;
 }) {
   const [creditTerms, setCreditTerms] = useState(
-    supplier.creditTerms === "—" ? "Net 30" : supplier.creditTerms,
+    supplier.creditTerms === "—" ? "Due on Completion" : supplier.creditTerms,
   );
   const [leadTime, setLeadTime] = useState(
     supplier.avgLeadTime === "—" ? "" : supplier.avgLeadTime,
@@ -147,9 +153,14 @@ function RatesTab({
   const [notes, setNotes] = useState(supplier.notes ?? "");
 
   const dirty =
-    creditTerms !== (supplier.creditTerms === "—" ? "Net 30" : supplier.creditTerms) ||
+    creditTerms !== (supplier.creditTerms === "—" ? "Due on Completion" : supplier.creditTerms) ||
     leadTime !== (supplier.avgLeadTime === "—" ? "" : supplier.avgLeadTime) ||
     notes !== (supplier.notes ?? "");
+
+  const creditTermsOptions =
+    creditTerms && !CREDIT_TERMS.includes(creditTerms)
+      ? [creditTerms, ...CREDIT_TERMS]
+      : CREDIT_TERMS;
 
   const handleSave = async () => {
     try {
@@ -196,7 +207,7 @@ function RatesTab({
               onChange={(e) => setCreditTerms(e.target.value)}
               className="w-full cursor-pointer appearance-none rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white py-2.5 pr-9 pl-3.5 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
             >
-              {CREDIT_TERMS.map((term) => (
+              {creditTermsOptions.map((term) => (
                 <option key={term} value={term}>
                   {term}
                 </option>
@@ -521,6 +532,7 @@ export function SupplierProfileScreen({ supplierId }: { supplierId: string }) {
           <div className="mb-1.5 flex flex-wrap items-center gap-3">
             <h1 className="text-[24px] font-bold text-[var(--figma-navy)]">{supplier.name}</h1>
             <CategoryBadge label={supplier.category} />
+            <SupplierRangeBadge range={supplier.supplierRange} />
           </div>
           <div className="flex flex-wrap items-center gap-3.5">
             <div className="flex items-center gap-1.5">

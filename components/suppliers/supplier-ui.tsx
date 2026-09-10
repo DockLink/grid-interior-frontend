@@ -4,8 +4,8 @@ import { useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { CATEGORY_CFG } from "@/lib/projects/link-categories";
-import { AVAILABILITY_CFG } from "@/lib/suppliers/map-suppliers";
-import type { AvailabilityStatus } from "@/types/suppliers";
+import { AVAILABILITY_CFG, SUPPLIER_RANGE_CFG } from "@/lib/suppliers/map-suppliers";
+import type { AvailabilityStatus, SupplierRange } from "@/types/suppliers";
 import { cn } from "@/lib/utils";
 
 export function CategoryBadge({ label }: { label: string }) {
@@ -20,6 +20,20 @@ export function CategoryBadge({ label }: { label: string }) {
       style={{ color: cfg.color, background: cfg.bg }}
     >
       {label}
+    </span>
+  );
+}
+
+export function SupplierRangeBadge({ range }: { range: SupplierRange }) {
+  const cfg = SUPPLIER_RANGE_CFG[range];
+
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-[11px] py-1 text-[11px] font-semibold whitespace-nowrap"
+      style={{ color: cfg.color, background: cfg.bg }}
+    >
+      <MaterialIcon name={cfg.icon} outlined size={13} />
+      {cfg.label}
     </span>
   );
 }

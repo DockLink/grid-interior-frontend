@@ -21,6 +21,7 @@ function toQueryString(params: SuppliersQueryParams = {}): string {
   if (params.limit) qs.set("limit", String(params.limit));
   if (params.search) qs.set("search", params.search);
   if (params.category) qs.set("category", params.category);
+  if (params.supplier_range) qs.set("supplier_range", params.supplier_range);
   if (params.status) qs.set("status", params.status);
   const str = qs.toString();
   return str ? `?${str}` : "";

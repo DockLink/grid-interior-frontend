@@ -125,8 +125,8 @@ export function FileUploadDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[480px] border-[rgba(90,60,30,0.10)] bg-[var(--ds-surface-elevated)]">
-        <DialogHeader className="relative border-[rgba(90,60,30,0.10)]">
+      <DialogContent className="w-[480px] border-[var(--figma-border)] bg-white">
+        <DialogHeader className="relative border-[var(--figma-border)]">
           <DialogTitle>Upload files</DialogTitle>
           <DialogCloseButton onClick={() => onOpenChange(false)} />
         </DialogHeader>
@@ -134,11 +134,11 @@ export function FileUploadDialog({
         <DialogBody className="space-y-3.5">
           {/* Destination */}
           <div>
-            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--ds-secondary-label)]">
+            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--figma-gray400)]">
               Destination
             </p>
-            <div className="flex items-center gap-1.5 rounded-md bg-[var(--ds-bg)] px-2.5 py-2 text-[13px] text-[var(--ds-label)]">
-              <Folder size={13} style={{ color: "var(--ds-accent)" }} />
+            <div className="flex items-center gap-1.5 rounded-md bg-[#F9FAFB] px-2.5 py-2 text-[13px] text-[var(--figma-navy)]">
+              <Folder size={13} style={{ color: "var(--figma-teal)" }} />
               {folderLabel}
             </div>
           </div>
@@ -164,13 +164,13 @@ export function FileUploadDialog({
             }}
             className="flex h-36 flex-col items-center justify-center gap-2 rounded-xl transition-all"
             style={{
-              border: `2px dashed ${dragOver ? "var(--ds-accent)" : "rgba(90,60,30,0.18)"}`,
-              background: dragOver ? "#FDF4E7" : "transparent",
+              border: `2px dashed ${dragOver ? "var(--figma-teal)" : "var(--figma-border)"}`,
+              background: dragOver ? "rgba(14,124,134,0.06)" : "transparent",
             }}
           >
-            <Upload size={24} style={{ color: "var(--ds-accent)" }} />
-            <span className="text-[14px] text-[var(--ds-secondary-label)]">Drag files here</span>
-            <label className="cursor-pointer rounded-md bg-[#F5E6D0] px-3 py-1 text-[12px] font-medium text-[var(--ds-accent)]">
+            <Upload size={24} style={{ color: "var(--figma-teal)" }} />
+            <span className="text-[14px] text-[var(--figma-gray500)]">Drag files here</span>
+            <label className="cursor-pointer rounded-md bg-[rgba(14,124,134,0.10)] px-3 py-1 text-[12px] font-medium text-[var(--figma-teal)]">
               Browse
               <input
                 ref={inputRef}
@@ -188,19 +188,19 @@ export function FileUploadDialog({
               {queue.map((qf, i) => (
                 <div
                   key={i}
-                  className="rounded-lg bg-[var(--ds-bg)] px-3 py-2"
+                  className="rounded-lg bg-[#F9FAFB] px-3 py-2"
                 >
                   <div className="mb-1.5 flex items-center justify-between gap-2">
-                    <span className="truncate text-[13px] font-medium text-[var(--ds-label)]">
+                    <span className="truncate text-[13px] font-medium text-[var(--figma-navy)]">
                       {qf.file.name}
                     </span>
                     <div className="flex shrink-0 items-center gap-2">
-                      <span className="text-[11px] text-[var(--ds-secondary-label)]">{qf.sizeLabel}</span>
+                      <span className="text-[11px] text-[var(--figma-gray500)]">{qf.sizeLabel}</span>
                       {!qf.uploading && !qf.done && (
                         <button
                           type="button"
                           onClick={() => removeQueued(i)}
-                          className="text-[var(--ds-secondary-label)] hover:text-[var(--ds-label)]"
+                          className="text-[var(--figma-gray400)] hover:text-[var(--figma-navy)]"
                         >
                           <X size={12} />
                         </button>
@@ -208,7 +208,7 @@ export function FileUploadDialog({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 overflow-hidden rounded-full bg-[#EDE3D4]" style={{ height: 4 }}>
+                    <div className="flex-1 overflow-hidden rounded-full bg-[var(--figma-gray100)]" style={{ height: 4 }}>
                       <div
                         className="h-full rounded-full transition-all duration-300"
                         style={{
@@ -217,12 +217,12 @@ export function FileUploadDialog({
                             : qf.uploading
                             ? `${Math.max(qf.progress, 2)}%`
                             : "0%",
-                          background: qf.error ? "#DC2626" : "var(--ds-accent)",
+                          background: qf.error ? "#DC2626" : "var(--figma-teal)",
                         }}
                       />
                     </div>
                     {qf.uploading && (
-                      <span className="shrink-0 text-[10px] text-[var(--ds-secondary-label)]">
+                      <span className="shrink-0 text-[10px] text-[var(--figma-gray500)]">
                         {qf.progress}%
                       </span>
                     )}
@@ -236,14 +236,14 @@ export function FileUploadDialog({
           )}
         </DialogBody>
 
-        <DialogFooter className="border-[rgba(90,60,30,0.10)] bg-[var(--ds-bg)]">
+        <DialogFooter className="border-[var(--figma-border)] bg-[#F9FAFB]">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
             disabled={queue.length === 0 || busy || allDone}
             onClick={() => void handleUpload()}
-            className="bg-[var(--ds-accent)] text-white hover:bg-[var(--ds-accent-hover)]"
+            className="bg-[var(--figma-teal)] text-white hover:bg-[var(--figma-teal)]/90"
           >
             {busy ? "Uploading…" : allDone ? "Done" : `Upload ${queue.length > 0 ? `(${queue.length})` : ""}`}
           </Button>
