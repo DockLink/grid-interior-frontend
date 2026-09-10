@@ -1,7 +1,41 @@
 export type SupplierCategory =
-  | "Furniture"
+  // New form options
+  | "Furniture Manufacturing"
+  | "Office Furniture"
+  | "Fabrics & Textiles"
+  | "Curtains & Blinds"
   | "Flooring"
+  | "Carpets & Rugs"
+  | "Tiles & Stone"
+  | "Sanitaryware & Bathroom Fittings"
+  | "Plumbing Fixtures"
   | "Lighting"
+  | "Air Conditioning & Ventilation"
+  | "Glass & Aluminium"
+  | "Ceiling & Partition"
+  | "Paint & Wall Finishes"
+  | "Wallpaper & Wall Coverings"
+  | "Wall Panels"
+  | "Doors & Hardware"
+  | "Locks & Ironmongery"
+  | "Kitchen & Pantry Equipment"
+  | "Appliances"
+  | "Signage"
+  | "Printing & Stickers"
+  | "CNC / Laser Cutting"
+  | "Acrylic & Display Fabrication"
+  | "Mirrors"
+  | "Décor & Accessories"
+  | "Artwork & Framing"
+  | "Indoor Plants & Landscaping"
+  | "Soft Furnishings"
+  | "Security & CCTV"
+  | "Smart Home / Automation"
+  | "Equipment / Tool Rental"
+  | "General Hardware & Building Materials"
+  | "Other"
+  // Legacy values (existing API / mock data)
+  | "Furniture"
   | "Fabrics"
   | "Masonry"
   | "Electrical"
@@ -11,16 +45,42 @@ export type SupplierCategory =
   | "Ironmongery";
 
 export type SubVendorSpecialty =
-  | "Masonry"
-  | "Plumbing"
+  // New form options
+  | "Civil & Masonry"
+  | "Carpentry & Joinery"
   | "Electrical"
+  | "Plumbing"
+  | "Painting"
+  | "Wall Finishing"
+  | "Tiling"
+  | "Flooring Installation"
+  | "Ceiling Work"
+  | "Partition and Gypsum Work"
+  | "Glass & Aluminium Installation"
+  | "Steel & Metal Fabrication"
+  | "Upholstery"
+  | "Curtain & Blind Installation"
+  | "Wallpaper Installation"
+  | "Signage Installation"
+  | "Sticker / Vinyl Installation"
+  | "CNC / Laser Cutting"
+  | "Air Conditioning & Ventilation"
+  | "CCTV & Security"
+  | "Automation / Smart Systems"
+  | "Cleaning"
+  | "Debris Removal"
+  | "Transport & Delivery"
+  | "General Labour"
+  | "Handyman / Maintenance"
+  | "Other"
+  // Legacy values (existing API / mock data)
+  | "Masonry"
   | "Plastering"
   | "Joinery"
-  | "Tiling"
-  | "Painting"
   | "HVAC";
 
 export type SupplierStatus = "Active" | "Inactive";
+export type SupplierRange = "Budget" | "Standard" | "Premium";
 export type AvailabilityStatus = "Available" | "Busy" | "Unknown";
 export type DeliveryStatus = "Delivered" | "Pending" | "Delayed";
 export type PaymentStatus = "Paid" | "Partial" | "Unpaid";
@@ -29,6 +89,7 @@ export interface SupplierApi {
   id: string;
   name: string;
   category: SupplierCategory;
+  supplier_range?: SupplierRange | null;
   contact_person?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -46,6 +107,7 @@ export interface Supplier {
   id: string;
   name: string;
   category: SupplierCategory;
+  supplierRange: SupplierRange;
   contactPerson: string;
   phone: string;
   email: string;
@@ -141,12 +203,14 @@ export interface SuppliersQueryParams {
   limit?: number;
   search?: string;
   category?: SupplierCategory;
+  supplier_range?: SupplierRange;
   status?: SupplierStatus;
 }
 
 export interface CreateSupplierPayload {
   name: string;
   category: SupplierCategory;
+  supplier_range: SupplierRange;
   contact_person?: string;
   phone?: string;
   email?: string;

@@ -27,7 +27,7 @@ const EXT_MAP: Record<string, { color: string; icon: React.ComponentType<{ size?
 };
 
 export function FileTypeIcon({ ext, size = 16 }: { ext: string; size?: number }) {
-  const cfg = EXT_MAP[ext.toLowerCase()] ?? { color: "#9C8573", icon: File };
+  const cfg = EXT_MAP[ext.toLowerCase()] ?? { color: "#9CA3AF", icon: File };
   const Icon = cfg.icon;
   return <Icon size={size} style={{ color: cfg.color, flexShrink: 0 }} />;
 }

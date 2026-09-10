@@ -8,8 +8,35 @@ import type {
   Supplier,
   SupplierApi,
   SupplierCategory,
+  SupplierRange,
   SupplierStatus,
 } from "@/types/suppliers";
+
+export const SUPPLIER_RANGES: SupplierRange[] = ["Budget", "Standard", "Premium"];
+
+export const SUPPLIER_RANGE_CFG: Record<
+  SupplierRange,
+  { color: string; bg: string; icon: string; label: string }
+> = {
+  Budget: {
+    color: "#3FA66B",
+    bg: "rgba(63,166,107,0.10)",
+    icon: "savings",
+    label: "Budget",
+  },
+  Standard: {
+    color: "var(--figma-teal)",
+    bg: "rgba(14,124,134,0.10)",
+    icon: "sell",
+    label: "Standard",
+  },
+  Premium: {
+    color: "#F5A623",
+    bg: "rgba(245,166,35,0.12)",
+    icon: "workspace_premium",
+    label: "Premium",
+  },
+};
 
 export const AVAILABILITY_CFG: Record<AvailabilityStatus, { color: string; label: string }> = {
   Available: { color: "#3FA66B", label: "Available" },
@@ -29,12 +56,19 @@ export const DELIVERY_STATUS_CFG: Record<DeliveryStatus, { color: string; bg: st
   Delayed: { color: "#F26D6D", bg: "rgba(242,109,109,0.10)" },
 };
 
+function parseSupplierRange(raw: Record<string, unknown>): SupplierRange {
+  const value = pickString(raw, "supplier_range", "supplierRange");
+  if (value === "Budget" || value === "Standard" || value === "Premium") return value;
+  return "Standard";
+}
+
 export function mapSupplierApiToView(raw: SupplierApi | Record<string, unknown>): Supplier {
   return {
     id: pickString(raw as Record<string, unknown>, "id") ?? "",
     name: pickString(raw as Record<string, unknown>, "name") ?? "",
     category:
       (pickString(raw as Record<string, unknown>, "category") as SupplierCategory) ?? "Furniture",
+    supplierRange: parseSupplierRange(raw as Record<string, unknown>),
     contactPerson:
       pickString(raw as Record<string, unknown>, "contact_person", "contactPerson") ?? "",
     phone: pickString(raw as Record<string, unknown>, "phone") ?? "",

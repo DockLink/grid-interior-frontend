@@ -63,8 +63,8 @@ export function FileList({
 
   if (!folderPath) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 text-[var(--ds-secondary-label)]">
-        <Folder size={40} className="opacity-30" />
+      <div className="flex h-full flex-col items-center justify-center gap-3 text-[var(--figma-gray400)]">
+        <Folder size={40} className="opacity-40" />
         <p className="text-[13px]">Select a folder to view files</p>
       </div>
     );
@@ -72,7 +72,7 @@ export function FileList({
 
   if (loading) {
     return (
-      <div className="flex h-48 items-center justify-center text-[13px] text-[var(--ds-secondary-label)]">
+      <div className="flex h-48 items-center justify-center text-[13px] text-[var(--figma-gray500)]">
         Loading files…
       </div>
     );
@@ -88,8 +88,8 @@ export function FileList({
 
   if (files.length === 0) {
     return (
-      <div className="flex h-48 flex-col items-center justify-center gap-2 text-[var(--ds-secondary-label)]">
-        <Folder size={32} className="opacity-30" />
+      <div className="flex h-48 flex-col items-center justify-center gap-2 text-[var(--figma-gray400)]">
+        <Folder size={32} className="opacity-40" />
         <p className="text-[13px]">This folder is empty</p>
       </div>
     );
@@ -98,7 +98,7 @@ export function FileList({
   return (
     <div className="h-full overflow-y-auto">
       {/* Column headers */}
-      <div className="sticky top-0 z-10 grid h-9 grid-cols-[1fr_120px_80px_100px] items-center border-b border-[rgba(90,60,30,0.10)] bg-[var(--ds-bg)] px-4 text-[12px] text-[var(--ds-secondary-label)]">
+      <div className="sticky top-0 z-10 grid h-9 grid-cols-[1fr_120px_80px_100px] items-center border-b border-[var(--figma-border)] bg-[#F9FAFB] px-4 text-[11px] font-semibold uppercase tracking-wide text-[var(--figma-gray400)]">
         <span>Name</span>
         <span>Date</span>
         <span>Size</span>
@@ -193,8 +193,8 @@ function FileRow({
           onMouseLeave={onMouseLeave}
           onClick={() => onSelect?.(file)}
           className={cn(
-            "grid h-10 grid-cols-[1fr_120px_80px_100px] items-center border-b border-[rgba(90,60,30,0.07)] px-4 transition-colors",
-            hovered ? "bg-[var(--ds-bg)]" : "bg-transparent",
+            "grid h-10 grid-cols-[1fr_120px_80px_100px] items-center border-b border-[var(--figma-border)] px-4 transition-colors",
+            hovered ? "bg-[rgba(14,124,134,0.03)]" : "bg-transparent",
             onSelect ? "cursor-pointer" : "",
           )}
         >
@@ -209,23 +209,23 @@ function FileRow({
           {/* Name */}
           <div className="flex min-w-0 items-center gap-2">
             <FileTypeIcon ext={ext} size={15} />
-            <span className="truncate text-[13px] font-medium text-[var(--ds-label)]">
+            <span className="truncate text-[13px] font-medium text-[var(--figma-navy)]">
               {file.fileName}
             </span>
             {isVersioned && file.version > 1 && (
-              <span className="shrink-0 rounded-[3px] bg-[#F5E6D0] px-1 text-[9px] font-bold text-[var(--ds-accent)]">
+              <span className="shrink-0 rounded-[3px] bg-[rgba(14,124,134,0.10)] px-1 text-[9px] font-bold text-[var(--figma-teal)]">
                 v{file.version}
               </span>
             )}
           </div>
 
           {/* Date */}
-          <span className="text-[12px] text-[var(--ds-secondary-label)]">
+          <span className="text-[12px] text-[var(--figma-gray500)]">
             {formatFileDate(file.created_at)}
           </span>
 
           {/* Size */}
-          <span className="text-[12px] text-[var(--ds-secondary-label)]">
+          <span className="text-[12px] text-[var(--figma-gray500)]">
             {formatFileSize(file.fileSize)}
           </span>
 
@@ -354,8 +354,8 @@ function ActionButton({
       className="flex items-center rounded p-0.5 transition-colors"
       style={{
         color: danger
-          ? hovered ? "var(--ds-destructive)" : "#C4A090"
-          : hovered ? "var(--ds-label)" : "var(--ds-secondary-label)",
+          ? hovered ? "var(--ds-destructive)" : "var(--figma-gray400)"
+          : hovered ? "var(--figma-navy)" : "var(--figma-gray500)",
       }}
     >
       {icon}

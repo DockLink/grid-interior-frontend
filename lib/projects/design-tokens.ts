@@ -54,6 +54,49 @@ export const PROJECT_TYPES = [
   "Soft Furnishing Refresh",
 ] as const;
 
+export const PROJECT_MAIN_TYPES = [
+  "Residential",
+  "Corporate",
+  "Commercial",
+  "Hospitality",
+] as const;
+
+export type ProjectMainType = (typeof PROJECT_MAIN_TYPES)[number];
+
+export const PROJECT_SUB_TYPES_BY_MAIN: Record<ProjectMainType, readonly string[]> = {
+  Residential: ["House / Villa", "Apartment", "Condominium", "Renovation"],
+  Hospitality: [
+    "Hotel / Resort",
+    "Restaurant",
+    "Café",
+    "Bar / Lounge",
+    "Guest House / Boutique Stay",
+    "Villa / Holiday Rental",
+    "Banquet / Event Space",
+  ],
+  Corporate: [
+    "Corporate Office",
+    "SME Office",
+    "Co-working Space",
+    "Meeting / Conference Room",
+    "Training / Lecture Room",
+    "Executive / Director’s Office",
+    "Staff / Common Areas",
+    "Renovation",
+  ],
+  Commercial: [
+    "Retail Store",
+    "Showroom",
+    "Salon / Beauty",
+    "Wellness / Spa",
+    "Healthcare / Clinic",
+    "Educational",
+    "Kiosk",
+    "Exhibition / Display Space",
+    "Entertainment / Recreation",
+  ],
+};
+
 export type PhaseWorkspace =
   | "consultation"
   | "concept"

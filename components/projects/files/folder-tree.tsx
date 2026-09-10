@@ -92,26 +92,32 @@ function FolderItem({
       className="flex h-[30px] cursor-pointer select-none items-center gap-1 pr-2 box-border transition-colors"
       style={{
         paddingLeft: 14 + depth * 18,
-        background: selected ? "#F5E6D0" : hovered ? "#EDE3D4" : "transparent",
-        borderLeft: selected ? "3px solid var(--ds-accent)" : "3px solid transparent",
+        background: selected
+          ? "rgba(14,124,134,0.10)"
+          : hovered
+            ? "var(--figma-gray100)"
+            : "transparent",
+        borderLeft: selected
+          ? "3px solid var(--figma-teal)"
+          : "3px solid transparent",
       }}
     >
-      <span className="flex w-3 shrink-0 items-center text-[var(--ds-secondary-label)]">
+      <span className="flex w-3 shrink-0 items-center text-[var(--figma-gray400)]">
         {hasChildren ? (
           expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />
         ) : null}
       </span>
 
       {hasChildren && expanded ? (
-        <FolderOpen size={13} style={{ color: "var(--ds-accent)", flexShrink: 0 }} />
+        <FolderOpen size={13} style={{ color: "var(--figma-teal)", flexShrink: 0 }} />
       ) : (
-        <Folder size={13} style={{ color: "var(--ds-accent)", flexShrink: 0 }} />
+        <Folder size={13} style={{ color: "var(--figma-teal)", flexShrink: 0 }} />
       )}
 
       <span
         className={cn(
           "flex-1 truncate text-[13px]",
-          selected ? "font-medium text-[var(--ds-accent)]" : "text-[var(--ds-label)]",
+          selected ? "font-medium text-[var(--figma-teal)]" : "text-[var(--figma-navy)]",
         )}
       >
         {node.name}
@@ -119,12 +125,12 @@ function FolderItem({
 
       <div className="ml-auto flex shrink-0 items-center gap-1">
         {node.isVersioned && (
-          <span className="rounded-[3px] bg-[#F5E6D0] px-1 text-[8px] font-bold text-[var(--ds-accent)]">
+          <span className="rounded-[3px] bg-[rgba(14,124,134,0.10)] px-1 text-[8px] font-bold text-[var(--figma-teal)]">
             V
           </span>
         )}
         {count != null && count > 0 && (
-          <span className="rounded-full bg-[#EDE3D4] px-1.5 text-[10px] text-[var(--ds-secondary-label)]">
+          <span className="rounded-full bg-[var(--figma-gray100)] px-1.5 text-[10px] text-[var(--figma-gray500)]">
             {count}
           </span>
         )}

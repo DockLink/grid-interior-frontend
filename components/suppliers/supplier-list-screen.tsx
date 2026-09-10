@@ -13,17 +13,19 @@ import {
   GradientButton,
   InitialsAvatar,
   StatusToggle,
+  SupplierRangeBadge,
 } from "@/components/suppliers/supplier-ui";
 import { useSubVendors } from "@/hooks/use-sub-vendors";
 import { useSuppliers } from "@/hooks/use-suppliers";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { CATEGORY_CFG } from "@/lib/projects/link-categories";
+import { SUPPLIER_RANGES } from "@/lib/suppliers/map-suppliers";
 import {
   downloadSubVendorsCsv,
   downloadSuppliersCsv,
   slugForFilename,
 } from "@/lib/suppliers/suppliers-export";
-import type { SubVendor, Supplier } from "@/types/suppliers";
+import type { SubVendor, Supplier, SupplierRange } from "@/types/suppliers";
 import { subVendorRoute, supplierRoute } from "@/types/navigation";
 import { cn } from "@/lib/utils";
 
@@ -62,6 +64,9 @@ function SupplierRow({
       </td>
       <td className="px-4 py-3">
         <CategoryBadge label={supplier.category} />
+      </td>
+      <td className="px-4 py-3">
+        <SupplierRangeBadge range={supplier.supplierRange} />
       </td>
       <td className="px-4 py-3">
         <div className="flex flex-col gap-0.5">
@@ -204,6 +209,7 @@ export function SupplierListScreen({ initialTab = "suppliers" }: { initialTab?: 
   const [search, setSearch] = useState("");
   const [searchFocus, setSearchFocus] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("All");
+  const [rangeFilter, setRangeFilter] = useState("All");
   const [showAdd, setShowAdd] = useState(false);
 
   const {
@@ -241,9 +247,11 @@ export function SupplierListScreen({ initialTab = "suppliers" }: { initialTab?: 
           s.category.toLowerCase().includes(q) ||
           s.contactPerson.toLowerCase().includes(q);
         const matchCat = categoryFilter === "All" || s.category === categoryFilter;
-        return matchQ && matchCat;
+        const matchRange =
+          rangeFilter === "All" || s.supplierRange === (rangeFilter as SupplierRange);
+        return matchQ && matchCat && matchRange;
       }),
-    [suppliers, search, categoryFilter],
+    [suppliers, search, categoryFilter, rangeFilter],
   );
 
   const filteredVendors = useMemo(
@@ -307,6 +315,7 @@ export function SupplierListScreen({ initialTab = "suppliers" }: { initialTab?: 
                 onClick={() => {
                   setTab(t.id);
                   setCategoryFilter("All");
+                  setRangeFilter("All");
                   setSearch("");
                 }}
                 className={cn(
@@ -379,6 +388,14 @@ export function SupplierListScreen({ initialTab = "suppliers" }: { initialTab?: 
             onChange={setCategoryFilter}
           />
 
+          {isSuppliers && (
+            <FilterDropdown
+              value={rangeFilter}
+              options={["All", ...SUPPLIER_RANGES]}
+              onChange={setRangeFilter}
+            />
+          )}
+
           <span className="ml-1 text-[12px] text-[var(--figma-gray400)]">
             {isSuppliers ? filteredSuppliers.length : filteredVendors.length} results
           </span>
@@ -404,7 +421,7 @@ export function SupplierListScreen({ initialTab = "suppliers" }: { initialTab?: 
                 <thead>
                   <tr className="bg-[var(--figma-gray50)]">
                     {(isSuppliers
-                      ? ["Supplier", "Category", "Contact", "Active Projects", "Lead Time", "Credit Terms", "Status", ""]
+                      ? ["Supplier", "Category", "Range", "Contact", "Active Projects", "Lead Time", "Credit Terms", "Status", ""]
                       : ["Sub-Vendor", "Specialty", "Availability", "Past Projects", "Payment Record", ""]
                     ).map((col) => (
                       <th
@@ -413,7 +430,7 @@ export function SupplierListScreen({ initialTab = "suppliers" }: { initialTab?: 
                       >
                         <div className="flex items-center gap-1">
                           {col}
-                          {["Supplier", "Category", "Sub-Vendor", "Specialty"].includes(col) && (
+                          {["Supplier", "Category", "Range", "Sub-Vendor", "Specialty"].includes(col) && (
                             <MaterialIcon name="unfold_more" outlined size={13} className="text-[var(--figma-gray400)]" />
                           )}
                         </div>

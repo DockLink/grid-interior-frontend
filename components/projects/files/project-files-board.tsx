@@ -190,7 +190,7 @@ export function ProjectFilesBoard({ projectId }: { projectId: string }) {
 
   if (treeLoading || isProvisioning) {
     return (
-      <div className="flex h-[calc(100vh-140px)] items-center justify-center text-[13px] text-[var(--ds-secondary-label)]">
+      <div className="flex h-[calc(100vh-140px)] items-center justify-center text-[13px] text-[var(--figma-gray500)]">
         {isProvisioning ? "Setting up project folders…" : "Loading…"}
       </div>
     );
@@ -216,11 +216,11 @@ export function ProjectFilesBoard({ projectId }: { projectId: string }) {
   if (tree.length === 0) {
     return (
       <div className="flex h-[calc(100vh-140px)] flex-col items-center justify-center gap-4 text-[13px]">
-        <p className="text-[var(--ds-secondary-label)]">Project folders have not been set up yet.</p>
+        <p className="text-[var(--figma-gray500)]">Project folders have not been set up yet.</p>
         {isAdmin && (
           <Button
             size="sm"
-            className="bg-[var(--ds-accent)] text-white hover:bg-[var(--ds-accent-hover)]"
+            className="bg-[var(--figma-teal)] text-white hover:bg-[var(--figma-teal)]/90"
             onClick={() => void provisionFolders()}
           >
             Set up project folders
@@ -233,19 +233,24 @@ export function ProjectFilesBoard({ projectId }: { projectId: string }) {
   return (
     <>
       <div
-        className="flex overflow-hidden"
+        className="flex gap-3 overflow-hidden p-1"
         style={{ height: "calc(100vh - 140px)" }}
       >
         {/* Left: folder panel */}
-        <div className="flex w-60 shrink-0 flex-col overflow-hidden border-r border-[var(--ds-separator)] bg-[var(--ds-bg)]">
-          <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-[var(--ds-separator)] px-3.5">
-            <span className="text-[15px] font-medium text-[var(--ds-label)]">Documents</span>
+        <div
+          className="flex w-60 shrink-0 flex-col overflow-hidden rounded-2xl border border-[var(--figma-border)] bg-white"
+          style={{ boxShadow: "var(--neu-card)" }}
+        >
+          <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-[var(--figma-border)] px-3.5">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--figma-gray400)]">
+              Folders
+            </span>
             {canManageFolders && (
               <button
                 type="button"
                 title="New root folder"
                 onClick={() => setFolderDialog({ type: "create-root" })}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--ds-accent)] hover:bg-[#EDE3D4]"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--figma-teal)] hover:bg-[var(--figma-gray100)]"
               >
                 <FolderPlus size={15} />
               </button>
@@ -271,7 +276,8 @@ export function ProjectFilesBoard({ projectId }: { projectId: string }) {
 
         {/* Right: file panel */}
         <div
-          className="relative flex flex-1 flex-col overflow-hidden bg-[var(--ds-surface-elevated)]"
+          className="relative flex flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--figma-border)] bg-white"
+          style={{ boxShadow: "var(--neu-card)" }}
           onDragOver={canManage ? (e) => { e.preventDefault(); setIsDragging(true); } : undefined}
           onDragLeave={canManage ? (e) => {
             if (!e.currentTarget.contains(e.relatedTarget as Node))
@@ -285,27 +291,27 @@ export function ProjectFilesBoard({ projectId }: { projectId: string }) {
         >
           {/* Drag overlay */}
           {isDragging && canManage && currentFolderPath && canUploadHere && (
-            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center border-[3px] border-dashed border-[var(--ds-accent)] bg-[rgba(212,169,106,0.06)]">
-              <div className="rounded-xl bg-[var(--ds-surface-elevated)] px-10 py-5 text-[15px] font-medium text-[var(--ds-accent)] shadow-lg">
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-2xl border-[3px] border-dashed border-[var(--figma-teal)] bg-[rgba(14,124,134,0.06)]">
+              <div className="rounded-xl bg-white px-10 py-5 text-[15px] font-medium text-[var(--figma-teal)] shadow-lg">
                 Drop to upload
               </div>
             </div>
           )}
 
           {/* Breadcrumb + action bar */}
-          <div className="flex h-10 shrink-0 items-center justify-between border-b border-[rgba(90,60,30,0.10)] bg-[var(--ds-bg)] px-4">
+          <div className="flex h-10 shrink-0 items-center justify-between border-b border-[var(--figma-border)] bg-[#F9FAFB] px-4">
             {/* Path */}
             <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
               {breadcrumb.length === 0 ? (
-                <span className="text-[13px] text-[var(--ds-secondary-label)]">Select a folder</span>
+                <span className="text-[13px] text-[var(--figma-gray500)]">Select a folder</span>
               ) : (
                 breadcrumb.map((seg, i) => (
                   <span key={seg.path} className="flex shrink-0 items-center gap-1">
-                    {i > 0 && <span className="text-[#C4B5A5]">/</span>}
+                    {i > 0 && <span className="text-[var(--figma-gray400)]">/</span>}
                     <span
                       className="max-w-[140px] truncate text-[13px]"
                       style={{
-                        color: i === breadcrumb.length - 1 ? "var(--ds-label)" : "var(--ds-secondary-label)",
+                        color: i === breadcrumb.length - 1 ? "var(--figma-navy)" : "var(--figma-gray500)",
                         fontWeight: i === breadcrumb.length - 1 ? 500 : 400,
                       }}
                     >
@@ -321,10 +327,10 @@ export function ProjectFilesBoard({ projectId }: { projectId: string }) {
               <div className="ml-3 flex shrink-0 items-center gap-2">
                 {canUploadHere ? (
                   <>
-                    <span className="text-[11px] text-[var(--ds-secondary-label)]">Drop files here</span>
+                    <span className="text-[11px] text-[var(--figma-gray500)]">Drop files here</span>
                     <Button
                       size="sm"
-                      className="h-7 gap-1 bg-[var(--ds-accent)] text-[12px] text-white hover:bg-[var(--ds-accent-hover)]"
+                      className="h-7 gap-1 bg-[var(--figma-teal)] text-[12px] text-white hover:bg-[var(--figma-teal)]/90"
                       onClick={() => setShowUpload(true)}
                     >
                       <Upload size={11} />
@@ -332,7 +338,7 @@ export function ProjectFilesBoard({ projectId }: { projectId: string }) {
                     </Button>
                   </>
                 ) : (
-                  <span className="text-[11px] text-[var(--ds-secondary-label)]">
+                  <span className="text-[11px] text-[var(--figma-gray500)]">
                     Select a folder to upload
                   </span>
                 )}
@@ -342,7 +348,7 @@ export function ProjectFilesBoard({ projectId }: { projectId: string }) {
 
           {/* Versioning banner */}
           {isVersioned && currentFolderPath && (
-            <div className="flex h-8 shrink-0 items-center gap-2 border-b border-[rgba(90,60,30,0.08)] bg-amber-50 px-4">
+            <div className="flex h-8 shrink-0 items-center gap-2 border-b border-[var(--figma-border)] bg-amber-50 px-4">
               <AlertCircle size={12} className="shrink-0 text-amber-700" />
               <span className="text-[11px] text-amber-700">
                 Versioning active — new uploads with matching filenames will supersede existing files.

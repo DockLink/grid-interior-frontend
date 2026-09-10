@@ -25,6 +25,8 @@ export interface Project {
   code: string;
   name: string;
   description?: string | null;
+  main_type?: string | null;
+  sub_type?: string | null;
   start_date: string;
   /** Present when API returns an explicit end; otherwise derive from duration. */
   end_date?: string | null;
@@ -117,6 +119,8 @@ export interface CreateProjectRequest {
   code?: string;
   name: string;
   description?: string;
+  main_type?: string;
+  sub_type?: string;
   start_date: string;
   end_date: string;
   location?: string;
@@ -136,6 +140,8 @@ export interface CreateProjectRequest {
 export interface UpdateProjectRequest {
   name?: string;
   description?: string;
+  main_type?: string | null;
+  sub_type?: string | null;
   start_date?: string;
   end_date?: string;
   location?: string;

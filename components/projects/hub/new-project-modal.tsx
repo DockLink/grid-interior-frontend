@@ -10,7 +10,15 @@ import { useClients } from "@/hooks/use-clients";
 import { useCreateProject } from "@/hooks/use-create-project";
 import { useUsers } from "@/hooks/use-users";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
-import { PHASE_CFG, PHASES, PROJECT_TYPES, type ProjectPhase } from "@/lib/projects/design-tokens";
+import {
+  PHASE_CFG,
+  PHASES,
+  PROJECT_MAIN_TYPES,
+  PROJECT_SUB_TYPES_BY_MAIN,
+  PROJECT_TYPES,
+  type ProjectMainType,
+  type ProjectPhase,
+} from "@/lib/projects/design-tokens";
 import { queryKeys } from "@/lib/query/keys";
 import { getUserInitials, getUserListPrimaryLabel } from "@/lib/user/display";
 import type { CreateProjectRequest } from "@/types/projects";
@@ -196,6 +204,8 @@ export function NewProjectModal({
   const [selectedClient, setSelectedClient] = useState<string | null>(preselectedClientId ?? null);
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [projectType, setProjectType] = useState("");
+  const [mainType, setMainType] = useState<ProjectMainType | "">("");
+  const [subType, setSubType] = useState("");
   const [startDate, setStartDate] = useState(defaultDates.start);
   const [endDate, setEndDate] = useState(defaultDates.end);
   const [selectedPhase, setSelectedPhase] = useState<ProjectPhase | null>(null);
@@ -223,6 +233,8 @@ export function NewProjectModal({
     if (!projectName.trim()) e.name = "This field is required";
     if (!selectedClient) e.client = "Please select a client";
     if (!projectType) e.type = "Please select a project type";
+    if (!mainType) e.mainType = "Please select a main type";
+    if (!subType) e.subType = "Please select a sub type";
     if (!startDate) e.startDate = "Start date is required";
     if (!endDate) e.endDate = "End date is required";
     if (startDate && endDate && endDate <= startDate) {
@@ -268,6 +280,8 @@ export function NewProjectModal({
     const payload: CreateProjectRequest = {
       name: projectName.trim(),
       description: projectType || undefined,
+      main_type: mainType || undefined,
+      sub_type: subType || undefined,
       start_date: startDate,
       end_date: endDate,
       location: address.trim() || undefined,
@@ -495,6 +509,89 @@ export function NewProjectModal({
                 })}
               </div>
               {errors.type && <div className="text-[11px] text-[var(--figma-alert)]">{errors.type}</div>}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label
+                  className="text-[13px] font-medium"
+                  style={{ color: errors.mainType ? "var(--figma-alert)" : "var(--figma-navy)" }}
+                >
+                  Main Type
+                </label>
+                <div className="relative">
+                  <select
+                    value={mainType}
+                    onChange={(e) => {
+                      setMainType(e.target.value as ProjectMainType | "");
+                      setSubType("");
+                      setErrors((p) => ({ ...p, mainType: "", subType: "" }));
+                    }}
+                    className="w-full cursor-pointer appearance-none rounded-[10px] border-[1.5px] bg-white py-2.5 pr-9 pl-3.5 text-[13px] text-[var(--figma-navy)] outline-none"
+                    style={{
+                      borderColor: errors.mainType ? "var(--figma-alert)" : "var(--figma-border)",
+                      boxShadow: "var(--neu-inset)",
+                    }}
+                  >
+                    <option value="">Select main type</option>
+                    {PROJECT_MAIN_TYPES.map((mt) => (
+                      <option key={mt} value={mt}>
+                        {mt}
+                      </option>
+                    ))}
+                  </select>
+                  <MaterialIcon
+                    name="expand_more"
+                    outlined
+                    size={16}
+                    className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[var(--figma-gray400)]"
+                  />
+                </div>
+                {errors.mainType && (
+                  <div className="text-[11px] text-[var(--figma-alert)]">{errors.mainType}</div>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label
+                  className="text-[13px] font-medium"
+                  style={{ color: errors.subType ? "var(--figma-alert)" : "var(--figma-navy)" }}
+                >
+                  Sub Type
+                </label>
+                <div className="relative">
+                  <select
+                    value={subType}
+                    disabled={!mainType}
+                    onChange={(e) => {
+                      setSubType(e.target.value);
+                      setErrors((p) => ({ ...p, subType: "" }));
+                    }}
+                    className="w-full cursor-pointer appearance-none rounded-[10px] border-[1.5px] bg-white py-2.5 pr-9 pl-3.5 text-[13px] text-[var(--figma-navy)] outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{
+                      borderColor: errors.subType ? "var(--figma-alert)" : "var(--figma-border)",
+                      boxShadow: "var(--neu-inset)",
+                    }}
+                  >
+                    <option value="">{mainType ? "Select sub type" : "Select main type first"}</option>
+                    {mainType &&
+                      PROJECT_SUB_TYPES_BY_MAIN[mainType].map((st) => (
+                        <option key={st} value={st}>
+                          {st}
+                        </option>
+                      ))}
+                  </select>
+                  <MaterialIcon
+                    name="expand_more"
+                    outlined
+                    size={16}
+                    className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[var(--figma-gray400)]"
+                  />
+                </div>
+                {errors.subType && (
+                  <div className="text-[11px] text-[var(--figma-alert)]">{errors.subType}</div>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -793,6 +890,8 @@ export function NewProjectModal({
                 { label: "Name", value: projectName || "—" },
                 { label: "Client", value: selectedClientName || "—" },
                 { label: "Type", value: projectType || "—" },
+                { label: "Main", value: mainType || "—" },
+                { label: "Sub", value: subType || "—" },
                 { label: "Phase", value: selectedPhase || "—" },
                 {
                   label: "Team",
