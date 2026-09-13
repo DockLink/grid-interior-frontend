@@ -3,15 +3,18 @@
 import { useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
+import { toVimeoEmbedUrl } from "@/lib/files/map-project-file";
 
 export function WalkthroughModal({
   onClose,
   projectName = "Marchetti Villa",
   variant = "threed",
+  vimeoUrl,
 }: {
   onClose: () => void;
   projectName?: string;
   variant?: "concept" | "threed";
+  vimeoUrl?: string | null;
 }) {
   const phaseLabel = variant === "concept" ? "Concept Design Phase" : "3D Design Phase";
   const title = variant === "concept" ? "Concept Virtual Walkthrough" : "3D Virtual Walkthrough";
@@ -19,6 +22,7 @@ export function WalkthroughModal({
     variant === "concept"
       ? `${projectName} — Concept visualisation`
       : `${projectName} — Full visualisation`;
+  const embedUrl = toVimeoEmbedUrl(vimeoUrl);
 
   return (
     <div
@@ -50,12 +54,27 @@ export function WalkthroughModal({
             boxShadow: "var(--neu-card)",
           }}
         >
-          <WalkthroughPreview projectName={projectName} variant={variant} large />
+          {embedUrl ? (
+            <iframe
+              title={title}
+              src={embedUrl}
+              className="size-full border-0"
+              allow="autoplay; fullscreen; picture-in-picture"
+              allowFullScreen
+            />
+          ) : (
+            <WalkthroughPreview projectName={projectName} variant={variant} large />
+          )}
         </div>
 
         <div className="mt-4 flex items-center justify-between">
           <span className="text-[13px] font-semibold text-[var(--figma-navy)]">
             {projectName} · {phaseLabel}
+            {!embedUrl ? (
+              <span className="ml-2 font-normal text-[var(--figma-gray400)]">
+                (No Vimeo URL on project)
+              </span>
+            ) : null}
           </span>
           <div className="flex gap-2">
             {(["download", "share"] as const).map((icon) => (

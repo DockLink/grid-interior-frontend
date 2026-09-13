@@ -1,8 +1,8 @@
 import {
   type GanttPhase,
-  type MaterialItem,
   type Milestone,
 } from "@/lib/timeline/mock-timeline";
+import type { MaterialItem } from "@/types/timeline-materials";
 
 function csvEscape(value: string): string {
   if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;

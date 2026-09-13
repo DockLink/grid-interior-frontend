@@ -3,18 +3,31 @@
 import { useEffect, useRef, useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
-import { SAMPLE_COMMENTS } from "@/lib/projects/mock-consultation";
+import { useConsultation } from "@/hooks/use-consultation";
 import { useHubTeam } from "@/lib/projects/hub-team-context";
 import type { ConsultComment } from "@/types/consultation";
 
-export function NotesThread({ compact = false, section }: { compact?: boolean; section?: string }) {
+export function NotesThread({
+  projectId,
+  compact = false,
+  section,
+}: {
+  projectId: string;
+  compact?: boolean;
+  section?: string;
+}) {
   const teamMembers = useHubTeam();
+  const { notes: remoteNotes, createNote, isAuthOff } = useConsultation(projectId);
   const [comments, setComments] = useState<ConsultComment[]>(
-    section ? SAMPLE_COMMENTS.slice(0, 2) : SAMPLE_COMMENTS,
+    section ? remoteNotes.slice(0, 2) : remoteNotes,
   );
   const [draft, setDraft] = useState("");
   const [focused, setFocused] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setComments(section ? remoteNotes.slice(0, 2) : remoteNotes);
+  }, [remoteNotes, section]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -22,24 +35,28 @@ export function NotesThread({ compact = false, section }: { compact?: boolean; s
 
   const send = () => {
     if (!draft.trim()) return;
-    setComments((p) => [
-      ...p,
-      {
-        id: Date.now(),
-        memberId: 1,
-        text: draft.trim(),
-        time: "Just now",
-      },
-    ]);
+    const text = draft.trim();
     setDraft("");
+    void createNote({ text }).then((note) => {
+      if (isAuthOff && note) setComments((p) => [...p, note]);
+    });
   };
+
+  const findMember = (memberId: string) =>
+    teamMembers.find((t) => String(t.id) === String(memberId)) ??
+    teamMembers[0] ?? {
+      id: 0,
+      name: "Team",
+      role: "Member",
+      initials: "TM",
+      color: "#0E7C86",
+    };
 
   return (
     <div className="flex flex-col" style={{ height: compact ? 280 : 560 }}>
       <div className="mb-4 flex-1 overflow-y-auto pr-1">
         {comments.map((c, idx) => {
-          const m = teamMembers.find((t) => t.id === c.memberId);
-          if (!m) return null;
+          const m = findMember(c.memberId);
           const isLast = idx === comments.length - 1;
 
           return (

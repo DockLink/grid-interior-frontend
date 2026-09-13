@@ -153,42 +153,42 @@ const PRESET_TOKENS: Record<
   Partial<Record<string, string>>
 > = {
   default: {
-    "--ds-bg": "#f5f2ed",
-    "--ds-surface": "rgba(255, 255, 255, 0.92)",
+    "--ds-bg": "#ffffff",
+    "--ds-surface": "#ffffff",
     "--ds-surface-elevated": "#ffffff",
-    "--ds-label": "#1c1c1e",
-    "--ds-secondary-label": "#6c6c70",
-    "--ds-tertiary-label": "#8e8e93",
-    "--ds-separator": "rgba(60, 60, 67, 0.12)",
-    "--ds-sidebar-bg": "#f7f1eb",
-    "--ds-destructive": "#ff3b30",
-    "--ds-destructive-muted": "rgba(255, 59, 48, 0.08)",
-    "--ds-success": "#34c759",
-    "--ds-warning": "#c85000",
-    "--background": "#fcf8f4",
-    "--foreground": "#1c1c1e",
+    "--ds-label": "#1b2a4a",
+    "--ds-secondary-label": "#5b6b85",
+    "--ds-tertiary-label": "#8a96a8",
+    "--ds-separator": "rgba(27, 42, 74, 0.12)",
+    "--ds-sidebar-bg": "#0b2545",
+    "--ds-destructive": "#ef4444",
+    "--ds-destructive-muted": "rgba(239, 68, 68, 0.1)",
+    "--ds-success": "#3fa66b",
+    "--ds-warning": "#d97706",
+    "--background": "#ffffff",
+    "--foreground": "#1b2a4a",
     "--card": "#ffffff",
-    "--muted": "#f5efe6",
-    "--border": "rgba(90, 60, 30, 0.12)",
+    "--muted": "#f8fafb",
+    "--border": "rgba(27, 42, 74, 0.12)",
   },
   light: {
     "--ds-bg": "#ffffff",
     "--ds-surface": "#ffffff",
     "--ds-surface-elevated": "#ffffff",
-    "--ds-label": "#111318",
-    "--ds-secondary-label": "#5b6270",
-    "--ds-tertiary-label": "#848c99",
-    "--ds-separator": "rgba(17, 19, 24, 0.1)",
-    "--ds-sidebar-bg": "#f4f5f7",
-    "--ds-destructive": "#e5342b",
-    "--ds-destructive-muted": "rgba(229, 52, 43, 0.08)",
-    "--ds-success": "#1f9d55",
-    "--ds-warning": "#b5620a",
+    "--ds-label": "#1b2a4a",
+    "--ds-secondary-label": "#5b6b85",
+    "--ds-tertiary-label": "#8a96a8",
+    "--ds-separator": "rgba(27, 42, 74, 0.1)",
+    "--ds-sidebar-bg": "#0b2545",
+    "--ds-destructive": "#ef4444",
+    "--ds-destructive-muted": "rgba(239, 68, 68, 0.1)",
+    "--ds-success": "#3fa66b",
+    "--ds-warning": "#d97706",
     "--background": "#ffffff",
-    "--foreground": "#111318",
+    "--foreground": "#1b2a4a",
     "--card": "#ffffff",
-    "--muted": "#f2f3f5",
-    "--border": "rgba(17, 19, 24, 0.1)",
+    "--muted": "#f8fafb",
+    "--border": "rgba(27, 42, 74, 0.1)",
   },
   dark: {
     "--ds-bg": "#121214",
@@ -315,17 +315,17 @@ export function getPresetColorValue(preset: ThemePreset, key: keyof CustomColorO
   const tokens = PRESET_TOKENS[preset];
   const value = tokens[cssVar];
   if (value && HEX_COLOR.test(value)) return value;
-  if (key === "accent") return preset === "dark" ? "#E0B07A" : "#D4A96A";
+  if (key === "accent") return preset === "dark" ? "#5B9BD5" : "#1B2A4A";
   if (key === "accent_hover") return getPresetColorValue(preset, "accent");
-  return "#000000";
+  return "#1B2A4A";
 }
 
 export const ACCENT_SWATCHES = [
-  { id: "gold", label: "Gold", color: "#D4A96A" },
-  { id: "teal", label: "Teal", color: "#2A9D8F" },
+  { id: "navy", label: "Navy", color: "#1B2A4A" },
+  { id: "teal", label: "Teal", color: "#0E7C86" },
   { id: "slate", label: "Slate", color: "#5C6B7A" },
-  { id: "rose", label: "Rose", color: "#C97B84" },
-  { id: "indigo", label: "Indigo", color: "#5B6CFF" },
+  { id: "blue", label: "Blue", color: "#1E4A7A" },
+  { id: "green", label: "Green", color: "#3FA66B" },
 ] as const;
 
 export function applyUserPreferences(prefs: UserPreferences): void {
@@ -352,7 +352,7 @@ export function applyUserPreferences(prefs: UserPreferences): void {
   const accentHex =
     prefs.custom_colors?.accent ??
     prefs.accent_color ??
-    (prefs.theme_preset === "dark" ? "#E0B07A" : "#d4a96a");
+    (prefs.theme_preset === "dark" ? "#5B9BD5" : "#1B2A4A");
   root.style.setProperty("--ds-accent", accentHex);
   const accentRgb = hexToRgb(accentHex);
   if (accentRgb) {

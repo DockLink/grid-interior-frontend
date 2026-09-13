@@ -4,7 +4,7 @@ import { Toaster } from "sonner";
 import { AuthHydration } from "@/components/auth/auth-hydration";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { APP_NAME } from "@/lib/constants";
-import { aktivGrotesk } from "@/lib/fonts/aktiv-grotesk";
+import { GRID_UI_FONT_STACK } from "@/lib/fonts/grid-ui";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -18,14 +18,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${aktivGrotesk.variable} ${aktivGrotesk.className} h-full antialiased`}>
+    <html
+      lang="en"
+      className="h-full antialiased"
+      style={{ fontFamily: GRID_UI_FONT_STACK }}
+    >
       <head>
         <link
           href="https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Outlined"
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-full">
+      <body className="min-h-full" style={{ fontFamily: GRID_UI_FONT_STACK }}>
         <QueryProvider>
           <AuthHydration />
           {children}

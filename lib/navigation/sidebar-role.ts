@@ -11,11 +11,11 @@ import type { UserRole } from "@/types/users";
 export type SidebarRole = "superadmin" | "admin" | "lead" | "member" | "guest";
 
 export const ROLE_LABEL: Record<SidebarRole, string> = {
-  superadmin: "Super Administrator",
-  admin: "Administrator",
-  lead: "Project Lead",
-  member: "Team Member",
-  guest: "Guest",
+  superadmin: "Super Admin",
+  admin: "Admin",
+  lead: "Project Coordinator",
+  member: "Designer",
+  guest: "Restricted / Guest",
 };
 
 export function toSidebarRole(role: UserRole | null): SidebarRole {

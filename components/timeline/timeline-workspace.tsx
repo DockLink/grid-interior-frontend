@@ -55,7 +55,6 @@ import {
   PROJECT_START,
   TOTAL_WEEKS,
   type GanttPhase,
-  type MaterialItem,
   type Milestone,
 } from "@/lib/timeline/mock-timeline";
 import {
@@ -65,6 +64,7 @@ import {
   slugForFilename,
 } from "@/lib/timeline/timeline-export";
 import type { SiteSubStageStatus } from "@/types/execution";
+import type { MaterialItem } from "@/types/timeline-materials";
 
 function useSiteSubstages() {
   return useSyncExternalStore(
@@ -243,13 +243,15 @@ function Avatar({
 
 // ── GANTT CHART ───────────────────────────────────────────────────────────────
 function GanttChart() {
+  const params = useParams();
+  const projectId = typeof params.projectId === "string" ? params.projectId : "";
   const projectName = useTimelineProjectName();
   const live = useTimelineLive();
   const authDisabled = isAuthDisabled();
   const [zoom, setZoom] = useState<"month" | "week">("month");
   const [tooltip, setTooltip] = useState<GanttPhase | null>(null);
   const [phases, setPhases] = useState<GanttPhase[]>(live.phases);
-  const [fridaySent, setFridaySent] = useState<string | null>("15 Aug 2026");
+  const [fridaySent, setFridaySent] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const siteStages = useSiteSubstages();
   const keyDates = getClientKeyDatesFromSite(siteStages);
@@ -305,11 +307,29 @@ function GanttChart() {
   };
 
   const sendFriday = () => {
-    const stamp = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-    setFridaySent(stamp);
-    void navigator.clipboard?.writeText(`${window.location.origin}/portal/marchetti-villa`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (!projectId) {
+      toast.error("Project id missing — cannot copy client timeline link.");
+      return;
+    }
+    const stamp = new Date().toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+    const clientViewUrl = `${window.location.origin}/projects/${projectId}/client-view`;
+    void navigator.clipboard?.writeText(clientViewUrl).then(
+      () => {
+        setFridaySent(stamp);
+        setCopied(true);
+        toast.success(
+          "Copied client timeline link. Portal token email send requires backend support.",
+        );
+        setTimeout(() => setCopied(false), 2000);
+      },
+      () => {
+        toast.error("Could not copy link to clipboard");
+      },
+    );
   };
 
   // Compute week labels from live project start
@@ -451,7 +471,13 @@ function GanttChart() {
             }}
           />
           <GradBtn
-            label={copied ? "Link copied" : fridaySent ? `Friday update · ${fridaySent}` : "Send Friday update"}
+            label={
+              copied
+                ? "Client view link copied"
+                : fridaySent
+                  ? `Link copied · ${fridaySent}`
+                  : "Copy client timeline link"
+            }
             icon="send"
             small
             onClick={sendFriday}

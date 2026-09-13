@@ -1,6 +1,10 @@
 // Mock timeline data for Phase 4 Timeline Workspace
 // Ported from Design System for GRID CRM/src/screens/timeline/TimelineWorkspace.tsx
 
+import type { MaterialItem } from "@/types/timeline-materials";
+
+export type { MaterialItem };
+
 export interface GanttPhase {
   id: number;
   /** Backend STAGE taskable id when live */
@@ -24,17 +28,6 @@ export interface Milestone {
   date: string;
   status: "completed" | "upcoming" | "overdue";
   phase: string;
-  notes?: string;
-}
-
-export interface MaterialItem {
-  id: number;
-  category: string;
-  item: string;
-  supplier: string;
-  status: "approved" | "pending" | "ordered" | "delivered";
-  eta: string;
-  value: string;
   notes?: string;
 }
 

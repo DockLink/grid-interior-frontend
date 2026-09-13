@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { cn } from "@/lib/utils";
@@ -36,14 +36,14 @@ export function WorkspaceBreadcrumb({
   );
 }
 
-export function AreaTabs<T extends { id: number; name: string }>({
+export function AreaTabs<T extends { id: number | string; name: string }>({
   areas,
   activeId,
   setActiveId,
 }: {
   areas: T[];
-  activeId: number;
-  setActiveId: (id: number) => void;
+  activeId: number | string;
+  setActiveId: (id: number | string) => void;
 }) {
   return (
     <div className="mb-6 flex flex-wrap gap-1.5">
@@ -71,11 +71,23 @@ export function AreaTabs<T extends { id: number; name: string }>({
 export function UploadDropzone({
   label,
   onUpload,
+  onFiles,
 }: {
   label: string;
   onUpload?: () => void;
+  onFiles?: (files: File[]) => void;
 }) {
   const [drag, setDrag] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFiles = (list: FileList | null) => {
+    const files = list ? Array.from(list) : [];
+    if (files.length && onFiles) {
+      onFiles(files);
+      return;
+    }
+    onUpload?.();
+  };
 
   return (
     <div
@@ -87,14 +99,30 @@ export function UploadDropzone({
       onDrop={(e) => {
         e.preventDefault();
         setDrag(false);
+        handleFiles(e.dataTransfer.files);
+      }}
+      onClick={() => {
+        if (onFiles) {
+          inputRef.current?.click();
+          return;
+        }
         onUpload?.();
       }}
-      onClick={onUpload}
       className={cn(
         "mb-5 flex cursor-pointer flex-col items-center gap-2.5 rounded-[14px] border-2 border-dashed px-6 py-7 transition-all duration-200 neu-inset",
         drag ? "border-[var(--figma-teal)] bg-[rgba(14,124,134,0.04)]" : "border-[var(--figma-border)] bg-[var(--figma-gray50)]",
       )}
     >
+      <input
+        ref={inputRef}
+        type="file"
+        className="hidden"
+        multiple
+        onChange={(e) => {
+          handleFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
       <div
         className={cn(
           "flex size-12 items-center justify-center rounded-xl",

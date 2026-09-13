@@ -1,6 +1,6 @@
 import { formatVendorTaskDate } from "@/lib/suppliers/map-vendor-tasks";
-import type { MaterialItem } from "@/lib/timeline/mock-timeline";
 import type { ProjectLinks } from "@/types/project-links";
+import type { MaterialItem } from "@/types/timeline-materials";
 import type { VendorTask, VendorTaskStatus } from "@/types/vendor-tasks";
 
 const STATUS_MAP: Record<VendorTaskStatus, MaterialItem["status"]> = {

@@ -1,17 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { OutlineBtn, SectionCard } from "@/components/projects/hub/consultation/consultation-ui";
+import { useProjectBoqSummary } from "@/hooks/use-boq";
 import { DETAIL_CATEGORIES } from "@/lib/projects/mock-detail";
 import { formatLKR } from "@/types/detail";
-import type { DetailCategory } from "@/types/detail";
+import type { DetailCategory, DetailCategoryId } from "@/types/detail";
 import { projectExecutionRoute } from "@/types/navigation";
 import type { ActiveProjectView } from "@/types/project-hub";
 
+function exportBoqSummaryCsv(
+  rows: { label: string; estimate: number; pct: number }[],
+  projectName: string,
+  grandTotal: number,
+) {
+  const lines = [
+    ["Category", "Estimate (LKR)", "% of total"].join(","),
+    ...rows.map((r) =>
+      [JSON.stringify(r.label), r.estimate, r.pct.toFixed(1)].join(","),
+    ),
+    ["Grand Total", grandTotal, "100.0"].join(","),
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${projectName.replace(/\s+/g, "_")}_BOQ_Summary.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function BoqCategoryCard({ cat, pct }: { cat: DetailCategory; pct: number }) {
   const [hov, setHov] = useState(false);
+  const safePct = Number.isFinite(pct) ? pct : 0;
 
   return (
     <div
@@ -47,17 +71,31 @@ function BoqCategoryCard({ cat, pct }: { cat: DetailCategory; pct: number }) {
       <div className="mb-1.5 h-1.5 overflow-hidden rounded-sm bg-[var(--figma-gray100)]">
         <div
           className="h-full rounded-sm transition-[width] duration-700 ease-out"
-          style={{ width: `${pct * 100}%`, background: cat.color }}
+          style={{ width: `${safePct * 100}%`, background: cat.color }}
         />
       </div>
-      <div className="text-[11px] text-[var(--figma-gray400)]">{(pct * 100).toFixed(1)}% of total budget</div>
+      <div className="text-[11px] text-[var(--figma-gray400)]">
+        {(safePct * 100).toFixed(1)}% of total budget
+      </div>
     </div>
   );
 }
 
 export function BoqScreen({ project, onBack }: { project: ActiveProjectView; onBack: () => void }) {
-  const cats = DETAIL_CATEGORIES;
-  const grand = cats.reduce((s, c) => s + c.estimate, 0);
+  const { buckets, isLoading, error } = useProjectBoqSummary(project.id);
+
+  const cats = useMemo(() => {
+    const estimateById = new Map(buckets.map((b) => [b.id, b.estimate]));
+    return DETAIL_CATEGORIES.map((cat) => ({
+      ...cat,
+      estimate: estimateById.get(cat.id) ?? cat.estimate,
+      label:
+        (buckets.find((b) => b.id === cat.id)?.label as string | undefined) ?? cat.label,
+    }));
+  }, [buckets]);
+
+  const estimateSum = cats.reduce((s, c) => s + c.estimate, 0);
+  const grand = estimateSum || 1;
   const [backHover, setBackHover] = useState(false);
   const [linkHover, setLinkHover] = useState(false);
 
@@ -80,7 +118,22 @@ export function BoqScreen({ project, onBack }: { project: ActiveProjectView; onB
           <h1 className="m-0 mb-1 text-[28px] font-bold text-[var(--figma-navy)]">Estimate Breakdown</h1>
           <p className="m-0 text-[13px] text-[var(--figma-gray500)]">BOQ summary by category</p>
         </div>
-        <OutlineBtn label="Export Summary" icon="download" />
+        <OutlineBtn
+          label="Export Summary"
+          icon="download"
+          onClick={() => {
+            exportBoqSummaryCsv(
+              cats.map((c) => ({
+                label: c.label,
+                estimate: c.estimate,
+                pct: (c.estimate / grand) * 100,
+              })),
+              project.name,
+              estimateSum,
+            );
+            toast.success("BOQ summary exported");
+          }}
+        />
       </div>
 
       <p className="mb-7 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--figma-gray400)]">
@@ -97,9 +150,18 @@ export function BoqScreen({ project, onBack }: { project: ActiveProjectView; onB
         </a>
       </p>
 
+      {isLoading && (
+        <p className="mb-4 text-[13px] text-[var(--figma-gray500)]">Loading estimate summary…</p>
+      )}
+      {error && <p className="mb-4 text-[13px] text-[#EF4444]">{error}</p>}
+
       <div className="mb-7 grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
         {cats.map((cat) => (
-          <BoqCategoryCard key={cat.id} cat={cat} pct={cat.estimate / grand} />
+          <BoqCategoryCard
+            key={cat.id}
+            cat={cat as DetailCategory}
+            pct={cat.estimate / grand}
+          />
         ))}
       </div>
 
@@ -107,7 +169,9 @@ export function BoqScreen({ project, onBack }: { project: ActiveProjectView; onB
         <div className="mb-[18px] flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="mb-1 text-[13px] text-[var(--figma-gray500)]">Grand Total Estimate</div>
-            <div className="text-[32px] font-extrabold tracking-tight text-[var(--figma-navy)]">{formatLKR(grand)}</div>
+            <div className="text-[32px] font-extrabold tracking-tight text-[var(--figma-navy)]">
+              {formatLKR(estimateSum)}
+            </div>
           </div>
           <div className="text-right">
             <div className="mb-1 text-[11px] text-[var(--figma-gray400)]">All categories</div>
@@ -123,7 +187,7 @@ export function BoqScreen({ project, onBack }: { project: ActiveProjectView; onB
               const pct = (cat.estimate / grand) * 100;
               return (
                 <div
-                  key={cat.id}
+                  key={cat.id as DetailCategoryId}
                   title={`${cat.label}: ${formatLKR(cat.estimate)}`}
                   className="h-full transition-[width] duration-[600ms] ease-out"
                   style={{

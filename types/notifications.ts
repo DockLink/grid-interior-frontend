@@ -5,7 +5,8 @@ export type NotificationType =
   | "hold_request"
   | "access_request"
   | "file_version"
-  | "share_link";
+  | "share_link"
+  | "deadline_alert";
 
 export interface FileVersionEvent {
   id: string;
@@ -88,8 +89,19 @@ export interface ShareLinkAppNotification extends BaseNotification {
   raw: ShareLinkEvent;
 }
 
+export interface DeadlineAppNotification extends BaseNotification {
+  type: "deadline_alert";
+  urgency: "overdue" | "due_soon";
+  taskTitle: string;
+  taskId: string;
+  projectId: string;
+  projectName: string;
+  dueDate: string;
+}
+
 export type AppNotification =
   | HoldAppNotification
   | AccessAppNotification
   | FileVersionAppNotification
-  | ShareLinkAppNotification;
+  | ShareLinkAppNotification
+  | DeadlineAppNotification;

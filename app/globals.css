@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-aktiv-grotesk);
-  --font-mono: var(--font-aktiv-grotesk);
-  --font-heading: var(--font-aktiv-grotesk);
+  --font-sans: var(--font-grid-ui);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-heading: var(--font-grid-ui);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -60,22 +60,23 @@
 }
 
 :root {
-  /* Grid Interior Minimalist SaaS tokens */
-  --ds-font-sans: var(--font-aktiv-grotesk);
+  /* Grid Interior tokens — white surfaces, navy accents (requirements) */
+  --font-grid-ui: "Aptos", "Calibri", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --ds-font-sans: var(--font-grid-ui);
   --ds-font-weight: 400;
-  --ds-bg: #f8fafb;
+  --ds-bg: #ffffff;
   --ds-surface: #ffffff;
   --ds-surface-elevated: #ffffff;
-  --ds-label: #16233d;
+  --ds-label: #1b2a4a;
   --ds-secondary-label: #5b6b85;
-  --ds-tertiary-label: #5b6b85;
+  --ds-tertiary-label: #8a96a8;
   --ds-separator: #e4e9f0;
-  --ds-accent: #0fa8a0;
-  --ds-accent-muted: rgba(15, 168, 160, 0.12);
-  --ds-accent-hover: #0b9990;
-  --ds-destructive: #ff6b6b;
+  --ds-accent: #1b2a4a;
+  --ds-accent-muted: rgba(27, 42, 74, 0.1);
+  --ds-accent-hover: #0e7c86;
+  --ds-destructive: #ef4444;
   --ds-destructive-muted: #fdecec;
-  --ds-success: #2fbe6b;
+  --ds-success: #3fa66b;
   --ds-warning: #d97706;
   --ds-sidebar-bg: #0b2545;
   --ds-sidebar-width: 260px;

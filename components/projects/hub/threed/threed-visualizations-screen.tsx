@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { ClientConfirmationWidget } from "@/components/projects/hub/shared/client-confirmation-widget";
@@ -13,9 +15,20 @@ import {
   SectionTitle,
   WorkspaceBreadcrumb,
 } from "@/components/projects/hub/shared/workspace-ui";
+import { useProject } from "@/hooks/use-project";
+import { useProjectFiles } from "@/hooks/use-project-files";
+import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import {
+  folderChildrenAsAreas,
+  resolveThreedFolder,
+} from "@/lib/files/resolve-folder";
+import { isImageProjectFile } from "@/lib/files/map-project-file";
 import { THREED_AREAS, THREED_RENDER_GALLERY } from "@/lib/projects/mock-threed";
+import { queryKeys } from "@/lib/query/keys";
 import type { ActiveProjectView } from "@/types/project-hub";
-import type { ThreeDRenderImage } from "@/types/threed";
+import type { ThreeDArea, ThreeDRenderImage } from "@/types/threed";
+import type { ProjectFile } from "@/types/files";
 
 function RenderThumb({
   img,
@@ -87,14 +100,135 @@ export function ThreeDVisualizationsScreen({
   project: ActiveProjectView;
   onBack: () => void;
 }) {
-  const [activeArea, setActiveArea] = useState(1);
-  const [gallery, setGallery] = useState(THREED_RENDER_GALLERY);
+  const authDisabled = isAuthDisabled();
+  const { project: apiProject } = useProject(project.id);
+  const { folderTree, uploadFile, deleteFile, getDownloadUrl } = useProjectFiles(project.id);
+  const threedFolder = useMemo(() => resolveThreedFolder(folderTree), [folderTree]);
+
+  const liveAreas = useMemo(() => {
+    if (authDisabled || !threedFolder) return null;
+    const children = folderChildrenAsAreas(threedFolder);
+    if (children.length === 1 && children[0]?.path === threedFolder.path) {
+      return [{ id: 0, name: "All", path: threedFolder.path }];
+    }
+    return children.map((c, idx) => ({ id: idx + 1, name: c.name, path: c.path }));
+  }, [authDisabled, threedFolder]);
+
+  const areas: (ThreeDArea & { path?: string })[] = authDisabled
+    ? THREED_AREAS
+    : liveAreas ?? [{ id: 0, name: "All", path: threedFolder?.path }];
+  const [activeArea, setActiveArea] = useState<number | string>(areas[0]?.id ?? 1);
+  const [gallery, setGallery] = useState(() => (isAuthDisabled() ? THREED_RENDER_GALLERY : []));
+  const [liveGallery, setLiveGallery] = useState<ThreeDRenderImage[]>([]);
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [finalUploaded, setFinalUploaded] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
-  const area = THREED_AREAS.find((a) => a.id === activeArea)!;
+  useEffect(() => {
+    if (!areas.some((a) => a.id === activeArea)) {
+      setActiveArea(areas[0]?.id ?? 1);
+    }
+  }, [areas, activeArea]);
+
+  const area = areas.find((a) => a.id === activeArea) ?? areas[0]!;
+  const folderPath =
+    ("path" in area && area.path) || threedFolder?.path || "";
+
+  const { data: folderFiles = [], refetch } = useQuery({
+    queryKey: queryKeys.files.folder(project.id, folderPath),
+    queryFn: async () => {
+      const qs = new URLSearchParams({ folderPath });
+      const res = await authApiClient<{ data: ProjectFile[] }>(
+        `/projects/${project.id}/files?${qs}`,
+      );
+      return res.data ?? [];
+    },
+    enabled: !authDisabled && Boolean(folderPath),
+    staleTime: 20_000,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const images = folderFiles.filter(isImageProjectFile);
+      if (!images.length) {
+        if (!cancelled) setLiveGallery([]);
+        return;
+      }
+      const items = await Promise.all(
+        images.map(async (file) => {
+          try {
+            const url = await getDownloadUrl(file.id);
+            return {
+              id: file.id,
+              url,
+              caption: file.fileName,
+              fileId: file.id,
+            } as ThreeDRenderImage;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      if (!cancelled) {
+        setLiveGallery(items.filter((x): x is ThreeDRenderImage => x != null));
+      }
+    }
+    if (!authDisabled) void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [folderFiles, getDownloadUrl, authDisabled]);
+
+  const displayGallery = authDisabled ? gallery : liveGallery;
   const shortName = project.name.split(" ")[0] ?? project.name;
+  const vimeoUrl = apiProject?.vimeo_url ?? null;
+
+  async function handleUpload() {
+    if (authDisabled) {
+      setGallery((prev) => [...prev, { id: Date.now(), url: "", caption: "New render" }]);
+      return;
+    }
+    if (!folderPath) {
+      toast.error("3Ds folder not found. Provision project folders first.");
+      return;
+    }
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.multiple = true;
+    input.onchange = async () => {
+      const files = input.files ? Array.from(input.files) : [];
+      if (!files.length) return;
+      setUploading(true);
+      try {
+        for (const file of files) {
+          await uploadFile(folderPath, file);
+        }
+        await refetch();
+        toast.success("Renders uploaded");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Upload failed");
+      } finally {
+        setUploading(false);
+      }
+    };
+    input.click();
+  }
+
+  async function handleDelete(img: ThreeDRenderImage) {
+    if (authDisabled || !img.fileId) {
+      setGallery((prev) => prev.filter((i) => i.id !== img.id));
+      return;
+    }
+    try {
+      await deleteFile(img.fileId);
+      await refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+    }
+  }
 
   return (
     <div className="px-10 py-8">
@@ -110,7 +244,7 @@ export function ThreeDVisualizationsScreen({
         </p>
       </div>
 
-      <AreaTabs areas={THREED_AREAS} activeId={activeArea} setActiveId={setActiveArea} />
+      <AreaTabs areas={areas} activeId={activeArea} setActiveId={setActiveArea} />
 
       <SectionCard>
         <SectionTitle
@@ -118,31 +252,35 @@ export function ThreeDVisualizationsScreen({
           title={`${area.name} — 3D Renders`}
           right={
             <GradientBtn
-              label="Upload Renders"
+              label={uploading ? "Uploading…" : "Upload Renders"}
               icon="upload"
               small
-              onClick={() =>
-                setGallery((prev) => [...prev, { id: Date.now(), url: "", caption: "New render" }])
-              }
+              onClick={() => void handleUpload()}
             />
           }
         />
         <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-3.5">
-          {gallery.map((img, idx) => (
+          {displayGallery.map((img, idx) => (
             <RenderThumb
               key={img.id}
               img={img}
               onClick={() => setLightbox(idx)}
-              onDelete={() => setGallery((prev) => prev.filter((i) => i.id !== img.id))}
+              onDelete={() => void handleDelete(img)}
             />
           ))}
         </div>
+        {!authDisabled && displayGallery.length === 0 ? (
+          <p className="mt-3 text-center text-[13px] text-[var(--figma-gray400)]">
+            No renders in this folder yet.
+          </p>
+        ) : null}
       </SectionCard>
 
       <WalkthroughCard onExpand={() => setShowWalkthrough(true)} />
 
       <TimelineWidget
         phase="3D Design"
+        projectId={project.id}
         initialDays="14"
         startDate="11 Aug 2026"
         startDateIso="2026-08-11"
@@ -183,9 +321,10 @@ export function ThreeDVisualizationsScreen({
         phase="3D Design"
         nextPhase="Detail Drawings"
         defaultFeedback="Client approved the 3D renders and walkthrough. Minor lighting adjustment requested for the lobby east view."
+        localOnly
       />
 
-      {lightbox !== null && gallery[lightbox]?.url && (
+      {lightbox !== null && displayGallery[lightbox]?.url && (
         <div
           className="fixed inset-0 z-[500] flex items-center justify-center backdrop-blur-md"
           style={{ background: "rgba(27,42,74,0.85)" }}
@@ -194,13 +333,13 @@ export function ThreeDVisualizationsScreen({
           <div className="relative max-w-[85vw]" onClick={(e) => e.stopPropagation()}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={gallery[lightbox].url.replace("w=600&h=400", "w=1100&h=740")}
-              alt={gallery[lightbox].caption}
+              src={displayGallery[lightbox].url.replace("w=600&h=400", "w=1100&h=740")}
+              alt={displayGallery[lightbox].caption}
               className="max-h-[80vh] max-w-[85vw] rounded-xl object-contain"
               style={{ boxShadow: "var(--neu-modal, 0 24px 48px rgba(27,42,74,0.18))" }}
             />
             <div className="absolute inset-x-0 bottom-0 rounded-b-xl bg-gradient-to-t from-black/55 to-transparent px-4 pb-3 pt-4 text-xs font-medium text-white">
-              {gallery[lightbox].caption}
+              {displayGallery[lightbox].caption}
             </div>
             <button
               type="button"
@@ -218,6 +357,7 @@ export function ThreeDVisualizationsScreen({
           onClose={() => setShowWalkthrough(false)}
           projectName={shortName}
           variant="threed"
+          vimeoUrl={vimeoUrl}
         />
       )}
     </div>

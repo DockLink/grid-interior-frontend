@@ -81,7 +81,7 @@ export const DETAIL_CATEGORIES: DetailCategory[] = [
 
 export const DIRECTOR_PROJECTS: DirectorProject[] = [
   {
-    id: 1,
+    id: "1",
     name: "Marchetti Villa",
     client: "Giulia Marchetti",
     designer: { initials: "PN", color: "#7C3AED", name: "Priya Nair" },
@@ -97,7 +97,7 @@ export const DIRECTOR_PROJECTS: DirectorProject[] = [
     },
   },
   {
-    id: 2,
+    id: "2",
     name: "Bianchi Office Fit-Out",
     client: "Federico Bianchi",
     designer: { initials: "AP", color: "#0891B2", name: "Ashan Perera" },
@@ -113,7 +113,7 @@ export const DIRECTOR_PROJECTS: DirectorProject[] = [
     },
   },
   {
-    id: 3,
+    id: "3",
     name: "Romano Penthouse",
     client: "Luca Romano",
     designer: { initials: "DS", color: "#D97706", name: "Dilani Silva" },
@@ -129,7 +129,7 @@ export const DIRECTOR_PROJECTS: DirectorProject[] = [
     },
   },
   {
-    id: 4,
+    id: "4",
     name: "Visconti Showroom",
     client: "Alessandra Visconti",
     designer: { initials: "RF", color: "#059669", name: "Roshan Fernando" },
@@ -145,7 +145,7 @@ export const DIRECTOR_PROJECTS: DirectorProject[] = [
     },
   },
   {
-    id: 5,
+    id: "5",
     name: "De Luca Townhouse",
     client: "Marco De Luca",
     designer: { initials: "CG", color: "#6366F1", name: "Chamari Gunasena" },

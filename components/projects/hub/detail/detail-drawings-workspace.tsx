@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 
 import { DemoCaption } from "@/components/demo/demo-caption";
 import { useActiveProjectView } from "@/hooks/use-active-project-view";
+import { useProjectMembers } from "@/hooks/use-project-members";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { HubTeamProvider } from "@/lib/projects/hub-team-context";
+import { canViewBoqFinancials } from "@/lib/projects/permissions";
 import type { DetailView } from "@/types/detail";
 
 import { BoqScreen } from "./boq-screen";
@@ -25,6 +27,8 @@ export function DetailDrawingsWorkspace({
   const router = useRouter();
   const authDisabled = isAuthDisabled();
   const { project, teamMembers, isLoading, error } = useActiveProjectView(projectId);
+  const { effectiveRole, isViewer } = useProjectMembers();
+  const allowBoq = authDisabled || canViewBoqFinancials(effectiveRole, isViewer);
 
   const [view, setView] = useState<DetailView>(initialView);
 
@@ -32,7 +36,15 @@ export function DetailDrawingsWorkspace({
     setView(initialView);
   }, [initialView]);
 
+  useEffect(() => {
+    if (!allowBoq && view === "boq") {
+      setView("hub");
+      onViewChange?.("hub");
+    }
+  }, [allowBoq, view, onViewChange]);
+
   const navigateView = (next: DetailView) => {
+    if (next === "boq" && !allowBoq) return;
     setView(next);
     onViewChange?.(next);
   };
@@ -85,7 +97,7 @@ export function DetailDrawingsWorkspace({
       project={project}
       onBack={handleBack}
       onDirectorOverview={() => navigateView("director-overview")}
-      onBoq={() => navigateView("boq")}
+      onBoq={allowBoq ? () => navigateView("boq") : undefined}
     />,
   );
 }

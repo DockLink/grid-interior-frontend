@@ -20,9 +20,9 @@ import type {
 } from "@/types/users";
 
 const THEME_OPTIONS: { id: ThemePreset; label: string; description: string }[] = [
-  { id: "default", label: "Default", description: "ADS+MAD cream and gold" },
-  { id: "light", label: "Light", description: "Clean white surfaces" },
-  { id: "dark", label: "Dark", description: "Dark surfaces and light text" },
+  { id: "default", label: "Default", description: "White surfaces · dark blue accents" },
+  { id: "light", label: "Light", description: "Clean white · navy labels" },
+  { id: "dark", label: "Dark (advanced)", description: "Optional dark surfaces — not the GRID default" },
   { id: "high_contrast", label: "High contrast", description: "Stronger text and borders" },
 ];
 
@@ -120,13 +120,13 @@ export function AppearanceSettingsSection() {
   const accent =
     draft.custom_colors.accent ??
     draft.accent_color ??
-    (draft.theme_preset === "dark" ? "#E0B07A" : "#D4A96A");
+    (draft.theme_preset === "dark" ? "#5B9BD5" : "#1B2A4A");
   const hasCustomColors = Object.values(draft.custom_colors).some((v) => v);
 
   return (
     <section className="mt-5 rounded-2xl border border-[rgba(90,60,30,0.12)] bg-[var(--ds-surface-elevated,#FDFAF6)] p-5">
       <div className="mb-4 flex items-center gap-2">
-        <Palette size={16} color="var(--ds-accent, #D4A96A)" />
+        <Palette size={16} color="var(--ds-accent, #1B2A4A)" />
         <h2 className="text-[15px] font-semibold text-[var(--ds-label,#1A1410)]">
           Organization appearance
         </h2>
@@ -205,7 +205,7 @@ export function AppearanceSettingsSection() {
                 <button
                   type="button"
                   onClick={handleResetAllColors}
-                  className="inline-flex items-center gap-1 text-[12px] text-[var(--ds-accent,#D4A96A)] underline-offset-2 hover:underline"
+                  className="inline-flex items-center gap-1 text-[12px] text-[var(--ds-accent,#1B2A4A)] underline-offset-2 hover:underline"
                 >
                   <RotateCcw size={12} />
                   Reset all colors to preset
@@ -235,7 +235,7 @@ export function AppearanceSettingsSection() {
           disabled={!isDirty || isSavingAppearance}
           onClick={() => void handleSave()}
           className="h-10 rounded-lg text-white"
-          style={{ background: "var(--ds-accent, #D4A96A)" }}
+          style={{ background: "var(--ds-accent, #1B2A4A)" }}
         >
           {isSavingAppearance ? "Saving…" : "Save for all users"}
         </Button>
@@ -421,7 +421,7 @@ function SegmentedControl<T extends string>({
             onClick={() => onChange(opt.value)}
             className="flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors"
             style={{
-              background: active ? "var(--ds-accent, #D4A96A)" : "transparent",
+              background: active ? "var(--ds-accent, #1B2A4A)" : "transparent",
               color: active ? "#fff" : "var(--ds-label, #1A1410)",
             }}
           >

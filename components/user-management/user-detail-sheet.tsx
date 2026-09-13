@@ -12,15 +12,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useUserActivity } from "@/hooks/use-user-activity";
 import { getUserDisplayName } from "@/lib/user/display";
 import type { User, UserRole, UserStatus } from "@/types/users";
 
 const ROLE_PILL: Record<UserRole, { bg: string; color: string; label: string }> = {
   SUPER_ADMIN: { bg: "#F5E6D0", color: "#D4A96A", label: "Super Admin" },
   ADMIN: { bg: "#F5E6D0", color: "#D4A96A", label: "Admin" },
-  TEAM_LEAD: { bg: "#DBEAFE", color: "#1E3A8A", label: "Team Lead" },
-  MEMBER: { bg: "#F5EFE6", color: "#6B5744", label: "Member" },
-  GUEST: { bg: "#F5EFE6", color: "#6B5744", label: "Guest" },
+  TEAM_LEAD: { bg: "#DBEAFE", color: "#1E3A8A", label: "Project Coordinator" },
+  MEMBER: { bg: "#F5EFE6", color: "#6B5744", label: "Designer" },
+  GUEST: { bg: "#F5EFE6", color: "#6B5744", label: "Restricted / Guest" },
   CLIENT_FULL_ACCESS: { bg: "#E8F0FE", color: "#1E4A7A", label: "Full view access" },
 };
 
@@ -28,12 +29,6 @@ const STATUS_PILL: Record<UserStatus, { bg: string; color: string }> = {
   ACTIVE: { bg: "#D8F3DC", color: "#2D6A4F" },
   INACTIVE: { bg: "#F5EFE6", color: "#9C8573" },
 };
-
-const MOCK_ACTIVITY = [
-  { id: "a1", text: "Signed in from Chrome on macOS", at: "2h ago" },
-  { id: "a2", text: "Updated project Lumière Penthouse", at: "Yesterday" },
-  { id: "a3", text: "Uploaded FF&E Schedule v4.xlsx", at: "3d ago" },
-];
 
 export function UserDetailSheet({
   user,
@@ -49,6 +44,9 @@ export function UserDetailSheet({
   const role = user?.roles[0] ?? "MEMBER";
   const roleCfg = ROLE_PILL[role];
   const statusCfg = user ? STATUS_PILL[user.status] : STATUS_PILL.INACTIVE;
+  const { activity, isLoading, error, authDisabled } = useUserActivity(
+    open ? user?.id : null,
+  );
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
@@ -84,9 +82,18 @@ export function UserDetailSheet({
                 <p className="mb-2 text-[12px] font-semibold tracking-wide text-[#5B6B85] uppercase">
                   Activity
                 </p>
-                <DemoCaption className="mb-2" />
+                {authDisabled ? <DemoCaption className="mb-2" /> : null}
                 <div className="space-y-2">
-                  {MOCK_ACTIVITY.map((a) => (
+                  {isLoading ? (
+                    <p className="text-[13px] text-[#5B6B85]">Loading activity…</p>
+                  ) : null}
+                  {!isLoading && error ? (
+                    <p className="text-[13px] text-[#5B6B85]">No activity available.</p>
+                  ) : null}
+                  {!isLoading && !error && activity.length === 0 ? (
+                    <p className="text-[13px] text-[#5B6B85]">No recent activity.</p>
+                  ) : null}
+                  {activity.map((a) => (
                     <div key={a.id} className="rounded-lg bg-[#F8FAFB] p-3">
                       <p className="text-[13px] text-[#16233D]">{a.text}</p>
                       <p className="text-[11px] text-[#5B6B85]">{a.at}</p>

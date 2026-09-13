@@ -1,34 +1,13 @@
-// Mock portal data for Phase 4 Client Portal
-// Ported from Design System for GRID CRM/src/screens/portal/ClientPortal.tsx
+import type {
+  PortalMaterial,
+  PortalMilestone,
+  PortalPhase,
+  PortalProjectionApi,
+  PortalViewModel,
+} from "@/types/portal";
+import { accessFromDemoToken } from "@/lib/portal/map-portal";
 
-export interface PortalPhase {
-  id: number;
-  name: string;
-  status: "completed" | "active" | "upcoming";
-  progress: number;
-  startDate: string;
-  endDate: string;
-  description: string;
-}
-
-export interface PortalMilestone {
-  id: number;
-  name: string;
-  date: string;
-  status: "completed" | "upcoming" | "overdue";
-  notes?: string;
-}
-
-export interface PortalMaterial {
-  id: number;
-  category: string;
-  item: string;
-  status: "approved" | "pending" | "ordered" | "delivered";
-  description: string;
-  approvedDate?: string;
-}
-
-export const PORTAL_PROJECT = {
+const PORTAL_PROJECT = {
   name: "Marchetti Villa",
   clientName: "Giulia Marchetti",
   designer: "Priya Nair",
@@ -41,7 +20,7 @@ export const PORTAL_PROJECT = {
   bufferDays: 10,
 };
 
-export const PORTAL_PHASES: PortalPhase[] = [
+const PORTAL_PHASES: PortalPhase[] = [
   {
     id: 1,
     name: "Concept Design",
@@ -111,7 +90,7 @@ export const PORTAL_PHASES: PortalPhase[] = [
   },
 ];
 
-export const PORTAL_MILESTONES: PortalMilestone[] = [
+const PORTAL_MILESTONES: PortalMilestone[] = [
   {
     id: 1,
     name: "Concept Approval",
@@ -154,7 +133,7 @@ export const PORTAL_MILESTONES: PortalMilestone[] = [
   },
 ];
 
-export const PORTAL_MATERIALS: PortalMaterial[] = [
+const PORTAL_MATERIALS: PortalMaterial[] = [
   {
     id: 1,
     category: "Stone & Marble",
@@ -210,3 +189,58 @@ export const PORTAL_MATERIALS: PortalMaterial[] = [
     description: "Full set — lever handles, hinges, and accessories.",
   },
 ];
+
+/** Auth-off / demo projection for local portal UX. */
+export function getPortalFixtureView(token?: string): PortalViewModel {
+  return {
+    access: accessFromDemoToken(token),
+    project: { ...PORTAL_PROJECT },
+    phases: PORTAL_PHASES.map((p) => ({ ...p })),
+    milestones: PORTAL_MILESTONES.map((m) => ({ ...m })),
+    materials: PORTAL_MATERIALS.map((m) => ({ ...m })),
+  };
+}
+
+/** Snake_case API shape for BFF auth-off short-circuit if needed. */
+export function getPortalFixtureApi(token?: string): PortalProjectionApi {
+  const view = getPortalFixtureView(token);
+  return {
+    access: view.access,
+    buffer_days: view.project.bufferDays,
+    project: {
+      name: view.project.name,
+      client_name: view.project.clientName,
+      designer: view.project.designer,
+      project_code: view.project.projectId,
+      start_date: view.project.startDate,
+      end_date: view.project.endDate,
+      overall_progress: view.project.overallProgress,
+      last_friday_update: view.project.lastFridayUpdate,
+      completed_date: view.project.completedDate,
+    },
+    phases: view.phases.map((p) => ({
+      id: p.id,
+      name: p.name,
+      status: p.status,
+      progress: p.progress,
+      start_date: p.startDate,
+      end_date: p.endDate,
+      description: p.description,
+    })),
+    milestones: view.milestones.map((m) => ({
+      id: m.id,
+      name: m.name,
+      date: m.date,
+      status: m.status,
+      notes: m.notes ?? null,
+    })),
+    materials: view.materials.map((m) => ({
+      id: m.id,
+      category: m.category,
+      item: m.item,
+      status: m.status,
+      description: m.description,
+      approved_date: m.approvedDate ?? null,
+    })),
+  };
+}

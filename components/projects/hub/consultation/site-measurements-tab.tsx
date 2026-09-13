@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
-import { SAMPLE_ROOMS } from "@/lib/projects/mock-consultation";
+import { useConsultation } from "@/hooks/use-consultation";
 import { useHubTeam } from "@/lib/projects/hub-team-context";
 import type { ConsultRoom } from "@/types/consultation";
 
@@ -64,19 +64,34 @@ function MeasurementRow({
   );
 }
 
-export function SiteMeasurementsTab() {
+export function SiteMeasurementsTab({ projectId }: { projectId: string }) {
   const teamMembers = useHubTeam();
-  const [rooms, setRooms] = useState<ConsultRoom[]>(SAMPLE_ROOMS);
+  const { rooms: remoteRooms, createRoom, updateRoom, deleteRoom, isAuthOff } =
+    useConsultation(projectId);
+  const [rooms, setRooms] = useState<ConsultRoom[]>(remoteRooms);
   const [sketchUploaded, setSketchUploaded] = useState(true);
   const [dragOver, setDragOver] = useState(false);
   const [saved, setSaved] = useState(false);
   const [visitDate, setVisitDate] = useState("2026-07-30");
   const [visitTime, setVisitTime] = useState("10:00");
-  const [visitStatus, setVisitStatus] = useState<"scheduled" | "completed" | "cancelled">("scheduled");
+  const [visitStatus, setVisitStatus] = useState<"scheduled" | "completed" | "cancelled">(
+    "scheduled",
+  );
   const [attendees, setAttendees] = useState([1, 3, 4]);
 
-  const updateRoom = (id: number, field: keyof ConsultRoom, val: string) => {
+  useEffect(() => {
+    setRooms(remoteRooms);
+  }, [remoteRooms]);
+
+  const updateLocal = (id: string, field: keyof ConsultRoom, val: string) => {
     setRooms((p) => p.map((r) => (r.id === id ? { ...r, [field]: val } : r)));
+  };
+
+  const persistField = (id: string, field: keyof ConsultRoom, val: string) => {
+    updateLocal(id, field, val);
+    if (!isAuthOff && !id.startsWith("mock-")) {
+      void updateRoom(id, { [field]: val });
+    }
   };
 
   return (
@@ -266,7 +281,11 @@ export function SiteMeasurementsTab() {
           right={
             <button
               type="button"
-              onClick={() => setRooms((p) => [...p, { id: Date.now(), name: "", length: "", width: "", height: "" }])}
+              onClick={() => {
+                void createRoom({ name: "", length: "", width: "", height: "" }).then((room) => {
+                  if (isAuthOff && room) setRooms((p) => [...p, room]);
+                });
+              }}
               className="flex cursor-pointer items-center gap-1.5 border-none bg-transparent text-xs font-semibold text-[var(--figma-teal)]"
             >
               <MaterialIcon name="add" outlined size={15} />
@@ -293,8 +312,11 @@ export function SiteMeasurementsTab() {
                 key={room.id}
                 room={room}
                 isLast={idx === rooms.length - 1}
-                onChange={(field, val) => updateRoom(room.id, field, val)}
-                onDelete={() => setRooms((p) => p.filter((r) => r.id !== room.id))}
+                onChange={(field, val) => persistField(room.id, field, val)}
+                onDelete={() => {
+                  setRooms((p) => p.filter((r) => r.id !== room.id));
+                  void deleteRoom(room.id);
+                }}
               />
             ))}
           </tbody>
@@ -311,7 +333,7 @@ export function SiteMeasurementsTab() {
         </div>
       </SectionCard>
 
-      <SectionNotes section="site" />
+      <SectionNotes section="site" projectId={projectId} />
     </div>
   );
 }

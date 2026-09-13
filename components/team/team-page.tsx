@@ -17,21 +17,27 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MOCK_TEAM, type StudioMember, type StudioMemberRole } from "@/lib/team/mock-team";
+import { useTeam } from "@/hooks/use-team";
+import { studioRoleToUserRole } from "@/lib/team/map-team";
+import type { StudioMember, StudioMemberRole } from "@/lib/team/mock-team";
 
 const ROLE_STYLE: Record<StudioMemberRole, { bg: string; color: string }> = {
   Admin: { bg: "rgba(11,37,69,0.08)", color: "#0B2545" },
   "Team Lead": { bg: "rgba(15,168,160,0.12)", color: "#0FA8A0" },
+  "Project Coordinator": { bg: "rgba(30,58,138,0.12)", color: "#1E3A8A" },
   Member: { bg: "rgba(91,107,133,0.12)", color: "#5B6B85" },
+  Designer: { bg: "rgba(107,87,68,0.12)", color: "#6B5744" },
 };
 
 export function TeamPage() {
-  const [members, setMembers] = useState(MOCK_TEAM);
+  const { members, isLoading, isMutating, error, createUser, authDisabled } = useTeam();
   const [search, setSearch] = useState("");
   const [showInvite, setShowInvite] = useState(false);
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<StudioMemberRole>("Member");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<StudioMemberRole>("Designer");
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -44,13 +50,45 @@ export function TeamPage() {
     );
   }, [members, search]);
 
+  async function handleInvite() {
+    if (!firstName.trim() || !email.trim() || !password.trim()) return;
+    if (authDisabled) {
+      toast.message("Enable auth to invite members against the API.");
+      return;
+    }
+    try {
+      await createUser({
+        email: email.trim(),
+        first_name: firstName.trim(),
+        last_name: lastName.trim() || undefined,
+        password,
+        role: studioRoleToUserRole(role),
+        status: "ACTIVE",
+      });
+      setFirstName("");
+      setLastName("");
+      setEmail("");
+      setPassword("");
+      setRole("Designer");
+      setShowInvite(false);
+      toast.success("Member created");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create member");
+    }
+  }
+
   return (
     <div>
       <div className="mb-5 flex items-center justify-between gap-4">
         <div>
           <h2 className="text-[22px] font-bold text-[#16233D]">Team</h2>
-          <p className="text-[14px] text-[#5B6B85]">{members.length} studio members</p>
-          <DemoCaption className="mt-1" />
+          <p className="text-[14px] text-[#5B6B85]">
+            {isLoading ? "Loading…" : `${members.length} studio members`}
+          </p>
+          {authDisabled ? <DemoCaption className="mt-1" /> : null}
+          {error ? (
+            <p className="mt-1 text-[12px] text-[var(--figma-alert)]">{error}</p>
+          ) : null}
         </div>
         <Button
           className="rounded-full bg-[#0FA8A0] text-white hover:bg-[#0B9990]"
@@ -83,15 +121,36 @@ export function TeamPage() {
           </DialogHeader>
           <DialogBody className="space-y-3">
             <div className="space-y-2">
-              <Label>Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} className="h-10" />
+              <Label>First name</Label>
+              <Input
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Last name</Label>
+              <Input
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="h-10"
+              />
             </div>
             <div className="space-y-2">
               <Label>Email</Label>
               <Input value={email} onChange={(e) => setEmail(e.target.value)} className="h-10" />
             </div>
+            <div className="space-y-2">
+              <Label>Temporary password</Label>
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="h-10"
+              />
+            </div>
             <div className="flex gap-2">
-              {(["Member", "Team Lead", "Admin"] as StudioMemberRole[]).map((r) => (
+              {(["Designer", "Project Coordinator", "Admin"] as StudioMemberRole[]).map((r) => (
                 <button
                   key={r}
                   type="button"
@@ -113,31 +172,10 @@ export function TeamPage() {
             </Button>
             <Button
               className="bg-[#0FA8A0] text-white hover:bg-[#0B9990]"
-              onClick={() => {
-                if (!name.trim() || !email.trim()) return;
-                setMembers((prev) => [
-                  {
-                    id: `m${Date.now()}`,
-                    name: name.trim(),
-                    email: email.trim(),
-                    role,
-                    initials: name.trim().slice(0, 2).toUpperCase(),
-                    color: "#0FA8A0",
-                    title: role === "Admin" ? "Studio Admin" : role,
-                    projects: 0,
-                    openTasks: 0,
-                    status: "active",
-                  },
-                  ...prev,
-                ]);
-                setName("");
-                setEmail("");
-                setRole("Member");
-                setShowInvite(false);
-                toast.success("Invite sent (demo)");
-              }}
+              disabled={isMutating || !firstName.trim() || !email.trim() || !password.trim()}
+              onClick={() => void handleInvite()}
             >
-              Send invite
+              {isMutating ? "Creating…" : "Create member"}
             </Button>
           </DialogFooter>
         </DialogContent>

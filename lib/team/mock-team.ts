@@ -1,4 +1,4 @@
-export type StudioMemberRole = "Admin" | "Team Lead" | "Member";
+export type StudioMemberRole = "Admin" | "Team Lead" | "Member" | "Project Coordinator" | "Designer";
 
 export interface StudioMember {
   id: string;

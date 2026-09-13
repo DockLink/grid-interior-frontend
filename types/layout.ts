@@ -4,24 +4,25 @@ export type LayoutDrawingType = "pdf" | "dwg" | "img";
 export type LayoutTaskStatus = "todo" | "in-progress" | "done";
 
 export interface LayoutArea {
-  id: number;
+  id: number | string;
   name: string;
 }
 
 export interface LayoutDrawingFile {
-  id: number;
-  areaId: number;
+  id: number | string;
+  areaId: number | string;
   name: string;
   type: LayoutDrawingType;
   size: string;
   date: string;
   url?: string;
+  fileId?: string;
 }
 
 export interface LayoutTask {
-  id: number;
+  id: number | string;
   title: string;
-  assigneeId: number;
+  assigneeId: number | string;
   status: LayoutTaskStatus;
 }
 

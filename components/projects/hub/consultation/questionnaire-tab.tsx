@@ -132,12 +132,9 @@ function YesNo({
   );
 }
 
-export function QuestionnaireTab() {
-  const [saved, setSaved] = useState(true);
+export function QuestionnaireTab({ projectId }: { projectId: string }) {
   const touch = <T,>(fn: (v: T) => void) => (v: T) => {
     fn(v);
-    setSaved(false);
-    setTimeout(() => setSaved(true), 800);
   };
 
   const [name, setName] = useState("Giulia Marchetti");
@@ -196,19 +193,12 @@ export function QuestionnaireTab() {
 
   return (
     <div>
-      <div className="mb-5 flex items-center justify-end gap-1.5">
-        {saved ? (
-          <>
-            <MaterialIcon name="check_circle" size={14} style={{ color: "#3FA66B" }} />
-            <span className="text-[11px] font-medium text-[#3FA66B]">All changes saved</span>
-          </>
-        ) : (
-          <>
-            <MaterialIcon name="sync" outlined size={14} className="text-[var(--figma-gray400)]" />
-            <span className="text-[11px] text-[var(--figma-gray400)]">Saving…</span>
-          </>
-        )}
-        <span className="text-[11px] text-[var(--figma-gray400)]">· Auto-save enabled</span>
+      <div className="mb-5 flex items-start gap-2 rounded-[10px] border border-[#FDE68A] bg-[#FFFBEB] px-3.5 py-2.5 text-[12px] text-[#92400E]">
+        <MaterialIcon name="info" outlined size={16} className="mt-0.5 shrink-0" />
+        <span>
+          Questionnaire answers are draft-only in this browser session and are not saved to the server yet.
+          Section notes below do persist.
+        </span>
       </div>
 
       <SectionCard>
@@ -439,7 +429,7 @@ export function QuestionnaireTab() {
         </div>
       </SectionCard>
 
-      <SectionNotes section="questionnaire" />
+      <SectionNotes section="questionnaire" projectId={projectId} />
     </div>
   );
 }

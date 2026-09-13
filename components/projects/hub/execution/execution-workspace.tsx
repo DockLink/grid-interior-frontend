@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 
 import { DemoCaption } from "@/components/demo/demo-caption";
 import { useActiveProjectView } from "@/hooks/use-active-project-view";
+import { useProjectMembers } from "@/hooks/use-project-members";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { HubTeamProvider } from "@/lib/projects/hub-team-context";
+import { canViewBoqFinancials } from "@/lib/projects/permissions";
 import type { ExecutionView } from "@/types/execution";
 
 import { BoqLineTable } from "./boq-line-table";
@@ -25,13 +27,23 @@ export function ExecutionWorkspace({
   const router = useRouter();
   const authDisabled = isAuthDisabled();
   const { project, teamMembers, isLoading, error } = useActiveProjectView(projectId);
+  const { effectiveRole, isViewer } = useProjectMembers();
+  const allowBoq = authDisabled || canViewBoqFinancials(effectiveRole, isViewer);
   const [view, setView] = useState<ExecutionView>(initialView);
 
   useEffect(() => {
     setView(initialView);
   }, [initialView]);
 
+  useEffect(() => {
+    if (!allowBoq && view === "boq") {
+      setView("stages");
+      onViewChange?.("stages");
+    }
+  }, [allowBoq, view, onViewChange]);
+
   const navigateView = (next: ExecutionView) => {
+    if (next === "boq" && !allowBoq) return;
     setView(next);
     onViewChange?.(next);
   };
@@ -72,7 +84,7 @@ export function ExecutionWorkspace({
           <StagesScreen
             project={project}
             onBack={handleBackToProject}
-            onOpenBoq={() => navigateView("boq")}
+            onOpenBoq={allowBoq ? () => navigateView("boq") : undefined}
             onOpenSite={() => navigateView("site")}
           />
         )}

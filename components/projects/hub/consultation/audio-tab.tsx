@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
-import { SAMPLE_AUDIO } from "@/lib/projects/mock-consultation";
+import { useConsultation } from "@/hooks/use-consultation";
 import type { ConsultAudioFile } from "@/types/consultation";
 
 import { OutlineBtn, SectionCard, SectionTitle } from "./consultation-ui";
@@ -101,12 +101,33 @@ function AudioRow({
   );
 }
 
-export function AudioTab() {
-  const [audioFiles, setAudioFiles] = useState<ConsultAudioFile[]>(SAMPLE_AUDIO);
-  const [playing, setPlaying] = useState<number | null>(null);
+export function AudioTab({ projectId }: { projectId: string }) {
+  const {
+    audio: remoteAudio,
+    createAudio,
+    deleteAudio,
+    isAuthOff,
+  } = useConsultation(projectId);
+  const [audioFiles, setAudioFiles] = useState<ConsultAudioFile[]>(remoteAudio);
+  const [playing, setPlaying] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const togglePlay = (id: number) => setPlaying((p) => (p === id ? null : id));
+  useEffect(() => {
+    setAudioFiles(remoteAudio);
+  }, [remoteAudio]);
+
+  const togglePlay = (id: string) => setPlaying((p) => (p === id ? null : id));
+
+  const addAudio = (name: string) => {
+    void createAudio({
+      name,
+      duration: "00:00",
+      date: "Just now",
+      size: "—",
+    }).then((created) => {
+      if (isAuthOff && created) setAudioFiles((p) => [...p, created]);
+    });
+  };
 
   return (
     <div>
@@ -122,16 +143,7 @@ export function AudioTab() {
           onDrop={(e) => {
             e.preventDefault();
             setDragOver(false);
-            setAudioFiles((p) => [
-              ...p,
-              {
-                id: Date.now(),
-                name: "new_recording.m4a",
-                duration: "00:00",
-                date: "Just now",
-                size: "—",
-              },
-            ]);
+            addAudio("new_recording.m4a");
           }}
           className="flex cursor-pointer flex-col items-center gap-3 rounded-[14px] border-2 border-dashed px-8 py-9 transition-all duration-200 neu-inset"
           style={{
@@ -170,12 +182,7 @@ export function AudioTab() {
               label="Add Audio"
               icon="add"
               small
-              onClick={() =>
-                setAudioFiles((p) => [
-                  ...p,
-                  { id: Date.now(), name: "recording.m4a", duration: "00:00", date: "Just now", size: "—" },
-                ])
-              }
+              onClick={() => addAudio("recording.m4a")}
             />
           }
         />
@@ -186,7 +193,10 @@ export function AudioTab() {
               file={file}
               isPlaying={playing === file.id}
               onPlay={() => togglePlay(file.id)}
-              onDelete={() => setAudioFiles((p) => p.filter((f) => f.id !== file.id))}
+              onDelete={() => {
+                setAudioFiles((p) => p.filter((f) => f.id !== file.id));
+                void deleteAudio(file.id);
+              }}
             />
           ))}
         </div>

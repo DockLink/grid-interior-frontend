@@ -1,14 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import {
-  PORTAL_MATERIALS,
-  PORTAL_MILESTONES,
-  PORTAL_PHASES,
-  PORTAL_PROJECT,
-  type PortalMaterial,
-  type PortalPhase,
-} from "@/lib/portal/mock-portal";
+import { createContext, useContext, useState } from "react";
+
+import { usePortal } from "@/hooks/use-portal";
+import type {
+  PortalMaterial,
+  PortalViewModel,
+} from "@/types/portal";
+
+const PortalDataContext = createContext<PortalViewModel | null>(null);
+
+function usePortalData(): PortalViewModel {
+  const ctx = useContext(PortalDataContext);
+  if (!ctx) throw new Error("Portal views require PortalDataContext");
+  return ctx;
+}
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -65,6 +71,7 @@ function PortalHeader({
   view: PortalView;
   setView: (v: PortalView) => void;
 }) {
+  const { project } = usePortalData();
   return (
     <header
       style={{
@@ -202,10 +209,10 @@ function PortalHeader({
         </div>
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.white }}>
-            {PORTAL_PROJECT.clientName}
+            {project.clientName}
           </div>
           <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)" }}>
-            {PORTAL_PROJECT.projectId}
+            {project.projectId}
           </div>
         </div>
       </div>
@@ -215,16 +222,13 @@ function PortalHeader({
 
 // ── HOME VIEW ─────────────────────────────────────────────────────────────────
 function PortalHome({ setView }: { setView: (v: PortalView) => void }) {
-  const activePhase = PORTAL_PHASES.find((p) => p.status === "active");
-  const nextMilestone = PORTAL_MILESTONES.find(
-    (m) => m.status === "upcoming"
-  );
-  const needsAttention = PORTAL_MILESTONES.filter(
-    (m) => m.status === "overdue" || m.status === "upcoming"
-  ).slice(0, 3);
-  const pendingMaterials = PORTAL_MATERIALS.filter(
-    (m) => m.status === "pending"
-  );
+  const { project, phases, milestones, materials } = usePortalData();
+  const activePhase = phases.find((p) => p.status === "active");
+  const nextMilestone = milestones.find((m) => m.status === "upcoming");
+  const needsAttention = milestones
+    .filter((m) => m.status === "overdue" || m.status === "upcoming")
+    .slice(0, 3);
+  const pendingMaterials = materials.filter((m) => m.status === "pending");
 
   return (
     <div style={{ padding: "40px 40px 60px" }}>
@@ -286,7 +290,7 @@ function PortalHome({ setView }: { setView: (v: PortalView) => void }) {
               lineHeight: 1.2,
             }}
           >
-            {PORTAL_PROJECT.clientName}
+            {project.clientName}
           </h1>
           <div
             style={{
@@ -295,7 +299,7 @@ function PortalHome({ setView }: { setView: (v: PortalView) => void }) {
               marginBottom: 24,
             }}
           >
-            {PORTAL_PROJECT.name}
+            {project.name}
           </div>
 
           {/* Progress bar */}
@@ -319,7 +323,7 @@ function PortalHome({ setView }: { setView: (v: PortalView) => void }) {
               <div
                 style={{
                   height: "100%",
-                  width: `${PORTAL_PROJECT.overallProgress}%`,
+                  width: `${project.overallProgress}%`,
                   background: `linear-gradient(90deg, ${T.tealLight}, ${T.teal})`,
                   borderRadius: 4,
                   transition: "width 800ms ease",
@@ -329,7 +333,7 @@ function PortalHome({ setView }: { setView: (v: PortalView) => void }) {
             <span
               style={{ fontSize: 14, fontWeight: 800, color: T.white }}
             >
-              {PORTAL_PROJECT.overallProgress}%
+              {project.overallProgress}%
             </span>
           </div>
           <div
@@ -339,8 +343,8 @@ function PortalHome({ setView }: { setView: (v: PortalView) => void }) {
               marginTop: 6,
             }}
           >
-            Overall project progress · {PORTAL_PROJECT.startDate} –{" "}
-            {PORTAL_PROJECT.endDate}
+            Overall project progress · {project.startDate} –{" "}
+            {project.endDate}
           </div>
         </div>
       </div>
@@ -379,7 +383,7 @@ function PortalHome({ setView }: { setView: (v: PortalView) => void }) {
           {
             icon: "person_outline",
             label: "Your Designer",
-            value: PORTAL_PROJECT.designer,
+            value: project.designer,
             sub: "Available for questions",
             color: T.success,
           },
@@ -482,7 +486,7 @@ function PortalHome({ setView }: { setView: (v: PortalView) => void }) {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
-          {PORTAL_PHASES.map((phase, idx) => {
+          {phases.map((phase, idx) => {
             const isDone = phase.status === "completed";
             const isActive = phase.status === "active";
             return (
@@ -510,7 +514,7 @@ function PortalHome({ setView }: { setView: (v: PortalView) => void }) {
                     }}
                   />
                 )}
-                {idx < PORTAL_PHASES.length - 1 && (
+                {idx < phases.length - 1 && (
                   <div
                     style={{
                       position: "absolute",
@@ -713,6 +717,7 @@ function PortalHome({ setView }: { setView: (v: PortalView) => void }) {
 
 // ── TIMELINE VIEW ─────────────────────────────────────────────────────────────
 function PortalTimeline() {
+  const { project, phases, milestones } = usePortalData();
   return (
     <div style={{ padding: "40px 40px 60px", maxWidth: 800 }}>
       <h1
@@ -726,8 +731,8 @@ function PortalTimeline() {
         Your Project Timeline
       </h1>
       <p style={{ fontSize: 12, color: T.gray500, margin: "0 0 28px" }}>
-        {PORTAL_PROJECT.name} · {PORTAL_PROJECT.startDate} –{" "}
-        {PORTAL_PROJECT.endDate}
+        {project.name} · {project.startDate} –{" "}
+        {project.endDate}
       </p>
 
       {/* Progress bar */}
@@ -751,7 +756,7 @@ function PortalTimeline() {
             Overall Progress
           </span>
           <span style={{ fontSize: 13, fontWeight: 700, color: T.teal }}>
-            {PORTAL_PROJECT.overallProgress}%
+            {project.overallProgress}%
           </span>
         </div>
         <div
@@ -766,7 +771,7 @@ function PortalTimeline() {
           <div
             style={{
               height: "100%",
-              width: `${PORTAL_PROJECT.overallProgress}%`,
+              width: `${project.overallProgress}%`,
               background: `linear-gradient(90deg, ${T.navy}, ${T.teal})`,
               borderRadius: 5,
               transition: "width 600ms ease",
@@ -788,7 +793,7 @@ function PortalTimeline() {
           Phases
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {PORTAL_PHASES.map((phase) => {
+          {phases.map((phase) => {
             const isDone = phase.status === "completed";
             const isActive = phase.status === "active";
             return (
@@ -947,7 +952,7 @@ function PortalTimeline() {
             overflow: "hidden",
           }}
         >
-          {PORTAL_MILESTONES.map((m, idx) => {
+          {milestones.map((m, idx) => {
             const cfg = MILESTONE_BADGE[m.status];
             return (
               <div
@@ -958,7 +963,7 @@ function PortalTimeline() {
                   gap: 14,
                   padding: "14px 18px",
                   borderBottom:
-                    idx < PORTAL_MILESTONES.length - 1
+                    idx < milestones.length - 1
                       ? `1px solid ${T.border}`
                       : "none",
                 }}
@@ -1057,9 +1062,8 @@ function PortalTimeline() {
 
 // ── MATERIALS VIEW ─────────────────────────────────────────────────────────────
 function PortalMaterials() {
-  const categories = [
-    ...new Set(PORTAL_MATERIALS.map((m) => m.category)),
-  ];
+  const { project, materials } = usePortalData();
+  const categories = [...new Set(materials.map((m) => m.category))];
 
   return (
     <div style={{ padding: "40px 40px 60px", maxWidth: 860 }}>
@@ -1074,13 +1078,13 @@ function PortalMaterials() {
         Your Material Selections
       </h1>
       <p style={{ fontSize: 12, color: T.gray500, margin: "0 0 6px" }}>
-        {PORTAL_PROJECT.name} · Selected finishes, furniture, and materials
+        {project.name} · Selected finishes, furniture, and materials
       </p>
 
       {/* Attention banner removed — client view is read-only */}
 
       {categories.map((cat) => {
-        const items = PORTAL_MATERIALS.filter((m) => m.category === cat);
+        const items = materials.filter((m) => m.category === cat);
         return (
           <div key={cat} style={{ marginBottom: 20 }}>
             <div
@@ -1210,6 +1214,7 @@ function MaterialRow({
 
 // ── PORTAL FOOTER ─────────────────────────────────────────────────────────────
 function PortalFooter() {
+  const { project } = usePortalData();
   return (
     <footer
       style={{
@@ -1245,7 +1250,7 @@ function PortalFooter() {
           </span>
         </div>
         <span style={{ fontSize: 12, color: T.gray500 }}>
-          GRID Interior Design · {PORTAL_PROJECT.projectId}
+          GRID Interior Design · {project.projectId}
         </span>
       </div>
       <div style={{ fontSize: 12, color: T.gray400 }}>
@@ -1264,10 +1269,81 @@ function PortalFooter() {
 // ── MAIN EXPORT ───────────────────────────────────────────────────────────────
 export function ClientPortalWorkspace({ token }: { token?: string }) {
   const [view, setView] = useState<PortalView>("home");
-  const closed = token === "expired" || token === "closed";
-  const buffer = token === "buffer";
+  const {
+    access,
+    project,
+    phases,
+    milestones,
+    materials,
+    isLoading,
+    error,
+  } = usePortal(token);
 
-  if (closed) {
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#F5F7FA",
+          fontFamily: "inherit",
+          color: T.gray500,
+          fontSize: 14,
+        }}
+      >
+        Loading portal…
+      </div>
+    );
+  }
+
+  if (error || !project) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#F5F7FA",
+          padding: 32,
+          fontFamily: "inherit",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 420,
+            background: T.white,
+            borderRadius: 20,
+            padding: 36,
+            boxShadow: S.card,
+            textAlign: "center",
+          }}
+        >
+          <span className="material-icons-outlined" style={{ fontSize: 40, color: T.alert }}>
+            error_outline
+          </span>
+          <h1 style={{ fontSize: 22, color: T.navy, margin: "12px 0 8px" }}>
+            Portal unavailable
+          </h1>
+          <p style={{ fontSize: 13, color: T.gray500, margin: 0 }}>
+            This portal link is invalid or could not be loaded. Please contact your designer.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const portalData: PortalViewModel = {
+    access,
+    project,
+    phases,
+    milestones,
+    materials,
+  };
+
+  if (access === "closed") {
     return (
       <div
         style={{
@@ -1295,7 +1371,7 @@ export function ClientPortalWorkspace({ token }: { token?: string }) {
           </span>
           <h1 style={{ fontSize: 22, color: T.navy, margin: "12px 0 8px" }}>Portal closed</h1>
           <p style={{ fontSize: 13, color: T.gray500, margin: 0 }}>
-            This project is complete. The client portal remained open for {PORTAL_PROJECT.bufferDays} days
+            This project is complete. The client portal remained open for {project.bufferDays} days
             after handover and is now closed.
           </p>
         </div>
@@ -1304,49 +1380,51 @@ export function ClientPortalWorkspace({ token }: { token?: string }) {
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        background: "#F5F7FA",
-        fontFamily:
-          "'Aptos', 'Calibri', 'Segoe UI', system-ui, -apple-system, sans-serif",
-      }}
-    >
-      <PortalHeader view={view} setView={setView} />
-      {buffer && (
-        <div
-          style={{
-            background: "#FEF3C7",
-            color: "#92400E",
-            fontSize: 12,
-            fontWeight: 600,
-            padding: "10px 40px",
-          }}
-        >
-          Project complete — this portal stays open for {PORTAL_PROJECT.bufferDays} days, then closes.
-        </div>
-      )}
+    <PortalDataContext.Provider value={portalData}>
       <div
         style={{
-          background: T.white,
-          borderBottom: `1px solid ${T.border}`,
-          padding: "8px 40px",
-          fontSize: 12,
-          color: T.gray500,
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          background: "#F5F7FA",
+          fontFamily:
+            "'Aptos', 'Calibri', 'Segoe UI', system-ui, -apple-system, sans-serif",
         }}
       >
-        Last Friday update: {PORTAL_PROJECT.lastFridayUpdate} · Materials list is view-only
+        <PortalHeader view={view} setView={setView} />
+        {access === "buffer" && (
+          <div
+            style={{
+              background: "#FEF3C7",
+              color: "#92400E",
+              fontSize: 12,
+              fontWeight: 600,
+              padding: "10px 40px",
+            }}
+          >
+            Project complete — this portal stays open for {project.bufferDays} days, then closes.
+          </div>
+        )}
+        <div
+          style={{
+            background: T.white,
+            borderBottom: `1px solid ${T.border}`,
+            padding: "8px 40px",
+            fontSize: 12,
+            color: T.gray500,
+          }}
+        >
+          Last Friday update: {project.lastFridayUpdate} · Materials list is view-only
+        </div>
+
+        <main style={{ flex: 1 }}>
+          {view === "home" && <PortalHome setView={setView} />}
+          {view === "timeline" && <PortalTimeline />}
+          {view === "materials" && <PortalMaterials />}
+        </main>
+
+        <PortalFooter />
       </div>
-
-      <main style={{ flex: 1 }}>
-        {view === "home" && <PortalHome setView={setView} />}
-        {view === "timeline" && <PortalTimeline />}
-        {view === "materials" && <PortalMaterials />}
-      </main>
-
-      <PortalFooter />
-    </div>
+    </PortalDataContext.Provider>
   );
 }
