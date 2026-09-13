@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { StatTile } from "@/components/projects/hub/stat-tile";
-import { DIRECTOR_PROJECTS } from "@/lib/projects/mock-detail";
+import { useDirectorOverview } from "@/hooks/use-detail-categories";
 import { cn } from "@/lib/utils";
 import type { DetailCategoryId, DirectorProject } from "@/types/detail";
 import type { ActiveProjectView } from "@/types/project-hub";
@@ -56,7 +56,7 @@ function DirectorProjectRow({
     >
       <div>
         <div className="text-sm font-bold text-[var(--figma-navy)]">{proj.name}</div>
-        <div className="text-[11px] text-[var(--figma-gray400)]">ID #{proj.id.toString().padStart(4, "0")}</div>
+        <div className="text-[11px] text-[var(--figma-gray400)]">ID #{proj.id.padStart(4, "0")}</div>
       </div>
 
       <div className="text-[13px] text-[var(--figma-gray700)]">{proj.client}</div>
@@ -139,18 +139,23 @@ export function DirectorOverviewScreen({
   project: ActiveProjectView;
   onBack: () => void;
 }) {
+  const { projects: directorProjects } = useDirectorOverview();
   const [sort, setSort] = useState<"days" | "name">("days");
   const [statusFilter, setStatusFilter] = useState<"all" | "awaiting" | "complete">("all");
   const [sortOpen, setSortOpen] = useState(false);
   const [backHover, setBackHover] = useState(false);
 
-  const filtered = DIRECTOR_PROJECTS.filter((p) => statusFilter === "all" || p.status === statusFilter).sort((a, b) =>
-    sort === "days" ? b.daysInPhase - a.daysInPhase : a.name.localeCompare(b.name),
-  );
+  const filtered = directorProjects
+    .filter((p) => statusFilter === "all" || p.status === statusFilter)
+    .sort((a, b) =>
+      sort === "days" ? b.daysInPhase - a.daysInPhase : a.name.localeCompare(b.name),
+    );
 
-  const totalProjects = DIRECTOR_PROJECTS.length;
-  const awaitingReview = DIRECTOR_PROJECTS.filter((p) => p.status === "awaiting").length;
-  const avgDays = Math.round(DIRECTOR_PROJECTS.reduce((s, p) => s + p.daysInPhase, 0) / totalProjects);
+  const totalProjects = directorProjects.length;
+  const awaitingReview = directorProjects.filter((p) => p.status === "awaiting").length;
+  const avgDays = totalProjects
+    ? Math.round(directorProjects.reduce((s, p) => s + p.daysInPhase, 0) / totalProjects)
+    : 0;
 
   return (
     <div className="px-10 py-8">

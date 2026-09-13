@@ -84,7 +84,9 @@ export function PermissionsMatrixView() {
       <div className="flex items-end justify-between gap-3 border-b border-[#E4E9F0] px-4 py-3">
         <div>
           <p className="text-[14px] font-semibold text-[#16233D]">Permissions matrix</p>
-          <DemoCaption className="mt-0.5">Demo overlay — not wired to the API.</DemoCaption>
+          <DemoCaption className="mt-0.5">
+            Illustrative GRID role matrix — not live RBAC. Real gates use org roles (Guest blocked from BOQ/financials).
+          </DemoCaption>
         </div>
         <div className="flex gap-3 text-[11px] text-[#5B6B85]">
           <span className="inline-flex items-center gap-1">

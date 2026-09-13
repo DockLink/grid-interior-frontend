@@ -1,3 +1,4 @@
+import { distanceKmFromCoords } from "@/lib/maps/distance";
 import { PHASES, type ProjectHealthStatus, type ProjectPhase } from "@/lib/projects/design-tokens";
 import { resolveProjectEndDate } from "@/lib/projects/duration";
 import { phaseIndex, stageToPhase } from "@/lib/projects/map-project-hub";
@@ -70,7 +71,7 @@ export function mapProjectToOverviewView(
     startDate: formatShortDate(project.start_date),
     endDate: formatShortDate(resolveProjectEndDate(project)),
     location: project.location ?? "—",
-    distanceKm: null,
+    distanceKm: distanceKmFromCoords(project.latitude, project.longitude),
     projectType:
       project.main_type && project.sub_type
         ? `${project.main_type} · ${project.sub_type}`

@@ -20,11 +20,13 @@ import { authApiClient } from "@/lib/api/authenticated-client";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { toProcessHoldRequestBody, mapHoldRequestsList } from "@/lib/hold-requests/map-hold-request";
 import { accessRequestToNotification } from "@/lib/notifications/access-request-map";
+import { mapAssignedTasksToDeadlineNotifications } from "@/lib/notifications/deadline-map";
 import { fileVersionToNotification } from "@/lib/notifications/file-version-map";
 import { shareLinkToNotification } from "@/lib/notifications/share-link-map";
 import { holdRequestToNotification } from "@/lib/notifications/map";
 import { toSidebarRole } from "@/lib/navigation/sidebar-role";
 import { toProjectsQueryString } from "@/lib/projects/query-string";
+import { toTasksQueryString } from "@/lib/tasks/query-string";
 import { NAV_ROUTES, projectTabRoute } from "@/types/navigation";
 import type { AccessRequestsListResponse } from "@/types/access-requests";
 import type { HoldRequestsListResponse } from "@/types/hold-requests";
@@ -36,6 +38,7 @@ import type {
 import type { ProjectsListResponse } from "@/types/projects";
 import { PROJECT_LEAD_ROLE } from "@/types/projects";
 import type { ReviewAccessRequestPayload } from "@/types/access-requests";
+import type { TaskAssigneeRecord, TasksListResponse } from "@/types/tasks";
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -264,6 +267,48 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         } catch {
           /* non-critical */
         }
+      }
+
+      // Deadline alerts — composed client-side from assigned tasks (no email API).
+      try {
+        const tasksQuery = toTasksQueryString({
+          taskable_type: "TASK",
+          limit: 100,
+          depth: 0,
+        });
+        const projectsQuery = toProjectsQueryString({ status: "ACTIVE", limit: 100 });
+        const [tasksRes, projectsRes] = await Promise.all([
+          authApiClient<TasksListResponse>(`/tasks${tasksQuery}`),
+          authApiClient<ProjectsListResponse>(`/projects${projectsQuery}`),
+        ]);
+        const tasks = tasksRes.data ?? [];
+        let assigneeMap: Record<string, TaskAssigneeRecord[]> = {};
+        if (tasks.length > 0) {
+          try {
+            assigneeMap = await authApiClient<Record<string, TaskAssigneeRecord[]>>(
+              "/tasks/batch-assignees",
+              {
+                method: "POST",
+                body: JSON.stringify({ task_ids: tasks.map((t) => t.id) }),
+              },
+            );
+          } catch {
+            assigneeMap = {};
+          }
+        }
+        const projectNameMap = Object.fromEntries(
+          (projectsRes.data ?? []).map((p) => [p.id, p.name]),
+        );
+        mapped.push(
+          ...mapAssignedTasksToDeadlineNotifications(
+            tasks,
+            assigneeMap,
+            projectNameMap,
+            userId,
+          ),
+        );
+      } catch {
+        /* non-critical */
       }
 
       mapped.sort(

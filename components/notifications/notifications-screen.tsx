@@ -144,6 +144,7 @@ export function NotificationsScreen() {
       hold: 0,
       access: 0,
       file: 0,
+      deadline: 0,
     };
     for (const n of notifications) {
       if (!isUnread(n.key)) continue;

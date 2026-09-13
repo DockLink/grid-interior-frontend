@@ -1,6 +1,16 @@
 import { PHASES, type ProjectPhase } from "@/lib/projects/design-tokens";
-import type { ProjectCardView } from "@/types/projects";
-import type { ActiveProjectView, HistoricalProjectView } from "@/types/project-hub";
+import {
+  FALLBACK_THUMBNAIL,
+  mapProjectToCard,
+  projectThumbnailUrl,
+} from "@/lib/projects/map-projects";
+import { resolveProjectEndDate } from "@/lib/projects/duration";
+import type { Project, ProjectCardView } from "@/types/projects";
+import type {
+  ActiveProjectView,
+  HistoricalGalleryItem,
+  HistoricalProjectView,
+} from "@/types/project-hub";
 
 export function stageToPhase(stage: string | null | undefined): ProjectPhase {
   if (!stage) return "Consultation";
@@ -63,6 +73,46 @@ export function mapProjectCardToHistoricalView(card: ProjectCardView): Historica
     photo: card.thumbnail,
     photoAlt: card.name,
   };
+}
+
+export function mapProjectToHistoricalView(project: Project): HistoricalProjectView {
+  const card = mapProjectToCard(project);
+  const endIso = resolveProjectEndDate(project);
+  const yearSource = endIso ?? project.updated_at ?? project.created_at;
+  const year = yearSource ? new Date(yearSource).getFullYear() : new Date().getFullYear();
+  const type =
+    [project.main_type, project.sub_type].filter(Boolean).join(" · ") || "Interior Design";
+
+  return {
+    id: project.id,
+    name: project.name,
+    clientName: project.client?.name ?? "No client",
+    startDate: card.startDate ?? "—",
+    completionDate: card.endDate ?? card.updatedAt ?? "—",
+    year: Number.isNaN(year) ? new Date().getFullYear() : year,
+    type,
+    description: project.description?.trim() || project.location || "",
+    photo: projectThumbnailUrl(project.images),
+    photoAlt: project.name,
+  };
+}
+
+export function mapProjectImagesToGallery(project: Project): HistoricalGalleryItem[] {
+  const source = project.images ?? [];
+  if (!source.length) {
+    return [
+      {
+        url: FALLBACK_THUMBNAIL,
+        alt: project.name,
+        caption: project.name,
+      },
+    ];
+  }
+  return source.map((img, idx) => ({
+    url: img.url,
+    alt: `${project.name} photo ${idx + 1}`,
+    caption: idx === 0 ? "Cover" : `Photo ${idx + 1}`,
+  }));
 }
 
 export function filterActiveByPhase(

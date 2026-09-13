@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { ClientPresentationWidget } from "@/components/projects/hub/concept/concept-presentation-widget";
@@ -12,7 +12,7 @@ import {
   SectionTitle,
 } from "@/components/projects/hub/consultation/consultation-ui";
 import { TimelineWidget } from "@/components/projects/hub/shared/timeline-widget";
-import { CONCEPT_AREAS, CONCEPT_CARDS, CONCEPT_RENDER_GALLERY } from "@/lib/projects/mock-concept";
+import { useConcept } from "@/hooks/use-concept";
 import { useHubTeam } from "@/lib/projects/hub-team-context";
 import type { ConceptRenderImage } from "@/types/concept";
 
@@ -80,20 +80,42 @@ function RenderThumb({
 }
 
 export function ConceptRenderScreen({
+  projectId,
   conceptId,
   onBack,
   onOpenWalkthrough,
 }: {
-  conceptId: number;
+  projectId: string;
+  conceptId: string;
   onBack: () => void;
   onOpenWalkthrough: () => void;
 }) {
   const teamMembers = useHubTeam();
-  const concept = CONCEPT_CARDS.find((c) => c.id === conceptId) ?? CONCEPT_CARDS[0];
-  const area = CONCEPT_AREAS.find((a) => a.id === concept.areaId) ?? CONCEPT_AREAS[0];
-  const [gallery, setGallery] = useState(CONCEPT_RENDER_GALLERY);
+  const {
+    areas,
+    cards,
+    renders: remoteRenders,
+    createRender,
+    deleteRender,
+    isAuthOff,
+  } = useConcept(projectId);
+  const concept = cards.find((c) => c.id === conceptId) ?? cards[0];
+  const area =
+    areas.find((a) => a.id === concept?.areaId) ??
+    areas[0] ?? { id: "", name: "Area", icon: "room", conceptCount: 0 };
+  const [gallery, setGallery] = useState<ConceptRenderImage[]>(remoteRenders);
   const [finalUploaded, setFinalUploaded] = useState(false);
   const [lightbox, setLightbox] = useState<number | null>(null);
+
+  useEffect(() => {
+    setGallery(remoteRenders);
+  }, [remoteRenders]);
+
+  if (!concept) {
+    return (
+      <div className="px-10 py-8 text-sm text-[var(--figma-gray500)]">No concept selected.</div>
+    );
+  }
 
   return (
     <div className="px-10 py-8">
@@ -114,7 +136,11 @@ export function ConceptRenderScreen({
               label="Upload Renders"
               icon="upload"
               small
-              onClick={() => setGallery((p) => [...p, { id: Date.now(), url: "", caption: "New render" }])}
+              onClick={() => {
+                void createRender({ url: "", caption: "New render" }).then((created) => {
+                  if (isAuthOff && created) setGallery((p) => [...p, created]);
+                });
+              }}
             />
           }
         />
@@ -124,7 +150,10 @@ export function ConceptRenderScreen({
               key={img.id}
               img={img}
               onClick={() => setLightbox(idx)}
-              onDelete={() => setGallery((p) => p.filter((i) => i.id !== img.id))}
+              onDelete={() => {
+                setGallery((p) => p.filter((i) => i.id !== img.id));
+                void deleteRender(img.id);
+              }}
             />
           ))}
         </div>
@@ -179,7 +208,7 @@ export function ConceptRenderScreen({
         </div>
       </SectionCard>
 
-      <RevisionTrackerWidget />
+      <RevisionTrackerWidget projectId={projectId} />
       <ClientPresentationWidget />
       <TimelineWidget phase="Concept Design" initialDays="10" badgeVariant="teal" />
       <SectionCard className="px-5 py-4">

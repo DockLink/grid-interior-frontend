@@ -1,14 +1,15 @@
 export type ThreeDView = "visualizations" | "confirmation";
 
 export interface ThreeDArea {
-  id: number;
+  id: number | string;
   name: string;
 }
 
 export interface ThreeDRenderImage {
-  id: number;
+  id: number | string;
   url: string;
   caption: string;
+  fileId?: string;
 }
 
 const ALLOWED: ThreeDView[] = ["visualizations", "confirmation"];

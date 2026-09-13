@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { GradientBtn, OutlineBtn } from "@/components/projects/hub/consultation/consultation-ui";
 import { UploadDropzone } from "@/components/projects/hub/shared/upload-dropzone";
 import { WorkspaceBreadcrumb } from "@/components/projects/hub/shared/workspace-breadcrumb";
-import { CONCEPT_AREAS, CONCEPT_CARDS } from "@/lib/projects/mock-concept";
+import { useConcept } from "@/hooks/use-concept";
 import type { ConceptCard } from "@/types/concept";
 import { MAX_CONCEPTS_PER_AREA } from "@/types/concept";
 
@@ -104,7 +104,13 @@ function ConceptCardItem({
             Client&apos;s finalized option
           </div>
         ) : (
-          <OutlineBtn label="Mark as finalized" icon="check_circle" onClick={onFinalize} small color="var(--figma-teal)" />
+          <OutlineBtn
+            label="Mark as finalized"
+            icon="check_circle"
+            onClick={onFinalize}
+            small
+            color="var(--figma-teal)"
+          />
         )}
       </div>
     </div>
@@ -112,42 +118,69 @@ function ConceptCardItem({
 }
 
 export function ConceptListScreen({
+  projectId,
   areaId,
   onBack,
 }: {
-  areaId: number;
+  projectId: string;
+  areaId: string;
   onBack: () => void;
 }) {
-  const area = CONCEPT_AREAS.find((a) => a.id === areaId) ?? CONCEPT_AREAS[0];
-  const [concepts, setConcepts] = useState(() => CONCEPT_CARDS.filter((c) => c.areaId === areaId));
+  const {
+    areas,
+    cards,
+    createCard,
+    updateCard,
+    isAuthOff,
+  } = useConcept(projectId);
+  const area = areas.find((a) => a.id === areaId) ?? areas[0] ?? {
+    id: areaId,
+    name: "Area",
+    icon: "room",
+    conceptCount: 0,
+  };
+  const remoteConcepts = cards.filter((c) => c.areaId === areaId);
+  const [concepts, setConcepts] = useState(remoteConcepts);
   const [showUpload, setShowUpload] = useState(false);
+
+  useEffect(() => {
+    setConcepts(remoteConcepts);
+  }, [remoteConcepts]);
 
   const atCap = concepts.length >= MAX_CONCEPTS_PER_AREA;
 
-  const handleFinalize = (id: number) => {
+  const handleFinalize = (id: string) => {
     setConcepts((prev) =>
       prev.map((c) => ({
         ...c,
         confirmStatus: c.id === id ? "confirmed" : "pending",
       })),
     );
+    void updateCard(id, { confirm_status: "confirmed" });
+    for (const c of concepts) {
+      if (c.id !== id && c.confirmStatus === "confirmed") {
+        void updateCard(c.id, { confirm_status: "pending" });
+      }
+    }
   };
 
   const handleUpload = () => {
     if (atCap) return;
     const nextIndex = concepts.length + 1;
     const isPdf = nextIndex % 3 === 0;
-    const newConcept: ConceptCard = {
-      id: Date.now(),
+    const payload = {
       name: `Concept ${nextIndex}`,
-      areaId,
-      fileName: isPdf ? `Concept_${area.name.replace(/\s+/g, "_")}_${nextIndex}.pdf` : `Concept_${area.name.replace(/\s+/g, "_")}_${nextIndex}.jpg`,
-      fileType: isPdf ? "pdf" : "jpg",
-      fileSize: isPdf ? "2.8 MB" : "1.6 MB",
-      thumb: isPdf ? "" : SAMPLE_THUMBS[(nextIndex - 1) % SAMPLE_THUMBS.length],
-      confirmStatus: "pending",
+      file_name: isPdf
+        ? `Concept_${area.name.replace(/\s+/g, "_")}_${nextIndex}.pdf`
+        : `Concept_${area.name.replace(/\s+/g, "_")}_${nextIndex}.jpg`,
+      file_type: (isPdf ? "pdf" : "jpg") as "pdf" | "jpg",
+      file_size: isPdf ? "2.8 MB" : "1.6 MB",
+      thumb_url: isPdf ? "" : SAMPLE_THUMBS[(nextIndex - 1) % SAMPLE_THUMBS.length],
+      confirm_status: "pending" as const,
     };
-    setConcepts((prev) => [...prev, newConcept]);
+    void createCard(areaId, payload).then((created) => {
+      if (isAuthOff && created) setConcepts((prev) => [...prev, created]);
+    });
     setShowUpload(false);
   };
 

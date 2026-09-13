@@ -17,7 +17,7 @@ import {
   type PhaseWorkspace,
 } from "@/lib/projects/design-tokens";
 import { mapProjectToOverviewView } from "@/lib/projects/map-project-overview";
-import { canManageProject } from "@/lib/projects/permissions";
+import { canManageProject, canViewBoqFinancials } from "@/lib/projects/permissions";
 import { getUserInitials, getUserListPrimaryLabel } from "@/lib/user/display";
 import type { HubActivityItem } from "@/types/project-hub";
 import type { ProjectMember } from "@/types/projects";
@@ -225,6 +225,7 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
   );
   const [showManageTeam, setShowManageTeam] = useState(false);
   const canManageTeam = canManageProject(effectiveRole, isViewer);
+  const allowBoq = canViewBoqFinancials(effectiveRole, isViewer);
 
   const overview = useMemo(() => {
     if (!project) return null;
@@ -274,7 +275,7 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
         document.getElementById("hub-site-location")?.scrollIntoView({ behavior: "smooth" });
       },
     },
-    ...(overview.phase === "Execution"
+    ...(overview.phase === "Execution" && allowBoq
       ? [
           {
             icon: "receipt_long",

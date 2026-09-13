@@ -1,22 +1,19 @@
 "use client";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useMemo } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import {
   SectionCard,
   WorkspaceBreadcrumb,
 } from "@/components/projects/hub/shared/workspace-ui";
+import { useSiteSubstages } from "@/hooks/use-execution";
 import {
-  cycleSiteSubstageStatus,
   formatSiteDayDate,
-  getSiteSubstagesSnapshot,
   resolveSiteSubstages,
-  SITE_TOTAL_DAYS,
-  subscribeSiteSubstages,
 } from "@/lib/projects/mock-execution";
 import { cn } from "@/lib/utils";
-import type { SiteSubStage, SiteSubStageStatus } from "@/types/execution";
+import type { SiteSubStageStatus } from "@/types/execution";
 import type { ActiveProjectView } from "@/types/project-hub";
 
 const STATUS_CFG: Record<
@@ -65,14 +62,6 @@ const BAR_COLORS = [
   "#0E7C86",
 ];
 
-function useSiteSubstages(): SiteSubStage[] {
-  return useSyncExternalStore(
-    subscribeSiteSubstages,
-    getSiteSubstagesSnapshot,
-    getSiteSubstagesSnapshot,
-  );
-}
-
 export function SiteSubstagesScreen({
   project,
   onBack,
@@ -80,9 +69,14 @@ export function SiteSubstagesScreen({
   project: ActiveProjectView;
   onBack: () => void;
 }) {
-  const stages = useSiteSubstages();
+  const { substages, totalDays, cycleStatus, isLoading } = useSiteSubstages(
+    project.id,
+  );
 
-  const resolved = useMemo(() => resolveSiteSubstages(stages), [stages]);
+  const resolved = useMemo(
+    () => resolveSiteSubstages(substages),
+    [substages],
+  );
 
   return (
     <div className="px-4 py-6 sm:px-10 sm:py-8">
@@ -98,6 +92,7 @@ export function SiteSubstagesScreen({
         <p className="m-0 text-[13px] text-[var(--figma-gray500)]">
           Sub-stages 6.1–6.13 · overlapping timelines · two mandatory deep cleans ·
           updates sync to Timeline Client View
+          {isLoading ? " · loading…" : ""}
         </p>
       </div>
 
@@ -113,13 +108,13 @@ export function SiteSubstagesScreen({
             Parallel timeline
           </span>
           <span className="text-[11px] text-[var(--figma-gray400)]">
-            Day 1 → Day {SITE_TOTAL_DAYS}
+            Day 1 → Day {totalDays}
           </span>
         </div>
         <div className="min-w-[640px]">
           {resolved.map((s, i) => {
-            const left = ((s.startDay - 1) / SITE_TOTAL_DAYS) * 100;
-            const width = (s.durationDays / SITE_TOTAL_DAYS) * 100;
+            const left = ((s.startDay - 1) / totalDays) * 100;
+            const width = (s.durationDays / totalDays) * 100;
             const sc = STATUS_CFG[s.status];
             return (
               <div key={s.id} className="mb-1.5 flex items-center gap-2">
@@ -167,7 +162,7 @@ export function SiteSubstagesScreen({
               <div className="mb-3 flex items-start gap-3">
                 <button
                   type="button"
-                  onClick={() => cycleSiteSubstageStatus(s.id)}
+                  onClick={() => void cycleStatus(s)}
                   disabled={locked}
                   className={cn(
                     "mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-[11px] border-none",
@@ -221,11 +216,6 @@ export function SiteSubstagesScreen({
                   {sc.label}
                 </span>
               </div>
-              {locked && s.blockedBy ? (
-                <div className="mt-2 text-[10px] text-[#EF4444]">
-                  Blocked until {s.blockedBy} is complete
-                </div>
-              ) : null}
             </div>
           );
         })}

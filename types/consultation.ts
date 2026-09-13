@@ -20,15 +20,17 @@ export type ConsultType = "free" | "paid" | null;
 export type ModeType = "online" | "offline";
 export type PaidTab = "questionnaire" | "site" | "inventory" | "notes" | "audio";
 
+export type ConsultTaskStatusApi = "done" | "in-progress" | "pending";
+
 export interface ConsultTask {
-  id: number;
+  id: string;
   title: string;
-  assigneeId: number;
+  assigneeId: string | null;
   status: "Done" | "In Progress" | "Pending" | string;
 }
 
 export interface ConsultRoom {
-  id: number;
+  id: string;
   name: string;
   length: string;
   width: string;
@@ -36,7 +38,7 @@ export interface ConsultRoom {
 }
 
 export interface ConsultInventoryItem {
-  id: number;
+  id: string;
   name: string;
   spec: string;
   h: string;
@@ -48,18 +50,129 @@ export interface ConsultInventoryItem {
 }
 
 export interface ConsultAudioFile {
-  id: number;
+  id: string;
   name: string;
   duration: string;
   date: string;
   size: string;
+  storageFileId?: string | null;
+  fileUrl?: string | null;
 }
 
 export interface ConsultComment {
-  id: number;
-  memberId: number;
+  id: string;
+  memberId: string;
   text: string;
   time: string;
+}
+
+/* ---------- API wire types ---------- */
+
+export interface ConsultRoomApi {
+  id: string;
+  name: string;
+  length: string;
+  width: string;
+  height: string;
+  sort_order?: number;
+}
+
+export interface ConsultInventoryItemApi {
+  id: string;
+  name: string;
+  spec: string;
+  h: string;
+  w: string;
+  l: string;
+  qty: string;
+  notes: string;
+  measured: boolean;
+  sort_order?: number;
+}
+
+export interface ConsultNoteApi {
+  id: string;
+  author_user_id: string;
+  text: string;
+  created_at: string;
+}
+
+export interface ConsultAudioApi {
+  id: string;
+  name: string;
+  duration: string;
+  date: string;
+  size: string;
+  storage_file_id?: string | null;
+  file_url?: string | null;
+}
+
+export interface ConsultTaskApi {
+  id: string;
+  title: string;
+  assignee_user_id: string | null;
+  status: ConsultTaskStatusApi | string;
+  sort_order?: number;
+}
+
+export interface ConsultationAggregateResponse {
+  rooms: ConsultRoomApi[];
+  inventory: ConsultInventoryItemApi[];
+  notes: ConsultNoteApi[];
+  audio: ConsultAudioApi[];
+  tasks: ConsultTaskApi[];
+}
+
+export interface ConsultRoomCreatePayload {
+  name: string;
+  length?: string;
+  width?: string;
+  height?: string;
+}
+
+export interface ConsultRoomUpdatePayload {
+  name?: string;
+  length?: string;
+  width?: string;
+  height?: string;
+}
+
+export interface ConsultInventoryCreatePayload {
+  name: string;
+  spec?: string;
+  h?: string;
+  w?: string;
+  l?: string;
+  qty?: string;
+  notes?: string;
+  measured?: boolean;
+}
+
+export type ConsultInventoryUpdatePayload = Partial<ConsultInventoryCreatePayload>;
+
+export interface ConsultNoteCreatePayload {
+  text: string;
+}
+
+export interface ConsultAudioCreatePayload {
+  name: string;
+  duration?: string;
+  date?: string;
+  size?: string;
+  storage_file_id?: string | null;
+  file_url?: string | null;
+}
+
+export interface ConsultTaskCreatePayload {
+  title: string;
+  assignee_user_id?: string | null;
+  status?: ConsultTaskStatusApi;
+}
+
+export interface ConsultTaskUpdatePayload {
+  title?: string;
+  assignee_user_id?: string | null;
+  status?: ConsultTaskStatusApi;
 }
 
 export function consultViewFromParam(view: string | undefined): ConsultView {

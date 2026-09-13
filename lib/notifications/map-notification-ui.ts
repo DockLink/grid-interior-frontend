@@ -1,7 +1,7 @@
 import { NAV_ROUTES, projectTabRoute } from "@/types/navigation";
 import type { AppNotification } from "@/types/notifications";
 
-export type NotificationUIFilter = "all" | "hold" | "access" | "file";
+export type NotificationUIFilter = "all" | "hold" | "access" | "file" | "deadline";
 
 export type NotificationUIRow = {
   id: string;
@@ -28,17 +28,20 @@ const FILTER_ICON: Record<
   hold: { icon: "pause_circle", color: "#D97706", bg: "rgba(217,119,6,0.1)" },
   access: { icon: "person_add", color: "var(--figma-teal)", bg: "rgba(14,124,134,0.08)" },
   file: { icon: "upload_file", color: "var(--figma-teal)", bg: "rgba(14,124,134,0.08)" },
+  deadline: { icon: "event_busy", color: "#EF4444", bg: "rgba(239,68,68,0.1)" },
 };
 
 function notificationFilter(type: AppNotification["type"]): Exclude<NotificationUIFilter, "all"> {
   if (type === "hold_request") return "hold";
   if (type === "access_request") return "access";
+  if (type === "deadline_alert") return "deadline";
   return "file";
 }
 
 function projectLabelFor(n: AppNotification): string {
   if (n.type === "access_request") return n.projectName;
   if (n.type === "file_version" || n.type === "share_link") return n.projectName;
+  if (n.type === "deadline_alert") return n.projectName;
   if (n.type === "hold_request" && n.projectId) return "Project";
   return "Studio";
 }
@@ -48,6 +51,9 @@ function hrefFor(n: AppNotification): string {
     return n.projectId ? projectTabRoute(n.projectId, "hold-requests") : NAV_ROUTES.holdRequests;
   }
   if (n.type === "access_request") return NAV_ROUTES.accessRequests;
+  if (n.type === "deadline_alert") {
+    return n.projectId ? projectTabRoute(n.projectId, "tasks") : NAV_ROUTES.myTasks;
+  }
   if (n.type === "file_version" || n.type === "share_link") {
     return projectTabRoute(n.projectId, "files");
   }
@@ -58,6 +64,15 @@ function formatRelativeTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "—";
   const diffMs = Date.now() - date.getTime();
+  if (diffMs < 0) {
+    const aheadMins = Math.floor(-diffMs / 60_000);
+    if (aheadMins < 60) return "Due soon";
+    const aheadHours = Math.floor(aheadMins / 60);
+    if (aheadHours < 24) return `In ${aheadHours}h`;
+    const aheadDays = Math.floor(aheadHours / 24);
+    if (aheadDays === 1) return "Tomorrow";
+    return `In ${aheadDays}d`;
+  }
   const diffMins = Math.floor(diffMs / 60_000);
   if (diffMins < 1) return "Just now";
   if (diffMins < 60) return `${diffMins}m ago`;
@@ -87,7 +102,10 @@ function timeGroup(iso: string): NotificationUIRow["group"] {
 
 export function mapAppNotificationToRow(n: AppNotification): NotificationUIRow {
   const filter = notificationFilter(n.type);
-  const cfg = FILTER_ICON[filter];
+  const cfg =
+    n.type === "deadline_alert" && n.urgency === "due_soon"
+      ? { icon: "event", color: "#D97706", bg: "rgba(217,119,6,0.1)" }
+      : FILTER_ICON[filter];
   const bold = n.requesterName || n.title.split(" ")[0] || "Update";
 
   return {
@@ -119,6 +137,7 @@ export function matchesNotificationFilter(
 
 export const NOTIFICATION_FILTER_TABS: { key: NotificationUIFilter; label: string }[] = [
   { key: "all", label: "All" },
+  { key: "deadline", label: "Deadlines" },
   { key: "hold", label: "Holds" },
   { key: "access", label: "Access" },
   { key: "file", label: "Files" },

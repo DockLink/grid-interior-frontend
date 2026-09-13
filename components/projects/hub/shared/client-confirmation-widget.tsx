@@ -25,11 +25,14 @@ export function ClientConfirmationWidget({
   nextPhase,
   onConfirmed,
   defaultFeedback = "Client has reviewed the layout drawings and is satisfied with the space planning. Requested minor adjustment to the meeting room partition wall width.",
+  localOnly = true,
 }: {
   phase: string;
   nextPhase: string;
   onConfirmed?: (date: string) => void;
   defaultFeedback?: string;
+  /** Confirmation steps are session-local until a backend confirmation API exists. */
+  localOnly?: boolean;
 }) {
   const [doneSteps, setDoneSteps] = useState<Set<Step>>(new Set(["presented"]));
   const [feedback, setFeedback] = useState(defaultFeedback);
@@ -64,6 +67,15 @@ export function ClientConfirmationWidget({
     <SectionCard>
       <SectionTitle icon="campaign" title="Client Presentation & Confirmation" />
 
+      {localOnly && (
+        <div className="mb-4 flex items-start gap-2 rounded-[10px] border border-[#FDE68A] bg-[#FFFBEB] px-3.5 py-2.5 text-[12px] text-[#92400E]">
+          <MaterialIcon name="info" outlined size={16} className="mt-0.5 shrink-0" />
+          <span>
+            Confirmation checklist for {phase} is tracked in this session only — it is not saved to the
+            server yet.
+          </span>
+        </div>
+      )}
       <div className="mb-[22px] flex items-center">
         {STEPS.map((step, idx) => {
           const done = doneSteps.has(step.id);

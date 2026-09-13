@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
+import { SiteAddressPicker } from "@/components/projects/hub/site-address-picker";
 import { useClients } from "@/hooks/use-clients";
 import { useCreateProject } from "@/hooks/use-create-project";
 import { useUsers } from "@/hooks/use-users";
@@ -15,10 +16,10 @@ import {
   PHASES,
   PROJECT_MAIN_TYPES,
   PROJECT_SUB_TYPES_BY_MAIN,
-  PROJECT_TYPES,
   type ProjectMainType,
   type ProjectPhase,
 } from "@/lib/projects/design-tokens";
+import { buildSeededPhaseStages } from "@/lib/projects/seed-phases";
 import { queryKeys } from "@/lib/query/keys";
 import { getUserInitials, getUserListPrimaryLabel } from "@/lib/user/display";
 import type { CreateProjectRequest } from "@/types/projects";
@@ -203,21 +204,20 @@ export function NewProjectModal({
   const [clientSearch, setClientSearch] = useState("");
   const [selectedClient, setSelectedClient] = useState<string | null>(preselectedClientId ?? null);
   const [showClientDropdown, setShowClientDropdown] = useState(false);
-  const [projectType, setProjectType] = useState("");
   const [mainType, setMainType] = useState<ProjectMainType | "">("");
   const [subType, setSubType] = useState("");
   const [startDate, setStartDate] = useState(defaultDates.start);
   const [endDate, setEndDate] = useState(defaultDates.end);
   const [selectedPhase, setSelectedPhase] = useState<ProjectPhase | null>(null);
   const [address, setAddress] = useState("");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<string[]>([]);
   const [coordinator, setCoordinator] = useState<string>("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [clientFocused, setClientFocused] = useState(false);
-
-  const distanceKm = address.length > 5 ? 3.6 : null;
-  const eligibleFree = distanceKm !== null && distanceKm <= 10;
 
   const filteredClients = clients
     .filter((c) => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
@@ -232,7 +232,6 @@ export function NewProjectModal({
     const e: Record<string, string> = {};
     if (!projectName.trim()) e.name = "This field is required";
     if (!selectedClient) e.client = "Please select a client";
-    if (!projectType) e.type = "Please select a project type";
     if (!mainType) e.mainType = "Please select a main type";
     if (!subType) e.subType = "Please select a sub type";
     if (!startDate) e.startDate = "Start date is required";
@@ -279,12 +278,13 @@ export function NewProjectModal({
 
     const payload: CreateProjectRequest = {
       name: projectName.trim(),
-      description: projectType || undefined,
       main_type: mainType || undefined,
       sub_type: subType || undefined,
       start_date: startDate,
       end_date: endDate,
       location: address.trim() || undefined,
+      latitude: latitude ?? undefined,
+      longitude: longitude ?? undefined,
       client: {
         name: client?.name ?? "Unknown Client",
         contact_email: client?.email || undefined,
@@ -298,16 +298,7 @@ export function NewProjectModal({
         clientId: selectedClient || undefined,
         memberUserIds: selectedTeam.length ? selectedTeam : undefined,
         projectLeadUserId: coordinator || null,
-        stages: selectedPhase
-          ? [
-              {
-                name: selectedPhase,
-                start_date: startDate,
-                end_date: endDate,
-                order: 0,
-              },
-            ]
-          : undefined,
+        stages: buildSeededPhaseStages(startDate, endDate),
       });
 
       await qc.invalidateQueries({ queryKey: queryKeys.projects.all });
@@ -475,40 +466,6 @@ export function NewProjectModal({
                   )}
                 </div>
               )}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label
-                className="text-[13px] font-medium"
-                style={{ color: errors.type ? "var(--figma-alert)" : "var(--figma-navy)" }}
-              >
-                Project Type
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {PROJECT_TYPES.map((pt) => {
-                  const isSelected = projectType === pt;
-                  return (
-                    <button
-                      key={pt}
-                      type="button"
-                      onClick={() => {
-                        setProjectType(pt);
-                        setErrors((p) => ({ ...p, type: "" }));
-                      }}
-                      className="cursor-pointer rounded-[20px] px-3.5 py-1.5 font-[inherit] text-xs transition-all duration-150"
-                      style={{
-                        border: isSelected ? "2px solid var(--figma-teal)" : "1.5px solid var(--figma-border)",
-                        background: isSelected ? "rgba(14,124,134,0.08)" : "#fff",
-                        color: isSelected ? "var(--figma-teal)" : "var(--figma-gray500)",
-                        fontWeight: isSelected ? 600 : 400,
-                      }}
-                    >
-                      {pt}
-                    </button>
-                  );
-                })}
-              </div>
-              {errors.type && <div className="text-[11px] text-[var(--figma-alert)]">{errors.type}</div>}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -714,88 +671,18 @@ export function NewProjectModal({
         )}
 
         {step === 3 && (
-          <div className="flex flex-col gap-5">
-            <FInput
-              label="Site Address"
-              value={address}
-              onChange={setAddress}
-              placeholder="e.g. 14 Via Colombo, Dehiwala"
-              icon="location_on"
-            />
-            <div className="relative flex h-[220px] flex-col items-center justify-center gap-2.5 overflow-hidden rounded-2xl border-[1.5px] border-[var(--figma-border)] bg-gradient-to-br from-[#e8f4f8] to-[#d1eaf0]">
-              <svg className="absolute inset-0 size-full opacity-30" viewBox="0 0 600 220" preserveAspectRatio="none">
-                {[40, 80, 120, 160].map((y) => (
-                  <line key={y} x1="0" y1={y} x2="600" y2={y} stroke="#0E7C86" strokeWidth="0.5" />
-                ))}
-                {[60, 120, 180, 240, 300, 360, 420, 480, 540].map((x) => (
-                  <line key={x} x1={x} y1="0" x2={x} y2="220" stroke="#0E7C86" strokeWidth="0.5" />
-                ))}
-                <path d="M0,80 Q150,60 300,80 Q450,100 600,80" stroke="#0E7C86" strokeWidth="3" fill="none" opacity="0.6" />
-                <path d="M200,0 Q220,110 200,220" stroke="#0E7C86" strokeWidth="3" fill="none" opacity="0.6" />
-                <path d="M400,0 Q420,110 400,220" stroke="#1B2A4A" strokeWidth="2" fill="none" opacity="0.4" />
-              </svg>
-              {address.length > 5 ? (
-                <>
-                  <div
-                    className="relative z-[1] size-9 rounded-[50%_50%_50%_0] neu-raised"
-                    style={{
-                      transform: "rotate(-45deg)",
-                      background: "linear-gradient(135deg, var(--figma-navy), var(--figma-teal))",
-                    }}
-                  >
-                    <div
-                      className="absolute rounded-full bg-white"
-                      style={{ inset: 4, transform: "rotate(45deg)" }}
-                    />
-                  </div>
-                  <div className="relative z-[1] text-xs font-medium text-[var(--figma-navy)]">{address}</div>
-                </>
-              ) : (
-                <>
-                  <MaterialIcon name="map" outlined size={36} className="relative z-[1] text-[var(--figma-teal)] opacity-60" />
-                  <span className="relative z-[1] text-[13px] text-[var(--figma-gray500)]">
-                    Enter an address to preview location
-                  </span>
-                </>
-              )}
-            </div>
-            {distanceKm !== null && (
-              <div
-                className="flex items-center gap-3 rounded-xl border-[1.5px] px-4 py-3.5"
-                style={{
-                  background: eligibleFree ? "rgba(63,166,107,0.06)" : "var(--figma-gray50)",
-                  borderColor: eligibleFree ? "#3FA66B" : "var(--figma-border)",
-                }}
-              >
-                <div
-                  className="flex size-9 shrink-0 items-center justify-center rounded-[10px]"
-                  style={{ background: eligibleFree ? "#DCFCE7" : "var(--figma-gray100)" }}
-                >
-                  <MaterialIcon
-                    name="near_me"
-                    outlined
-                    size={20}
-                    style={{ color: eligibleFree ? "#3FA66B" : "var(--figma-gray400)" }}
-                  />
-                </div>
-                <div>
-                  <div className="mb-0.5 text-[13px] font-semibold text-[var(--figma-navy)]">
-                    {distanceKm.toFixed(1)} km from Dehiwala office
-                  </div>
-                  {eligibleFree ? (
-                    <div className="flex items-center gap-1 text-[11px] font-semibold text-[#3FA66B]">
-                      <MaterialIcon name="check_circle" size={13} />
-                      Eligible for Free Consultation (within 10 km)
-                    </div>
-                  ) : (
-                    <div className="text-[11px] text-[var(--figma-gray500)]">
-                      Outside free consultation radius (&gt; 10 km)
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+          <SiteAddressPicker
+            address={address}
+            latitude={latitude}
+            longitude={longitude}
+            distanceKm={distanceKm}
+            onChange={(next) => {
+              setAddress(next.address);
+              setLatitude(next.latitude);
+              setLongitude(next.longitude);
+              setDistanceKm(next.distanceKm);
+            }}
+          />
         )}
 
         {step === 4 && (
@@ -889,7 +776,6 @@ export function NewProjectModal({
               {[
                 { label: "Name", value: projectName || "—" },
                 { label: "Client", value: selectedClientName || "—" },
-                { label: "Type", value: projectType || "—" },
                 { label: "Main", value: mainType || "—" },
                 { label: "Sub", value: subType || "—" },
                 { label: "Phase", value: selectedPhase || "—" },

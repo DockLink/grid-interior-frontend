@@ -6,7 +6,13 @@ import { MaterialIcon } from "@/components/projects/hub/material-icon";
 
 import { NotesThread } from "./notes-thread";
 
-export function SectionNotes({ section }: { section: string }) {
+export function SectionNotes({
+  section,
+  projectId,
+}: {
+  section: string;
+  projectId: string;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -31,7 +37,7 @@ export function SectionNotes({ section }: { section: string }) {
       </button>
       {open && (
         <div className="mt-4">
-          <NotesThread compact section={section} />
+          <NotesThread compact section={section} projectId={projectId} />
         </div>
       )}
     </div>

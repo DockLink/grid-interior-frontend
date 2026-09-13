@@ -82,4 +82,37 @@ export const queryKeys = {
   projectLinks: {
     detail: (projectId: string) => ["projectLinks", projectId] as const,
   },
+  boq: {
+    all: ["boq"] as const,
+    project: (projectId: string) => ["boq", "project", projectId] as const,
+    summary: (projectId: string) => ["boq", "summary", projectId] as const,
+  },
+  consultation: {
+    all: ["consultation"] as const,
+    project: (projectId: string) => ["consultation", "project", projectId] as const,
+  },
+  execution: {
+    all: ["execution"] as const,
+    stages: (projectId: string) => ["execution", "stages", projectId] as const,
+    site: (projectId: string) => ["execution", "site", projectId] as const,
+    endedAfterBoq: (projectId: string) =>
+      ["execution", "endedAfterBoq", projectId] as const,
+  },
+  detail: {
+    all: ["detail"] as const,
+    categories: (projectId: string) => ["detail", "categories", projectId] as const,
+    directorOverview: () => ["detail", "directorOverview"] as const,
+  },
+  concept: {
+    all: ["concept"] as const,
+    project: (projectId: string) => ["concept", "project", projectId] as const,
+  },
+  audit: {
+    all: ["audit"] as const,
+    actor: (actorId: string) => ["audit", "actor", actorId] as const,
+  },
+  portal: {
+    all: ["portal"] as const,
+    byToken: (token: string) => ["portal", "token", token] as const,
+  },
 } as const;

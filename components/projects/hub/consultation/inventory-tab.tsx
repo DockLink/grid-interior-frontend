@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
-import { SAMPLE_INVENTORY } from "@/lib/projects/mock-consultation";
+import { useConsultation } from "@/hooks/use-consultation";
 import type { ConsultInventoryItem } from "@/types/consultation";
 
 import { GradientBtn, PillSwitch, SectionCard, SectionTitle } from "./consultation-ui";
@@ -83,73 +83,95 @@ function InventoryRow({
   );
 }
 
-export function InventoryTab() {
+export function InventoryTab({ projectId }: { projectId: string }) {
+  const {
+    inventory: remoteItems,
+    createInventory,
+    updateInventory,
+    deleteInventory,
+    isAuthOff,
+  } = useConsultation(projectId);
   const [included, setIncluded] = useState(true);
-  const [items, setItems] = useState<ConsultInventoryItem[]>(SAMPLE_INVENTORY);
+  const [items, setItems] = useState<ConsultInventoryItem[]>(remoteItems);
 
-  const toggleMeasured = (id: number) => {
-    setItems((p) => p.map((it) => (it.id === id ? { ...it, measured: !it.measured } : it)));
+  useEffect(() => {
+    setItems(remoteItems);
+  }, [remoteItems]);
+
+  const toggleMeasured = (id: string) => {
+    const item = items.find((it) => it.id === id);
+    if (!item) return;
+    const next = !item.measured;
+    setItems((p) => p.map((it) => (it.id === id ? { ...it, measured: next } : it)));
+    if (!isAuthOff) void updateInventory(id, { measured: next });
   };
 
   return (
     <>
-    <SectionCard>
-      <SectionTitle
-        icon="inventory_2"
-        title="Inventory List"
-        right={<PillSwitch on={included} setOn={setIncluded} label="Include Inventory List" />}
-      />
+      <SectionCard>
+        <SectionTitle
+          icon="inventory_2"
+          title="Inventory List"
+          right={<PillSwitch on={included} setOn={setIncluded} label="Include Inventory List" />}
+        />
 
-      {!included ? (
-        <div className="flex items-center gap-2.5 rounded-[10px] border border-dashed border-[var(--figma-border)] bg-[var(--figma-gray50)] px-4 py-5">
-          <MaterialIcon name="inventory_2" outlined size={18} className="text-[var(--figma-gray400)]" />
-          <span className="text-[13px] text-[var(--figma-gray400)]">Inventory list not included for this consultation.</span>
-        </div>
-      ) : (
-        <>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-xs">
-              <thead>
-                <tr className="bg-[var(--figma-gray50)]">
-                  {["Item Name", "Specifications", "H (cm)", "W (cm)", "L (cm)", "Qty", "Notes", "Measured"].map(
-                    (col) => (
-                      <th
-                        key={col}
-                        className="whitespace-nowrap border-b border-[var(--figma-border)] px-2.5 py-[9px] text-left text-[11px] font-semibold tracking-wide text-[var(--figma-navy)]"
-                      >
-                        {col}
-                      </th>
-                    ),
-                  )}
-                  <th className="border-b border-[var(--figma-border)] px-2.5 py-[9px]" />
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, idx) => (
-                  <InventoryRow
-                    key={item.id}
-                    item={item}
-                    isLast={idx === items.length - 1}
-                    onToggleMeasured={() => toggleMeasured(item.id)}
-                    onDelete={() => setItems((p) => p.filter((i) => i.id !== item.id))}
-                    onChange={(field, val) =>
-                      setItems((p) => p.map((i) => (i.id === item.id ? { ...i, [field]: val } : i)))
-                    }
-                  />
-                ))}
-              </tbody>
-            </table>
+        {!included ? (
+          <div className="flex items-center gap-2.5 rounded-[10px] border border-dashed border-[var(--figma-border)] bg-[var(--figma-gray50)] px-4 py-5">
+            <MaterialIcon name="inventory_2" outlined size={18} className="text-[var(--figma-gray400)]" />
+            <span className="text-[13px] text-[var(--figma-gray400)]">
+              Inventory list not included for this consultation.
+            </span>
           </div>
-          <div className="mt-4">
-            <GradientBtn
-              label="Add Item"
-              icon="add"
-              small
-              onClick={() =>
-                setItems((p) => [
-                  ...p,
-                  {
-                    id: Date.now(),
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-[var(--figma-gray50)]">
+                    {["Item Name", "Specifications", "H (cm)", "W (cm)", "L (cm)", "Qty", "Notes", "Measured"].map(
+                      (col) => (
+                        <th
+                          key={col}
+                          className="whitespace-nowrap border-b border-[var(--figma-border)] px-2.5 py-[9px] text-left text-[11px] font-semibold tracking-wide text-[var(--figma-navy)]"
+                        >
+                          {col}
+                        </th>
+                      ),
+                    )}
+                    <th className="border-b border-[var(--figma-border)] px-2.5 py-[9px]" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, idx) => (
+                    <InventoryRow
+                      key={item.id}
+                      item={item}
+                      isLast={idx === items.length - 1}
+                      onToggleMeasured={() => toggleMeasured(item.id)}
+                      onDelete={() => {
+                        setItems((p) => p.filter((i) => i.id !== item.id));
+                        void deleteInventory(item.id);
+                      }}
+                      onChange={(field, val) => {
+                        setItems((p) =>
+                          p.map((i) => (i.id === item.id ? { ...i, [field]: val } : i)),
+                        );
+                        if (!isAuthOff && field !== "measured") {
+                          void updateInventory(item.id, { [field]: val });
+                        }
+                      }}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4">
+              <GradientBtn
+                label="Add Item"
+                icon="add"
+                small
+                onClick={() => {
+                  void createInventory({
                     name: "",
                     spec: "",
                     h: "",
@@ -158,15 +180,16 @@ export function InventoryTab() {
                     qty: "1",
                     notes: "",
                     measured: false,
-                  },
-                ])
-              }
-            />
-          </div>
-        </>
-      )}
-    </SectionCard>
-    <SectionNotes section="inventory" />
+                  }).then((created) => {
+                    if (isAuthOff && created) setItems((p) => [...p, created]);
+                  });
+                }}
+              />
+            </div>
+          </>
+        )}
+      </SectionCard>
+      <SectionNotes section="inventory" projectId={projectId} />
     </>
   );
 }

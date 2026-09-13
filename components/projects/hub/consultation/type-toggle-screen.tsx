@@ -3,6 +3,8 @@
 import { useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
+import { isEligibleForFreeConsultation } from "@/lib/maps/distance";
+import { FREE_CONSULTATION_RADIUS_KM } from "@/lib/maps/office";
 import type { ConsultType, ModeType } from "@/types/consultation";
 import type { ActiveProjectView } from "@/types/project-hub";
 
@@ -20,7 +22,7 @@ export function TypeToggleScreen({
   const [consultType, setConsultType] = useState<ConsultType>(null);
   const [mode, setMode] = useState<ModeType>("online");
   const [backHover, setBackHover] = useState(false);
-  const eligible = project.distanceKm <= 10;
+  const eligible = isEligibleForFreeConsultation(project.distanceKm);
 
   return (
     <div className="px-4 py-6 sm:px-10 sm:py-8">
@@ -125,8 +127,8 @@ export function TypeToggleScreen({
                   </div>
                   <div className="text-xs leading-snug text-[var(--figma-gray500)]">
                     {eligible
-                      ? `Site is ${project.distanceKm} km from Dehiwala office — within the 10 km free consultation radius.`
-                      : `Client site is ${project.distanceKm} km from Dehiwala office. Free consultations require the site to be within 10 km.`}
+                      ? `Site is ${project.distanceKm} km from Dehiwala office — within the ${FREE_CONSULTATION_RADIUS_KM} km free consultation radius.`
+                      : `Client site is ${project.distanceKm} km from Dehiwala office. Free consultations require the site to be within ${FREE_CONSULTATION_RADIUS_KM} km.`}
                   </div>
                   {!eligible && (
                     <div className="mt-2 text-[11px] font-medium text-[var(--figma-alert)]">

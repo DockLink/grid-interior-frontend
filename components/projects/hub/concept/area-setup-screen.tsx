@@ -1,11 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { GradientBtn } from "@/components/projects/hub/consultation/consultation-ui";
 import { WorkspaceBreadcrumb } from "@/components/projects/hub/shared/workspace-breadcrumb";
-import { CONCEPT_AREAS } from "@/lib/projects/mock-concept";
+import { useConcept } from "@/hooks/use-concept";
 import type { ConceptArea } from "@/types/concept";
 import type { ActiveProjectView } from "@/types/project-hub";
 
@@ -71,22 +71,40 @@ export function AreaSetupScreen({
   onBack,
 }: {
   project: ActiveProjectView;
-  onSelectArea: (areaId: number) => void;
+  onSelectArea: (areaId: string) => void;
   onBack: () => void;
 }) {
-  const [areas, setAreas] = useState(CONCEPT_AREAS);
+  const { areas: remoteAreas, createArea, isAuthOff } = useConcept(project.id);
+  const [areas, setAreas] = useState(remoteAreas);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setAreas(remoteAreas);
+  }, [remoteAreas]);
 
   const commitAdd = () => {
     if (!newName.trim()) {
       setAdding(false);
       return;
     }
-    setAreas((p) => [...p, { id: Date.now(), name: newName.trim(), icon: "room", conceptCount: 0 }]);
+    const name = newName.trim();
     setNewName("");
     setAdding(false);
+    void createArea({ name, icon: "room" }).then((created) => {
+      if (isAuthOff && created) {
+        setAreas((p) => [
+          ...p,
+          {
+            id: created.id,
+            name: created.name,
+            icon: created.icon,
+            conceptCount: created.conceptCount,
+          },
+        ]);
+      }
+    });
   };
 
   const focusInput = () => setTimeout(() => inputRef.current?.focus(), 50);

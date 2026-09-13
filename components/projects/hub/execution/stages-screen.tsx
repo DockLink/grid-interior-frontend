@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import {
@@ -9,6 +10,14 @@ import {
   SectionCard,
   WorkspaceBreadcrumb,
 } from "@/components/projects/hub/shared/workspace-ui";
+import { useProjectTaskables } from "@/hooks/use-project-taskables";
+import { useEndedAfterBoq } from "@/hooks/use-execution";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { PHASE_CFG, PHASES, type ProjectPhase } from "@/lib/projects/design-tokens";
+import {
+  findStageTaskable,
+  mapTaskableStatusToStageStatus,
+} from "@/lib/projects/seed-phases";
 import { EXECUTION_STAGES } from "@/lib/projects/mock-execution";
 import { cn } from "@/lib/utils";
 import type { ExecutionStage, ExecutionStageStatus } from "@/types/execution";
@@ -22,6 +31,20 @@ const STATUS_CFG: Record<ExecutionStageStatus, { label: string; color: string; b
 
 const END_ACCENT = { color: "#B45309", bg: "#FEF3C7" };
 
+const PHASE_DETAILS: Record<ProjectPhase, string> = {
+  Consultation: "Kick-off, brief capture, and client alignment.",
+  "Concept Design": "Mood, massing, and directional design options.",
+  Layout: "Spatial planning and layout drawings.",
+  "3D Design": "Renders and walkthrough visualisation.",
+  "Detail Drawings": "Technical detailing and BOQ estimates.",
+  Execution: "Commercial execution, suppliers, and site work.",
+};
+
+type PhaseCardModel = ExecutionStage & {
+  phase: ProjectPhase;
+  taskableId?: string;
+};
+
 function StageCard({
   stage,
   onStatus,
@@ -29,9 +52,9 @@ function StageCard({
   onOpenSite,
   disabled,
 }: {
-  stage: ExecutionStage;
+  stage: PhaseCardModel;
   onStatus: (status: ExecutionStageStatus) => void;
-  onOpenBoq: () => void;
+  onOpenBoq?: () => void;
   onOpenSite: () => void;
   disabled?: boolean;
 }) {
@@ -94,7 +117,7 @@ function StageCard({
             {STATUS_CFG[s].label}
           </button>
         ))}
-        {stage.id === 1 && (
+        {stage.phase === "Detail Drawings" && onOpenBoq && (
           <button
             type="button"
             disabled={disabled}
@@ -104,7 +127,7 @@ function StageCard({
             Open BOQ →
           </button>
         )}
-        {stage.id === 6 && (
+        {stage.phase === "Execution" && (
           <button
             type="button"
             disabled={disabled}
@@ -254,6 +277,12 @@ function EndProjectConfirmModal({
   );
 }
 
+function statusToApi(status: ExecutionStageStatus) {
+  if (status === "complete") return "COMPLETED" as const;
+  if (status === "in-progress") return "IN_PROGRESS" as const;
+  return "TODO" as const;
+}
+
 export function StagesScreen({
   project,
   onBack,
@@ -262,15 +291,75 @@ export function StagesScreen({
 }: {
   project: ActiveProjectView;
   onBack: () => void;
-  onOpenBoq: () => void;
+  onOpenBoq?: () => void;
   onOpenSite: () => void;
 }) {
-  const [stages, setStages] = useState(EXECUTION_STAGES);
-  const [projectEnded, setProjectEnded] = useState(false);
+  const authDisabled = isAuthDisabled();
+  const { tasks, setTaskableStatus, isLoading } = useProjectTaskables(project.id, "STAGE", {
+    limit: 100,
+  });
+  const {
+    endedAfterBoq,
+    setEndedAfterBoq,
+    isAuthOff: endedAuthOff,
+  } = useEndedAfterBoq(project.id);
+  const [localOverrides, setLocalOverrides] = useState<
+    Partial<Record<ProjectPhase, ExecutionStageStatus>>
+  >({});
+  const [localEnded, setLocalEnded] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
+
+  const projectEnded = endedAuthOff ? localEnded : endedAfterBoq;
+
+  const stages: PhaseCardModel[] = useMemo(() => {
+    if (authDisabled) {
+      return PHASES.map((phase, idx) => {
+        const mock = EXECUTION_STAGES[idx];
+        const cfg = PHASE_CFG[phase];
+        return {
+          id: idx + 1,
+          phase,
+          name: phase,
+          detail: PHASE_DETAILS[phase],
+          status: localOverrides[phase] ?? mock?.status ?? "upcoming",
+          icon: cfg.icon,
+        };
+      });
+    }
+
+    return PHASES.map((phase, idx) => {
+      const cfg = PHASE_CFG[phase];
+      const task = findStageTaskable(tasks, phase);
+      const derived = mapTaskableStatusToStageStatus(
+        task?.status,
+        task?.start_date,
+        task?.end_date,
+      );
+      return {
+        id: idx + 1,
+        phase,
+        name: phase,
+        detail: PHASE_DETAILS[phase],
+        status: localOverrides[phase] ?? derived,
+        icon: cfg.icon,
+        taskableId: task?.id,
+      };
+    });
+  }, [authDisabled, tasks, localOverrides]);
+
   const done = stages.filter((s) => s.status === "complete").length;
-  const boqStage = stages.find((s) => s.id === 1)!;
-  const laterStages = stages.filter((s) => s.id !== 1);
+  const detailStage = stages.find((s) => s.phase === "Detail Drawings")!;
+  const otherStages = stages.filter((s) => s.phase !== "Detail Drawings");
+
+  async function handleStatus(stage: PhaseCardModel, status: ExecutionStageStatus) {
+    setLocalOverrides((prev) => ({ ...prev, [stage.phase]: status }));
+    if (authDisabled || !stage.taskableId) return;
+    try {
+      await setTaskableStatus(stage.taskableId, statusToApi(status));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update stage");
+    }
+  }
 
   return (
     <div className="px-4 py-6 sm:px-10 sm:py-8">
@@ -282,12 +371,15 @@ export function StagesScreen({
             Execution
           </h1>
           <p className="m-0 text-[13px] text-[var(--figma-gray500)]">
-            Six-stage workflow · timelines may overlap · {done} of {stages.length} complete
+            Six design stages · {done} of {stages.length} complete
             {projectEnded ? " · project ended after BOQ" : ""}
+            {!authDisabled && isLoading ? " · loading…" : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <OutlineBtn label="BOQ Line Items" icon="receipt_long" onClick={onOpenBoq} />
+          {onOpenBoq && (
+            <OutlineBtn label="BOQ Line Items" icon="receipt_long" onClick={onOpenBoq} />
+          )}
           <GradientBtn
             label="Site Sub-Stages"
             icon="construction"
@@ -346,27 +438,26 @@ export function StagesScreen({
 
       <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
         <StageCard
-          stage={boqStage}
+          stage={detailStage}
           disabled={projectEnded}
-          onStatus={(status) =>
-            setStages((prev) => prev.map((s) => (s.id === boqStage.id ? { ...s, status } : s)))
-          }
+          onStatus={(status) => void handleStatus(detailStage, status)}
           onOpenBoq={onOpenBoq}
           onOpenSite={onOpenSite}
         />
         <EndProjectCard
           ended={projectEnded}
           onRequestEnd={() => setConfirmEnd(true)}
-          onReopen={() => setProjectEnded(false)}
+          onReopen={() => {
+            if (endedAuthOff) setLocalEnded(false);
+            else void setEndedAfterBoq(false);
+          }}
         />
-        {laterStages.map((stage) => (
+        {otherStages.map((stage) => (
           <StageCard
             key={stage.id}
             stage={stage}
             disabled={projectEnded}
-            onStatus={(status) =>
-              setStages((prev) => prev.map((s) => (s.id === stage.id ? { ...s, status } : s)))
-            }
+            onStatus={(status) => void handleStatus(stage, status)}
             onOpenBoq={onOpenBoq}
             onOpenSite={onOpenSite}
           />
@@ -378,17 +469,9 @@ export function StagesScreen({
           projectName={project.name}
           onCancel={() => setConfirmEnd(false)}
           onConfirm={() => {
-            setProjectEnded(true);
+            if (endedAuthOff) setLocalEnded(true);
+            else void setEndedAfterBoq(true);
             setConfirmEnd(false);
-            setStages((prev) =>
-              prev.map((s) =>
-                s.id === 1
-                  ? s
-                  : s.status === "complete"
-                    ? s
-                    : { ...s, status: "upcoming" as ExecutionStageStatus },
-              ),
-            );
           }}
         />
       )}

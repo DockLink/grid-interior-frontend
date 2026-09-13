@@ -1,14 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
+import { useProject } from "@/hooks/use-project";
+import { useProjectFiles } from "@/hooks/use-project-files";
+import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { resolveGalleryFolder } from "@/lib/files/resolve-folder";
 import {
   getHistoricalGallery,
   getHistoricalProject,
 } from "@/lib/projects/mock-projects";
+import {
+  mapProjectImagesToGallery,
+  mapProjectToHistoricalView,
+} from "@/lib/projects/map-project-hub";
+import { queryKeys } from "@/lib/query/keys";
 import type { HistoricalGalleryItem } from "@/types/project-hub";
+import type { ProjectFile } from "@/types/files";
 import { NAV_ROUTES } from "@/types/navigation";
 
 function GalleryItem({
@@ -57,15 +69,91 @@ function GalleryItem({
   );
 }
 
+function isImageFile(file: ProjectFile): boolean {
+  const mime = file.mimeType?.toLowerCase() ?? "";
+  if (mime.startsWith("image/")) return true;
+  return /\.(jpe?g|png|gif|webp|avif|bmp|heic)$/i.test(file.fileName);
+}
+
 export function HistoricalProjectDetail({ projectId }: { projectId: string }) {
-  const project = getHistoricalProject(projectId);
-  const gallery = getHistoricalGallery(projectId);
+  const authDisabled = isAuthDisabled();
+  const { project: apiProject, isLoading, error } = useProject(projectId);
+  const { folderTree, getDownloadUrl } = useProjectFiles(projectId);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const [fileGallery, setFileGallery] = useState<HistoricalGalleryItem[]>([]);
+
+  const galleryFolder = useMemo(
+    () => resolveGalleryFolder(folderTree),
+    [folderTree],
+  );
+
+  const { data: galleryFiles = [] } = useQuery({
+    queryKey: queryKeys.files.folder(projectId, galleryFolder?.path ?? ""),
+    queryFn: async () => {
+      const qs = new URLSearchParams({ folderPath: galleryFolder!.path });
+      const res = await authApiClient<{ data: ProjectFile[] }>(
+        `/projects/${projectId}/files?${qs}`,
+      );
+      return res.data ?? [];
+    },
+    enabled: !authDisabled && Boolean(galleryFolder?.path),
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadUrls() {
+      const images = galleryFiles.filter(isImageFile);
+      if (!images.length) {
+        if (!cancelled) setFileGallery([]);
+        return;
+      }
+      const items = await Promise.all(
+        images.map(async (file) => {
+          try {
+            const url = await getDownloadUrl(file.id);
+            return {
+              url,
+              alt: file.fileName,
+              caption: file.fileName,
+            } satisfies HistoricalGalleryItem;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      if (!cancelled) {
+        setFileGallery(items.filter((x): x is HistoricalGalleryItem => Boolean(x)));
+      }
+    }
+    void loadUrls();
+    return () => {
+      cancelled = true;
+    };
+  }, [galleryFiles, getDownloadUrl]);
+
+  const mockProject = authDisabled ? getHistoricalProject(projectId) : null;
+  const mockGallery = authDisabled ? getHistoricalGallery(projectId) : [];
+
+  const project = apiProject
+    ? mapProjectToHistoricalView(apiProject)
+    : mockProject;
+
+  const gallery = useMemo(() => {
+    if (authDisabled) return mockGallery;
+    if (fileGallery.length) return fileGallery;
+    if (apiProject) return mapProjectImagesToGallery(apiProject);
+    return [];
+  }, [authDisabled, mockGallery, fileGallery, apiProject]);
+
+  if (isLoading && !project) {
+    return <div className="px-10 py-8 text-[var(--figma-gray500)]">Loading project…</div>;
+  }
 
   if (!project) {
     return (
       <div className="px-10 py-8 text-[var(--figma-alert)]">
-        Historical project not found.
+        {error ?? "Historical project not found."}
       </div>
     );
   }
@@ -123,12 +211,12 @@ export function HistoricalProjectDetail({ projectId }: { projectId: string }) {
           style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}
         >
           {gallery.map((img, idx) => (
-            <GalleryItem key={idx} img={img} onClick={() => setLightboxIdx(idx)} />
+            <GalleryItem key={`${img.url}-${idx}`} img={img} onClick={() => setLightboxIdx(idx)} />
           ))}
         </div>
       </div>
 
-      {lightboxIdx !== null && (
+      {lightboxIdx !== null && gallery[lightboxIdx] && (
         <div
           className="fixed inset-0 z-[500] flex items-center justify-center backdrop-blur-md"
           style={{ background: "rgba(27,42,74,0.88)" }}

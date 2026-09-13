@@ -1,33 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { SectionCard, SectionTitle } from "@/components/projects/hub/consultation/consultation-ui";
-import { CONCEPT_REVISION_LOG } from "@/lib/projects/mock-concept";
+import { useConcept } from "@/hooks/use-concept";
 import type { ConceptRevisionEntry } from "@/types/concept";
 
 const FREE_LIMIT = 2;
 
-export function RevisionTrackerWidget() {
-  const [revisions, setRevisions] = useState<ConceptRevisionEntry[]>(CONCEPT_REVISION_LOG);
+export function RevisionTrackerWidget({ projectId }: { projectId: string }) {
+  const {
+    revisions: remoteRevisions,
+    createRevision,
+    isAuthOff,
+  } = useConcept(projectId);
+  const [revisions, setRevisions] = useState<ConceptRevisionEntry[]>(remoteRevisions);
   const [noteInput, setNoteInput] = useState("");
   const [adding, setAdding] = useState(false);
+
+  useEffect(() => {
+    setRevisions(remoteRevisions);
+  }, [remoteRevisions]);
 
   const addRevision = () => {
     if (!noteInput.trim()) return;
     const chargeable = revisions.length >= FREE_LIMIT;
-    setRevisions((p) => [
-      ...p,
-      {
-        id: Date.now(),
-        date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
-        note: noteInput.trim(),
-        chargeable,
-      },
-    ]);
+    const note = noteInput.trim();
     setNoteInput("");
     setAdding(false);
+    void createRevision({
+      note,
+      chargeable,
+      date: new Date().toISOString(),
+    }).then((created) => {
+      if (isAuthOff && created) setRevisions((p) => [...p, created]);
+    });
   };
 
   return (
@@ -46,7 +54,9 @@ export function RevisionTrackerWidget() {
               <div
                 className="flex size-8 items-center justify-center rounded-full transition-all duration-[180ms]"
                 style={{
-                  background: chargeable ? "#FEE2E2" : "linear-gradient(135deg, var(--figma-navy), var(--figma-teal))",
+                  background: chargeable
+                    ? "#FEE2E2"
+                    : "linear-gradient(135deg, var(--figma-navy), var(--figma-teal))",
                   border: chargeable ? "2px solid var(--figma-alert)" : "none",
                   boxShadow: chargeable ? "none" : "var(--neu-raised)",
                 }}
@@ -113,7 +123,7 @@ export function RevisionTrackerWidget() {
       <div className="flex flex-col">
         {revisions.map((rev, idx) => {
           const isLast = idx === revisions.length - 1;
-          const chargeable = idx >= FREE_LIMIT;
+          const chargeable = idx >= FREE_LIMIT || rev.chargeable;
           return (
             <div
               key={rev.id}

@@ -34,3 +34,12 @@ export function canDownloadProjectFiles(role: SidebarRole, _isViewer = false): b
   if (role === "guest") return false;
   return true;
 }
+
+/**
+ * BOQ and commercial financial surfaces.
+ * Guests / project viewers (Social Media–style restricted access) are blocked.
+ */
+export function canViewBoqFinancials(role: SidebarRole, isViewer = false): boolean {
+  if (role === "guest" || isViewer) return false;
+  return true;
+}

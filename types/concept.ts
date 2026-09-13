@@ -7,16 +7,16 @@ export type ConceptFileType = "jpg" | "pdf";
 export const MAX_CONCEPTS_PER_AREA = 3;
 
 export interface ConceptArea {
-  id: number;
+  id: string;
   name: string;
   icon: string;
   conceptCount: number;
 }
 
 export interface ConceptCard {
-  id: number;
+  id: string;
   name: string;
-  areaId: number;
+  areaId: string;
   fileName: string;
   fileType: ConceptFileType;
   fileSize: string;
@@ -25,16 +25,101 @@ export interface ConceptCard {
 }
 
 export interface ConceptRenderImage {
-  id: number;
+  id: string;
   url: string;
   caption: string;
 }
 
 export interface ConceptRevisionEntry {
-  id: number;
+  id: string;
   date: string;
   note: string;
   chargeable: boolean;
+}
+
+/* ---------- API ---------- */
+
+export interface ConceptCardApi {
+  id: string;
+  name: string;
+  area_id?: string;
+  file_id?: string | null;
+  file_name?: string | null;
+  file_type?: string | null;
+  file_size?: string | null;
+  thumb_url?: string | null;
+  confirm_status: ConfirmStatus | string;
+}
+
+export interface ConceptAreaApi {
+  id: string;
+  name: string;
+  icon: string;
+  sort_order?: number;
+  concept_count?: number;
+  cards?: ConceptCardApi[];
+}
+
+export interface ConceptRenderApi {
+  id: string;
+  file_id?: string | null;
+  url?: string | null;
+  caption: string;
+  sort_order?: number;
+}
+
+export interface ConceptRevisionApi {
+  id: string;
+  date: string;
+  note: string;
+  chargeable: boolean;
+}
+
+export interface ConceptTreeResponse {
+  areas: ConceptAreaApi[];
+  renders: ConceptRenderApi[];
+  revisions: ConceptRevisionApi[];
+}
+
+export interface ConceptAreaCreatePayload {
+  name: string;
+  icon?: string;
+}
+
+export interface ConceptAreaUpdatePayload {
+  name?: string;
+  icon?: string;
+}
+
+export interface ConceptCardCreatePayload {
+  name: string;
+  file_id?: string | null;
+  file_name?: string;
+  file_type?: ConceptFileType | string;
+  file_size?: string;
+  thumb_url?: string | null;
+  confirm_status?: ConfirmStatus;
+}
+
+export interface ConceptCardUpdatePayload {
+  name?: string;
+  file_name?: string;
+  file_type?: ConceptFileType | string;
+  file_size?: string;
+  thumb_url?: string | null;
+  confirm_status?: ConfirmStatus;
+}
+
+export interface ConceptRenderCreatePayload {
+  url?: string | null;
+  caption?: string;
+  file_id?: string | null;
+}
+
+export interface ConceptRevisionCreatePayload {
+  note: string;
+  date?: string;
+  chargeable?: boolean;
 }
 
 const ALLOWED: ConceptView[] = ["area-setup", "concept-list"];

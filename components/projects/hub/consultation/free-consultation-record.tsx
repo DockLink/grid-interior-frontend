@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
-import { SAMPLE_TASKS } from "@/lib/projects/mock-consultation";
+import { useConsultation } from "@/hooks/use-consultation";
 import { useHubTeam } from "@/lib/projects/hub-team-context";
 import type { ConsultTask, ModeType } from "@/types/consultation";
 import type { ActiveProjectView } from "@/types/project-hub";
@@ -31,11 +31,20 @@ export function FreeConsultationRecord({
   onConvertToPaid: () => void;
 }) {
   const teamMembers = useHubTeam();
-  const [tasks, setTasks] = useState<ConsultTask[]>(SAMPLE_TASKS);
+  const {
+    tasks: remoteTasks,
+    createTask,
+    isAuthOff,
+  } = useConsultation(project.id);
+  const [tasks, setTasks] = useState<ConsultTask[]>(remoteTasks);
   const [notes, setNotes] = useState("");
   const [dateVal, setDateVal] = useState("2026-07-24");
   const [timeVal, setTimeVal] = useState("10:00");
   const [completing, setCompleting] = useState(false);
+
+  useEffect(() => {
+    setTasks(remoteTasks);
+  }, [remoteTasks]);
 
   const handleComplete = () => {
     setCompleting(true);
@@ -76,9 +85,15 @@ export function FreeConsultationRecord({
           right={
             <button
               type="button"
-              onClick={() =>
-                setTasks((p) => [...p, { id: Date.now(), title: "New task", assigneeId: 1, status: "Pending" }])
-              }
+              onClick={() => {
+                void createTask({
+                  title: "New task",
+                  assignee_user_id: teamMembers[0] ? String(teamMembers[0].id) : "1",
+                  status: "pending",
+                }).then((task) => {
+                  if (isAuthOff && task) setTasks((p) => [...p, task]);
+                });
+              }}
               className="flex cursor-pointer items-center gap-1.5 border-none bg-transparent text-xs font-semibold text-[var(--figma-teal)]"
             >
               <MaterialIcon name="add" outlined size={15} />
@@ -88,7 +103,7 @@ export function FreeConsultationRecord({
         />
         <div className="flex flex-col">
           {tasks.map((task, idx) => {
-            const m = teamMembers.find((t) => t.id === task.assigneeId);
+            const m = teamMembers.find((t) => String(t.id) === String(task.assigneeId));
             return (
               <div
                 key={task.id}
