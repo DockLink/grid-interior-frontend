@@ -9,9 +9,9 @@ export type ProjectPhase =
 export const PHASES: ProjectPhase[] = [
   "Consultation",
   "Concept Design",
+  "Detail Drawings",
   "Layout",
   "3D Design",
-  "Detail Drawings",
   "Execution",
 ];
 

@@ -27,6 +27,7 @@ export function ConsultHeader({
     <div className="mb-7">
       <button
         type="button"
+        data-allow-phase-nav
         onClick={onBack}
         onMouseEnter={() => setBackHover(true)}
         onMouseLeave={() => setBackHover(false)}

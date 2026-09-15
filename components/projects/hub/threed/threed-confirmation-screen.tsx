@@ -24,7 +24,7 @@ export function ThreeDConfirmationScreen({
       <div className="max-w-[680px]">
         <ClientConfirmationWidget
           phase="3D Design"
-          nextPhase="Detail Drawings"
+          nextPhase="Execution"
           defaultFeedback="Client approved the 3D renders and walkthrough. Minor lighting adjustment requested for the lobby east view."
         />
       </div>

@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { DemoCaption } from "@/components/demo/demo-caption";
+import { PhaseLockedContent } from "@/components/projects/hub/shared/workspace-ui";
 import { useActiveProjectView } from "@/hooks/use-active-project-view";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { HubTeamProvider } from "@/lib/projects/hub-team-context";
+import { isPhaseEditable } from "@/lib/projects/map-project-hub";
 import type { LayoutView } from "@/types/layout";
 
 import { LayoutConfirmationScreen } from "./layout-confirmation-screen";
@@ -60,19 +62,23 @@ export function LayoutWorkspace({
     );
   }
 
+  const readOnly = !isPhaseEditable(project.phase, "Layout");
+
   return (
     <HubTeamProvider members={teamMembers}>
       <div>
         {authDisabled && <DemoCaption className="mb-4 px-10 pt-6" />}
-        {view === "drawings" && (
-          <LayoutDrawingsScreen project={project} onBack={handleBack} conceptConfirmed />
-        )}
-        {view === "confirmation" && (
-          <LayoutConfirmationScreen
-            project={project}
-            onBack={() => navigateView("drawings")}
-          />
-        )}
+        <PhaseLockedContent locked={readOnly}>
+          {view === "drawings" && (
+            <LayoutDrawingsScreen project={project} onBack={handleBack} conceptConfirmed />
+          )}
+          {view === "confirmation" && (
+            <LayoutConfirmationScreen
+              project={project}
+              onBack={() => navigateView("drawings")}
+            />
+          )}
+        </PhaseLockedContent>
       </div>
     </HubTeamProvider>
   );

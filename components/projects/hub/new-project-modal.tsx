@@ -254,6 +254,14 @@ export function NewProjectModal({
       setErrors({ phase: "Please select a starting phase" });
       return;
     }
+    if (step === 3) {
+      if (latitude == null || longitude == null || distanceKm == null) {
+        setErrors({
+          location: "Pin the site on the map (search, click, or drag) before continuing.",
+        });
+        return;
+      }
+    }
     setErrors({});
     setStep((s) => (s + 1) as Step);
   };
@@ -274,7 +282,19 @@ export function NewProjectModal({
       return;
     }
 
-    const client = clients.find((c) => c.id === selectedClient);
+    if (latitude == null || longitude == null) {
+      setStep(3);
+      setErrors({
+        location: "Pin the site on the map (search, click, or drag) before creating.",
+      });
+      return;
+    }
+
+    if (!selectedClient) {
+      setStep(1);
+      setErrors({ client: "Please select a client" });
+      return;
+    }
 
     const payload: CreateProjectRequest = {
       name: projectName.trim(),
@@ -285,20 +305,17 @@ export function NewProjectModal({
       location: address.trim() || undefined,
       latitude: latitude ?? undefined,
       longitude: longitude ?? undefined,
-      client: {
-        name: client?.name ?? "Unknown Client",
-        contact_email: client?.email || undefined,
-        contact_number: client?.phone || undefined,
-      },
+      client: { id: selectedClient },
     };
 
     setSaving(true);
     try {
+      const startPhase = selectedPhase ?? "Consultation";
       const created = await createProject(payload, {
-        clientId: selectedClient || undefined,
+        clientId: selectedClient,
         memberUserIds: selectedTeam.length ? selectedTeam : undefined,
         projectLeadUserId: coordinator || null,
-        stages: buildSeededPhaseStages(startDate, endDate),
+        stages: buildSeededPhaseStages(startDate, endDate, undefined, startPhase),
       });
 
       await qc.invalidateQueries({ queryKey: queryKeys.projects.all });
@@ -676,11 +693,19 @@ export function NewProjectModal({
             latitude={latitude}
             longitude={longitude}
             distanceKm={distanceKm}
+            error={errors.location}
             onChange={(next) => {
               setAddress(next.address);
               setLatitude(next.latitude);
               setLongitude(next.longitude);
               setDistanceKm(next.distanceKm);
+              if (next.latitude != null && next.longitude != null) {
+                setErrors((prev) => {
+                  if (!prev.location) return prev;
+                  const { location: _removed, ...rest } = prev;
+                  return rest;
+                });
+              }
             }}
           />
         )}

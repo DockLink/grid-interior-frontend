@@ -22,6 +22,7 @@ export function useCreateProject() {
         stages?: CreateProjectStageInput[];
         memberUserIds?: string[];
         projectLeadUserId?: string | null;
+        /** Existing client id — used to correct the link if create minted a duplicate. */
         clientId?: string;
       }
     ) => {
@@ -30,11 +31,23 @@ export function useCreateProject() {
         body: JSON.stringify(payload),
       });
 
-      if (options?.clientId) {
-        project = await authApiClient<Project>(`/projects/${project.id}`, {
+      const desiredClientId = options?.clientId ?? payload.client?.id;
+      // Safety net: re-link via /links if create still pointed at a different client,
+      // then remove the orphan minted during create.
+      if (desiredClientId && project.client?.id !== desiredClientId) {
+        const mintedClientId = project.client?.id ?? null;
+        await authApiClient(`/projects/${project.id}/links`, {
           method: "PATCH",
-          body: JSON.stringify({ client: { id: options.clientId } }),
+          body: JSON.stringify({ client_id: desiredClientId }),
         });
+        if (mintedClientId && mintedClientId !== desiredClientId) {
+          try {
+            await authApiClient(`/clients/${mintedClientId}`, { method: "DELETE" });
+          } catch {
+            // Orphan cleanup is best-effort; project is already correctly linked.
+          }
+        }
+        project = await authApiClient<Project>(`/projects/${project.id}`);
       }
 
       if (options?.stages?.length) {
@@ -47,6 +60,7 @@ export function useCreateProject() {
             duration: stage.duration,
             order: stage.order,
             taskable_type: "STAGE",
+            ...(stage.status ? { status: stage.status } : {}),
           };
           await authApiClient("/tasks", {
             method: "POST",

@@ -20,6 +20,7 @@ export function PaidTabNav({ tab, setTab }: { tab: PaidTab; setTab: (t: PaidTab)
           <button
             key={t.id}
             type="button"
+            data-allow-phase-nav
             onClick={() => setTab(t.id)}
             className="flex shrink-0 cursor-pointer items-center gap-[7px] whitespace-nowrap rounded-[22px] border-none px-4 py-2 text-[13px] transition-all duration-150"
             style={{

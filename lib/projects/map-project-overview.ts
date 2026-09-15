@@ -1,7 +1,7 @@
 import { distanceKmFromCoords } from "@/lib/maps/distance";
 import { PHASES, type ProjectHealthStatus, type ProjectPhase } from "@/lib/projects/design-tokens";
 import { resolveProjectEndDate } from "@/lib/projects/duration";
-import { phaseIndex, stageToPhase } from "@/lib/projects/map-project-hub";
+import { phaseIndex, resolveCurrentPhase } from "@/lib/projects/map-project-hub";
 import type { HubActivityItem } from "@/types/project-hub";
 import type { Project, ProjectMember, ProjectStatus } from "@/types/projects";
 
@@ -51,9 +51,10 @@ export function mapProjectToOverviewView(
   options: {
     members?: ProjectMember[];
     tasks?: { status: string }[];
+    stages?: { title?: string | null; status?: string | null }[];
   } = {},
 ): ProjectOverviewView {
-  const phase = stageToPhase(project.current_stage);
+  const phase = resolveCurrentPhase(project.current_stage, options.stages);
   const tasks = options.tasks ?? [];
   const tasksDone = tasks.filter((t) => t.status === "COMPLETED").length;
   const activeMembers = (options.members ?? []).filter((m) => m.status === "ACTIVE");

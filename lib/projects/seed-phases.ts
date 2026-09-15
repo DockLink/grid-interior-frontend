@@ -11,12 +11,23 @@ function toIso(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+function stageStatusForOrder(
+  order: number,
+  startIndex: number,
+): TaskableStatus | undefined {
+  if (order < startIndex) return "COMPLETED";
+  if (order === startIndex) return "IN_PROGRESS";
+  return undefined;
+}
+
 /** Split project range evenly across the 6 design PHASES for create payload. */
 export function buildSeededPhaseStages(
   startDate: string,
   endDate: string,
   phases: readonly ProjectPhase[] = PHASES,
+  startPhase: ProjectPhase = "Consultation",
 ): CreateProjectStageInput[] {
+  const startIndex = Math.max(0, phases.indexOf(startPhase));
   const start = toDay(startDate);
   const end = toDay(endDate);
   const startMs = start.getTime();
@@ -27,6 +38,7 @@ export function buildSeededPhaseStages(
       start_date: startDate,
       end_date: endDate,
       order,
+      status: stageStatusForOrder(order, startIndex),
     }));
   }
 
@@ -34,6 +46,7 @@ export function buildSeededPhaseStages(
   const slice = Math.max(1, Math.floor(totalDays / phases.length));
 
   return phases.map((name, order) => {
+    const status = stageStatusForOrder(order, startIndex);
     const sliceStart = new Date(start);
     sliceStart.setDate(start.getDate() + order * slice);
     const sliceEnd = new Date(sliceStart);
@@ -43,6 +56,7 @@ export function buildSeededPhaseStages(
         start_date: toIso(sliceStart),
         end_date: endDate,
         order,
+        status,
       };
     }
     sliceEnd.setDate(sliceStart.getDate() + slice - 1);
@@ -52,6 +66,7 @@ export function buildSeededPhaseStages(
       start_date: toIso(sliceStart),
       end_date: toIso(sliceEnd),
       order,
+      status,
     };
   });
 }

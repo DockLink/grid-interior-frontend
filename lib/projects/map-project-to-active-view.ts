@@ -8,6 +8,7 @@ export function mapProjectToActiveView(
   options: {
     members?: ProjectMember[];
     tasks?: { status: string }[];
+    stages?: { title?: string | null; status?: string | null }[];
   } = {},
 ): ActiveProjectView {
   const overview = mapProjectToOverviewView(project, options);
@@ -27,7 +28,7 @@ export function mapProjectToActiveView(
     startDate: overview.startDate,
     endDate: overview.endDate,
     location: overview.location,
-    distanceKm: overview.distanceKm ?? 0,
+    distanceKm: overview.distanceKm,
     projectType: overview.projectType,
     tasksTotal: overview.tasksTotal,
     tasksDone: overview.tasksDone,

@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { DemoCaption } from "@/components/demo/demo-caption";
+import { PhaseLockedContent } from "@/components/projects/hub/shared/workspace-ui";
 import { useActiveProjectView } from "@/hooks/use-active-project-view";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { HubTeamProvider } from "@/lib/projects/hub-team-context";
+import { isPhaseEditable } from "@/lib/projects/map-project-hub";
 import type { ConsultType, ConsultView, ModeType } from "@/types/consultation";
 import { paidTabFromView } from "@/types/consultation";
 
@@ -77,18 +79,25 @@ export function ConsultationWorkspace({
     );
   }
 
+  const readOnly = !isPhaseEditable(project.phase, "Consultation");
+
   const wrap = (content: React.ReactNode) => (
     <HubTeamProvider members={teamMembers}>
       <div>
         {authDisabled && <DemoCaption className="mb-4 px-10 pt-6" />}
-        {content}
+        <PhaseLockedContent locked={readOnly}>{content}</PhaseLockedContent>
       </div>
     </HubTeamProvider>
   );
 
   if (view === "toggle") {
     return wrap(
-      <TypeToggleScreen project={project} onContinue={handleContinue} onBack={handleBack} />,
+      <TypeToggleScreen
+        project={project}
+        onContinue={handleContinue}
+        onBack={handleBack}
+        readOnly={readOnly}
+      />,
     );
   }
 
@@ -99,6 +108,7 @@ export function ConsultationWorkspace({
         mode={mode}
         onBack={handleToggleBack}
         onConvertToPaid={handleConvertToPaid}
+        readOnly={readOnly}
       />,
     );
   }
@@ -110,6 +120,7 @@ export function ConsultationWorkspace({
       initialTab={paidTabFromView(view)}
       onBack={handleToggleBack}
       onTabChange={navigateView}
+      readOnly={readOnly}
     />,
   );
 }

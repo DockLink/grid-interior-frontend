@@ -1,3 +1,5 @@
+import type { TaskableStatus } from "./tasks";
+
 export type ProjectStatus = "ACTIVE" | "INACTIVE";
 
 export interface ProjectImage {
@@ -129,9 +131,14 @@ export interface CreateProjectRequest {
   vimeo_url?: string;
   images?: string[];
   brief_attachments?: string[];
+  /**
+   * Prefer `{ id }` to link an existing client.
+   * Name/contact fields create a new client when `id` is omitted.
+   */
   client: {
+    id?: string;
     code?: string;
-    name: string;
+    name?: string;
     contact_number?: string;
     contact_email?: string;
   };
@@ -176,6 +183,7 @@ export interface CreateProjectStageInput {
   end_date?: string;
   duration?: string;
   order: number;
+  status?: TaskableStatus;
 }
 
 export interface LeadProjectView {

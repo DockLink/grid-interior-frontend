@@ -16,6 +16,7 @@ export function WorkspaceBreadcrumb({
   return (
     <button
       type="button"
+      data-allow-phase-nav
       onClick={onBack}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
