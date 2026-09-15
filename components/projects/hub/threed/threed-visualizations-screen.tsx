@@ -319,7 +319,7 @@ export function ThreeDVisualizationsScreen({
 
       <ClientConfirmationWidget
         phase="3D Design"
-        nextPhase="Detail Drawings"
+        nextPhase="Execution"
         defaultFeedback="Client approved the 3D renders and walkthrough. Minor lighting adjustment requested for the lobby east view."
         localOnly
       />

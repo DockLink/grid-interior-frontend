@@ -14,10 +14,12 @@ export function TypeToggleScreen({
   project,
   onContinue,
   onBack,
+  readOnly = false,
 }: {
   project: ActiveProjectView;
   onContinue: (type: ConsultType, mode: ModeType) => void;
   onBack: () => void;
+  readOnly?: boolean;
 }) {
   const [consultType, setConsultType] = useState<ConsultType>(null);
   const [mode, setMode] = useState<ModeType>("online");
@@ -28,6 +30,7 @@ export function TypeToggleScreen({
     <div className="px-4 py-6 sm:px-10 sm:py-8">
       <button
         type="button"
+        data-allow-phase-nav
         onClick={onBack}
         onMouseEnter={() => setBackHover(true)}
         onMouseLeave={() => setBackHover(false)}
@@ -123,16 +126,22 @@ export function TypeToggleScreen({
                   <div className="mb-[3px] text-[13px] font-semibold text-[var(--figma-navy)]">
                     {eligible
                       ? "Client is eligible for free consultation"
-                      : "Outside free consultation radius"}
+                      : project.distanceKm == null
+                        ? "Project site location is missing"
+                        : "Outside free consultation radius"}
                   </div>
                   <div className="text-xs leading-snug text-[var(--figma-gray500)]">
                     {eligible
                       ? `Site is ${project.distanceKm} km from Dehiwala office — within the ${FREE_CONSULTATION_RADIUS_KM} km free consultation radius.`
-                      : `Client site is ${project.distanceKm} km from Dehiwala office. Free consultations require the site to be within ${FREE_CONSULTATION_RADIUS_KM} km.`}
+                      : project.distanceKm == null
+                        ? `Free consultations require a pinned site within ${FREE_CONSULTATION_RADIUS_KM} km of the GRID Dehiwala office. Edit the project location on the map first.`
+                        : `Client site is ${project.distanceKm} km from Dehiwala office. Free consultations require the site to be within ${FREE_CONSULTATION_RADIUS_KM} km.`}
                   </div>
                   {!eligible && (
                     <div className="mt-2 text-[11px] font-medium text-[var(--figma-alert)]">
-                      Consider switching to Paid Consultation.
+                      {project.distanceKm == null
+                        ? "Add a map pin on the project, or switch to Paid Consultation."
+                        : "Consider switching to Paid Consultation."}
                     </div>
                   )}
                 </div>
@@ -168,7 +177,7 @@ export function TypeToggleScreen({
           label="Continue"
           icon="arrow_forward"
           onClick={() => onContinue(consultType, mode)}
-          disabled={!consultType || (consultType === "free" && !eligible)}
+          disabled={readOnly || !consultType || (consultType === "free" && !eligible)}
         />
       </div>
     </div>

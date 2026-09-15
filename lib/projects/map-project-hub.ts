@@ -1,4 +1,8 @@
-import { PHASES, type ProjectPhase } from "@/lib/projects/design-tokens";
+import {
+  PHASES,
+  type PhaseWorkspace,
+  type ProjectPhase,
+} from "@/lib/projects/design-tokens";
 import {
   FALLBACK_THUMBNAIL,
   mapProjectToCard,
@@ -31,6 +35,57 @@ export function phaseIndex(phase: ProjectPhase): number {
   return idx >= 0 ? idx : 0;
 }
 
+const WORKSPACE_TO_PHASE: Record<PhaseWorkspace, ProjectPhase> = {
+  consultation: "Consultation",
+  concept: "Concept Design",
+  detail: "Detail Drawings",
+  layout: "Layout",
+  threed: "3D Design",
+  execution: "Execution",
+};
+
+export function workspaceToPhase(id: PhaseWorkspace): ProjectPhase {
+  return WORKSPACE_TO_PHASE[id];
+}
+
+/** Past phases are locked; current and later remain editable. */
+export function isPhaseEditable(current: ProjectPhase, target: ProjectPhase): boolean {
+  return phaseIndex(target) >= phaseIndex(current);
+}
+
+export function phaseWorkspaceStatus(
+  currentPhaseIndex: number,
+  targetPhaseIndex: number,
+): "Completed" | "In Progress" | "Upcoming" {
+  if (targetPhaseIndex < currentPhaseIndex) return "Completed";
+  if (targetPhaseIndex === currentPhaseIndex) return "In Progress";
+  return "Upcoming";
+}
+
+/**
+ * Prefer STAGE taskable progress over project.current_stage (API may not accept
+ * current_stage on PATCH). First non-COMPLETED phase in order is current.
+ */
+export function resolveCurrentPhase(
+  currentStage: string | null | undefined,
+  stages?: { title?: string | null; status?: string | null }[],
+): ProjectPhase {
+  if (stages?.length) {
+    let matchedAny = false;
+    for (const phase of PHASES) {
+      const needle = phase.toLowerCase();
+      const stage =
+        stages.find((t) => (t.title ?? "").trim().toLowerCase() === needle) ??
+        stages.find((t) => (t.title ?? "").toLowerCase().includes(needle));
+      if (!stage) continue;
+      matchedAny = true;
+      if (stage.status !== "COMPLETED") return phase;
+    }
+    if (matchedAny) return "Execution";
+  }
+  return stageToPhase(currentStage);
+}
+
 export function mapProjectCardToActiveView(card: ProjectCardView): ActiveProjectView {
   const phase = stageToPhase(card.currentStage);
   return {
@@ -47,7 +102,7 @@ export function mapProjectCardToActiveView(card: ProjectCardView): ActiveProject
     startDate: card.startDate ?? "—",
     endDate: card.endDate ?? undefined,
     location: card.location ?? "",
-    distanceKm: 0,
+    distanceKm: null,
     projectType: "Interior Design",
     tasksTotal: 0,
     tasksDone: 0,

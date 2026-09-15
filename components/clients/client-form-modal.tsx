@@ -29,6 +29,9 @@ export type ClientFormValues = {
 const PREFERRED_CONTACTS: PreferredContact[] = ["Email", "Phone", "WhatsApp"];
 const SOURCES: LeadSource[] = ["Referral", "Instagram", "Website", "Walk-in"];
 const STATUSES: ClientStatus[] = ["Lead", "Active", "Past"];
+const EMAIL_PATTERN = /^[^\sA-Z]+@[^\sA-Z]+\.[^\sA-Z]+$/;
+
+type FieldErrors = Partial<Record<"name" | "email", string>>;
 
 function emptyForm(): ClientFormValues {
   return {
@@ -42,6 +45,18 @@ function emptyForm(): ClientFormValues {
     source: "Referral",
     notes: "",
   };
+}
+
+function validateForm(values: ClientFormValues): FieldErrors {
+  const errors: FieldErrors = {};
+  if (!values.name.trim()) {
+    errors.name = "Full Name is required";
+  }
+  const email = values.email.trim();
+  if (email && !EMAIL_PATTERN.test(email)) {
+    errors.email = "Enter a valid email address";
+  }
+  return errors;
 }
 
 function clientToForm(client: Client): ClientFormValues {
@@ -113,6 +128,7 @@ export function ClientFormModal({
   const [form, setForm] = useState<ClientFormValues>(() =>
     initialClient ? clientToForm(initialClient) : { ...emptyForm(), status: defaultStatus },
   );
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   useEffect(() => {
     if (initialClient) setForm(clientToForm(initialClient));
@@ -120,10 +136,18 @@ export function ClientFormModal({
 
   const set = <K extends keyof ClientFormValues>(key: K, value: ClientFormValues[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+    if (key === "name" || key === "email") {
+      setErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev));
+    }
   };
 
   const handleSubmit = async () => {
-    if (!form.name.trim()) return;
+    const nextErrors = validateForm(form);
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+    setErrors({});
     if (mode === "edit") {
       await onSubmit(formToUpdatePayload(form));
       return;
@@ -165,25 +189,42 @@ export function ClientFormModal({
             { key: "email" as const, label: "Email Address", icon: "email", placeholder: "giulia@example.com" },
             { key: "phone" as const, label: "Phone", icon: "phone", placeholder: "+39 02 1234 5678" },
             { key: "address" as const, label: "Address", icon: "location_on", placeholder: "Street, city, country" },
-          ].map((f) => (
-            <div key={f.key} className="flex flex-col gap-1.5">
-              <label className="text-[13px] font-medium text-[var(--figma-navy)]">{f.label}</label>
-              <div className="relative">
-                <MaterialIcon
-                  name={f.icon}
-                  outlined
-                  size={17}
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--figma-gray400)]"
-                />
-                <input
-                  value={form[f.key]}
-                  onChange={(e) => set(f.key, e.target.value)}
-                  placeholder={f.placeholder}
-                  className="hub-input-focus w-full rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white py-2.5 pl-9 pr-3.5 text-sm text-[var(--figma-navy)] outline-none neu-inset"
-                />
+          ].map((f) => {
+            const fieldError =
+              f.key === "name" || f.key === "email" ? errors[f.key] : undefined;
+            return (
+              <div key={f.key} className="flex flex-col gap-1.5">
+                <label
+                  className="text-[13px] font-medium"
+                  style={{ color: fieldError ? "var(--figma-alert)" : "var(--figma-navy)" }}
+                >
+                  {f.label}
+                </label>
+                <div className="relative">
+                  <MaterialIcon
+                    name={f.icon}
+                    outlined
+                    size={17}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--figma-gray400)]"
+                  />
+                  <input
+                    value={form[f.key]}
+                    onChange={(e) => set(f.key, e.target.value)}
+                    placeholder={f.placeholder}
+                    type={f.key === "email" ? "email" : "text"}
+                    aria-invalid={Boolean(fieldError)}
+                    className={cn(
+                      "hub-input-focus w-full rounded-[10px] border-[1.5px] bg-white py-2.5 pl-9 pr-3.5 text-sm text-[var(--figma-navy)] outline-none neu-inset",
+                      fieldError ? "border-[var(--figma-alert)]" : "border-[var(--figma-border)]",
+                    )}
+                  />
+                </div>
+                {fieldError && (
+                  <div className="text-[11px] text-[var(--figma-alert)]">{fieldError}</div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           <div className="flex flex-col gap-1.5">
             <label className="text-[13px] font-medium text-[var(--figma-navy)]">Preferred Contact</label>
@@ -268,7 +309,7 @@ export function ClientFormModal({
             icon={mode === "edit" ? "save" : "person_add"}
             onClick={() => void handleSubmit()}
             className="flex-[2]"
-            disabled={isSaving || !form.name.trim()}
+            disabled={isSaving}
           >
             {isSaving ? "Saving…" : mode === "edit" ? "Save Changes" : "Create Client"}
           </GradientButton>

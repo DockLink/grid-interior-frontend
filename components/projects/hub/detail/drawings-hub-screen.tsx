@@ -446,6 +446,7 @@ export function DrawingsHubScreen({
     <div className="px-10 py-8">
       <button
         type="button"
+        data-allow-phase-nav
         onClick={onBack}
         onMouseEnter={() => setBackHover(true)}
         onMouseLeave={() => setBackHover(false)}

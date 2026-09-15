@@ -5,21 +5,23 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
 import { queryKeys } from "@/lib/query/keys";
-import type { Project } from "@/types/projects";
+import type { ProjectLinksApi } from "@/types/project-links";
 
 export function useLinkProjectToClient(clientId: string) {
   const qc = useQueryClient();
 
   const mutation = useMutation({
     mutationFn: (projectId: string) =>
-      authApiClient<Project>(`/projects/${projectId}`, {
+      authApiClient<ProjectLinksApi>(`/projects/${projectId}/links`, {
         method: "PATCH",
-        body: JSON.stringify({ client: { id: clientId } }),
+        body: JSON.stringify({ client_id: clientId }),
       }),
-    onSuccess: () => {
+    onSuccess: (_result, projectId) => {
       void qc.invalidateQueries({ queryKey: queryKeys.clients.projects(clientId) });
       void qc.invalidateQueries({ queryKey: queryKeys.clients.documents(clientId) });
       void qc.invalidateQueries({ queryKey: queryKeys.projects.all });
+      void qc.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.projectLinks.detail(projectId) });
     },
   });
 

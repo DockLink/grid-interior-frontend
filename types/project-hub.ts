@@ -30,7 +30,8 @@ export interface ActiveProjectView {
   /** Formatted project end date when known */
   endDate?: string;
   location: string;
-  distanceKm: number;
+  /** Null when the project has no pinned lat/lng yet. */
+  distanceKm: number | null;
   projectType: string;
   tasksTotal: number;
   tasksDone: number;

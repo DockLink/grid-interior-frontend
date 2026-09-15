@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { cn } from "@/lib/utils";
@@ -24,6 +24,7 @@ export function WorkspaceBreadcrumb({
   return (
     <button
       type="button"
+      data-allow-phase-nav
       onClick={onBack}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
@@ -141,6 +142,49 @@ export function UploadDropzone({
         <div className="text-[11px] text-[var(--figma-gray500)]">
           Drag & drop or click · PDF, DWG, DXF, PNG, JPG
         </div>
+      </div>
+    </div>
+  );
+}
+
+export function PhaseReadOnlyBanner() {
+  return (
+    <div
+      className="mx-4 mb-4 flex items-start gap-3 rounded-[12px] border border-[var(--figma-border)] bg-[var(--figma-gray50)] px-4 py-3 sm:mx-10"
+      role="status"
+    >
+      <MaterialIcon name="lock" outlined size={18} className="mt-0.5 shrink-0 text-[var(--figma-gray500)]" />
+      <div>
+        <div className="text-[13px] font-semibold text-[var(--figma-navy)]">
+          This phase is completed and is read-only
+        </div>
+        <div className="mt-0.5 text-[12px] text-[var(--figma-gray500)]">
+          You can review past work here, but editing is locked because the project has moved past this phase.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** View-only wrapper for completed phases — keeps navigation, blocks interactions. */
+export function PhaseLockedContent({
+  locked,
+  children,
+  className,
+}: {
+  locked: boolean;
+  children: ReactNode;
+  className?: string;
+}) {
+  if (!locked) return <>{children}</>;
+  return (
+    <div className={className}>
+      <PhaseReadOnlyBanner />
+      <div
+        className="pointer-events-none select-none opacity-80 [&_[data-allow-phase-nav]]:pointer-events-auto"
+        aria-disabled="true"
+      >
+        {children}
       </div>
     </div>
   );

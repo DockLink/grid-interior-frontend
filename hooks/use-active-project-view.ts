@@ -38,9 +38,13 @@ export function useActiveProjectView(projectId: string): {
   const project = useMemo(() => {
     if (authDisabled && mockProject) return mockProject;
     if (!apiProject) return null;
+    const stages = tasks
+      .filter((t) => t.taskableType === "STAGE")
+      .map((t) => ({ title: t.title, status: t.status }));
     return mapProjectToActiveView(apiProject, {
       members,
       tasks: tasks.map((t) => ({ status: t.status })),
+      stages,
     });
   }, [authDisabled, mockProject, apiProject, members, tasks]);
 

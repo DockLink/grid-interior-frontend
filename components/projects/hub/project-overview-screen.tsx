@@ -16,6 +16,11 @@ import {
   WS_STATUS_CFG,
   type PhaseWorkspace,
 } from "@/lib/projects/design-tokens";
+import {
+  phaseIndex,
+  phaseWorkspaceStatus,
+  workspaceToPhase,
+} from "@/lib/projects/map-project-hub";
 import { mapProjectToOverviewView } from "@/lib/projects/map-project-overview";
 import { canManageProject, canViewBoqFinancials } from "@/lib/projects/permissions";
 import { getUserInitials, getUserListPrimaryLabel } from "@/lib/user/display";
@@ -162,13 +167,15 @@ function MapThumbnail({ location }: { location: string }) {
 
 function PhaseWorkspaceCard({
   ws,
+  status,
   onOpen,
 }: {
   ws: (typeof PHASE_WORKSPACES)[number];
+  status: "Completed" | "In Progress" | "Upcoming";
   onOpen: () => void;
 }) {
   const [hover, setHover] = useState(false);
-  const sc = WS_STATUS_CFG[ws.status] ?? WS_STATUS_CFG.Upcoming;
+  const sc = WS_STATUS_CFG[status] ?? WS_STATUS_CFG.Upcoming;
 
   return (
     <div
@@ -199,7 +206,7 @@ function PhaseWorkspaceCard({
           className="shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap"
           style={{ background: sc.bg, color: sc.color }}
         >
-          {ws.status}
+          {status}
         </span>
       </div>
       <p className="m-0 text-[11px] leading-relaxed text-[var(--figma-gray500)]">{ws.desc}</p>
@@ -223,21 +230,30 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
     "TASK",
     { depth: 0, limit: 200 },
   );
+  const { tasks: stageTasks, isLoading: stagesLoading } = useProjectTaskables(
+    projectId,
+    "STAGE",
+    { limit: 50 },
+  );
   const [showManageTeam, setShowManageTeam] = useState(false);
   const canManageTeam = canManageProject(effectiveRole, isViewer);
   const allowBoq = canViewBoqFinancials(effectiveRole, isViewer);
 
   const overview = useMemo(() => {
     if (!project) return null;
-    return mapProjectToOverviewView(project, { members, tasks: projectTasks });
-  }, [project, members, projectTasks]);
+    return mapProjectToOverviewView(project, {
+      members,
+      tasks: projectTasks,
+      stages: stageTasks.map((t) => ({ title: t.title, status: t.status })),
+    });
+  }, [project, members, projectTasks, stageTasks]);
 
   const activeMembers = useMemo(
     () => members.filter((m) => m.status === "ACTIVE"),
     [members],
   );
 
-  if (isLoading || tasksLoading) {
+  if (isLoading || tasksLoading || stagesLoading) {
     return (
       <div className="px-10 py-8 text-[var(--figma-gray500)]">Loading project overview…</div>
     );
@@ -369,9 +385,18 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
           <span className="ml-1 text-[11px] text-[var(--figma-gray400)]">Click any workspace to open it</span>
         </div>
         <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
-          {PHASE_WORKSPACES.map((ws) => (
-            <PhaseWorkspaceCard key={ws.id} ws={ws} onOpen={() => openWorkspace(ws.id)} />
-          ))}
+          {PHASE_WORKSPACES.map((ws) => {
+            const targetIndex = phaseIndex(workspaceToPhase(ws.id));
+            const status = phaseWorkspaceStatus(overview.phaseIndex, targetIndex);
+            return (
+              <PhaseWorkspaceCard
+                key={ws.id}
+                ws={ws}
+                status={status}
+                onOpen={() => openWorkspace(ws.id)}
+              />
+            );
+          })}
         </div>
       </div>
 

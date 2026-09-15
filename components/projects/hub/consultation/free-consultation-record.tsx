@@ -1,10 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { useConsultation } from "@/hooks/use-consultation";
+import { useProjectTaskables } from "@/hooks/use-project-taskables";
 import { useHubTeam } from "@/lib/projects/hub-team-context";
+import { findStageTaskable } from "@/lib/projects/seed-phases";
+import { queryKeys } from "@/lib/query/keys";
 import type { ConsultTask, ModeType } from "@/types/consultation";
 import type { ActiveProjectView } from "@/types/project-hub";
 
@@ -24,31 +29,78 @@ export function FreeConsultationRecord({
   mode,
   onBack,
   onConvertToPaid,
+  readOnly = false,
 }: {
   project: ActiveProjectView;
   mode: ModeType;
   onBack: () => void;
   onConvertToPaid: () => void;
+  readOnly?: boolean;
 }) {
+  const qc = useQueryClient();
   const teamMembers = useHubTeam();
   const {
     tasks: remoteTasks,
     createTask,
+    createNote,
     isAuthOff,
   } = useConsultation(project.id);
+  const {
+    tasks: stages,
+    setTaskableStatus,
+    isLoading: stagesLoading,
+  } = useProjectTaskables(project.id, "STAGE");
+  const consultationStage = findStageTaskable(stages, "Consultation");
+  const stageCompleted = consultationStage?.status === "COMPLETED";
+
   const [tasks, setTasks] = useState<ConsultTask[]>(remoteTasks);
   const [notes, setNotes] = useState("");
   const [dateVal, setDateVal] = useState("2026-07-24");
   const [timeVal, setTimeVal] = useState("10:00");
   const [completing, setCompleting] = useState(false);
+  const [localCompleted, setLocalCompleted] = useState(false);
 
   useEffect(() => {
     setTasks(remoteTasks);
   }, [remoteTasks]);
 
-  const handleComplete = () => {
+  const isComplete = stageCompleted || localCompleted;
+  const completeDisabled =
+    readOnly || completing || isComplete || (!isAuthOff && stagesLoading);
+
+  const handleComplete = async () => {
+    if (completeDisabled) return;
     setCompleting(true);
-    setTimeout(() => setCompleting(false), 1200);
+    try {
+      const trimmedNotes = notes.trim();
+      if (trimmedNotes) {
+        await createNote({ text: trimmedNotes });
+      }
+
+      if (isAuthOff) {
+        setLocalCompleted(true);
+        toast.success("Consultation marked complete");
+        return;
+      }
+
+      const stage = findStageTaskable(stages, "Consultation");
+      if (!stage) {
+        toast.error("Consultation stage not found. Open Manage stages to add it first.");
+        return;
+      }
+
+      if (stage.status !== "COMPLETED") {
+        await setTaskableStatus(stage.id, "COMPLETED");
+      }
+
+      await qc.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
+      setLocalCompleted(true);
+      toast.success("Consultation marked complete");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to mark consultation complete");
+    } finally {
+      setCompleting(false);
+    }
   };
 
   const inputClass =
@@ -63,11 +115,23 @@ export function FreeConsultationRecord({
         <div className="grid grid-cols-3 gap-4">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-[var(--figma-navy)]">Date</label>
-            <input type="date" value={dateVal} onChange={(e) => setDateVal(e.target.value)} className={inputClass} />
+            <input
+              type="date"
+              value={dateVal}
+              onChange={(e) => setDateVal(e.target.value)}
+              className={inputClass}
+              disabled={readOnly}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-[var(--figma-navy)]">Time</label>
-            <input type="time" value={timeVal} onChange={(e) => setTimeVal(e.target.value)} className={inputClass} />
+            <input
+              type="time"
+              value={timeVal}
+              onChange={(e) => setTimeVal(e.target.value)}
+              className={inputClass}
+              disabled={readOnly}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-[var(--figma-navy)]">Mode</label>
@@ -83,22 +147,24 @@ export function FreeConsultationRecord({
           icon="task_alt"
           title="Task Updates"
           right={
-            <button
-              type="button"
-              onClick={() => {
-                void createTask({
-                  title: "New task",
-                  assignee_user_id: teamMembers[0] ? String(teamMembers[0].id) : "1",
-                  status: "pending",
-                }).then((task) => {
-                  if (isAuthOff && task) setTasks((p) => [...p, task]);
-                });
-              }}
-              className="flex cursor-pointer items-center gap-1.5 border-none bg-transparent text-xs font-semibold text-[var(--figma-teal)]"
-            >
-              <MaterialIcon name="add" outlined size={15} />
-              Add Task
-            </button>
+            readOnly ? undefined : (
+              <button
+                type="button"
+                onClick={() => {
+                  void createTask({
+                    title: "New task",
+                    assignee_user_id: teamMembers[0] ? String(teamMembers[0].id) : "1",
+                    status: "pending",
+                  }).then((task) => {
+                    if (isAuthOff && task) setTasks((p) => [...p, task]);
+                  });
+                }}
+                className="flex cursor-pointer items-center gap-1.5 border-none bg-transparent text-xs font-semibold text-[var(--figma-teal)]"
+              >
+                <MaterialIcon name="add" outlined size={15} />
+                Add Task
+              </button>
+            )
           }
         />
         <div className="flex flex-col">
@@ -142,16 +208,36 @@ export function FreeConsultationRecord({
 
       <SectionCard>
         <SectionTitle icon="sticky_note_2" title="Notes" />
-        <NeuTextarea value={notes} onChange={setNotes} placeholder="Add consultation notes here… (optional)" rows={4} />
+        <NeuTextarea
+          value={notes}
+          onChange={setNotes}
+          placeholder="Add consultation notes here… (optional)"
+          rows={4}
+          disabled={readOnly}
+        />
       </SectionCard>
 
       <div className="flex flex-wrap items-center gap-3">
         <GradientBtn
-          label={completing ? "Marked Complete!" : "Mark Consultation Complete"}
-          icon={completing ? "check" : "check_circle"}
-          onClick={handleComplete}
+          label={
+            completing
+              ? "Saving…"
+              : isComplete
+                ? "Consultation Complete"
+                : "Mark Consultation Complete"
+          }
+          icon={isComplete ? "check" : "check_circle"}
+          onClick={() => void handleComplete()}
+          disabled={completeDisabled}
         />
-        <OutlineBtn label="Convert to Paid Consultation" icon="upgrade" onClick={onConvertToPaid} color="var(--figma-navy)" />
+        {!readOnly && (
+          <OutlineBtn
+            label="Convert to Paid Consultation"
+            icon="upgrade"
+            onClick={onConvertToPaid}
+            color="var(--figma-navy)"
+          />
+        )}
       </div>
     </div>
   );

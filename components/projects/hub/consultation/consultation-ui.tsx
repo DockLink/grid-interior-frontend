@@ -51,12 +51,14 @@ export function NeuTextarea({
   placeholder,
   rows = 4,
   label,
+  disabled = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   rows?: number;
   label?: string;
+  disabled?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
 
@@ -68,11 +70,14 @@ export function NeuTextarea({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         rows={rows}
+        disabled={disabled}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         className={cn(
-          "box-border w-full resize-y rounded-[10px] bg-white px-3.5 py-[11px] text-[13px] leading-relaxed text-[var(--figma-navy)] outline-none transition-all duration-150",
-          focused ? "border-2 border-[var(--figma-teal)] hub-input-focus" : "border-[1.5px] border-[var(--figma-border)] neu-inset",
+          "box-border w-full resize-y rounded-[10px] bg-white px-3.5 py-[11px] text-[13px] leading-relaxed text-[var(--figma-navy)] outline-none transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-70",
+          focused && !disabled
+            ? "border-2 border-[var(--figma-teal)] hub-input-focus"
+            : "border-[1.5px] border-[var(--figma-border)] neu-inset",
         )}
       />
       <div className="text-right text-[11px] text-[var(--figma-gray400)]">{value.length} chars</div>

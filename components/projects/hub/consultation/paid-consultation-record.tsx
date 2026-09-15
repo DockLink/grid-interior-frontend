@@ -21,12 +21,14 @@ export function PaidConsultationRecord({
   initialTab,
   onBack,
   onTabChange,
+  readOnly = false,
 }: {
   project: ActiveProjectView;
   mode: ModeType;
   initialTab: PaidTab;
   onBack: () => void;
   onTabChange?: (view: ConsultView) => void;
+  readOnly?: boolean;
 }) {
   const [tab, setTab] = useState<PaidTab>(initialTab);
 
@@ -44,16 +46,18 @@ export function PaidConsultationRecord({
       <ConsultHeader project={project} consultType="paid" mode={mode} onBack={onBack} showModeBadge />
       <PaidTabNav tab={tab} setTab={handleTabChange} />
 
-      {tab === "questionnaire" && <QuestionnaireTab projectId={project.id} />}
-      {tab === "site" && <SiteMeasurementsTab projectId={project.id} />}
-      {tab === "inventory" && <InventoryTab projectId={project.id} />}
-      {tab === "notes" && (
-        <SectionCard>
-          <SectionTitle icon="forum" title="Notes & Thread" />
-          <NotesThread projectId={project.id} />
-        </SectionCard>
-      )}
-      {tab === "audio" && <AudioTab projectId={project.id} />}
+      <div className={readOnly ? "pointer-events-none opacity-80" : undefined}>
+        {tab === "questionnaire" && <QuestionnaireTab projectId={project.id} />}
+        {tab === "site" && <SiteMeasurementsTab projectId={project.id} />}
+        {tab === "inventory" && <InventoryTab projectId={project.id} />}
+        {tab === "notes" && (
+          <SectionCard>
+            <SectionTitle icon="forum" title="Notes & Thread" />
+            <NotesThread projectId={project.id} />
+          </SectionCard>
+        )}
+        {tab === "audio" && <AudioTab projectId={project.id} />}
+      </div>
     </div>
   );
 }
