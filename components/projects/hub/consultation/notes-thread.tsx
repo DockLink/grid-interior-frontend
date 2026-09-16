@@ -23,7 +23,9 @@ export function NotesThread({
   );
   const [draft, setDraft] = useState("");
   const [focused, setFocused] = useState(false);
+  const [attachment, setAttachment] = useState<File | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setComments(section ? remoteNotes.slice(0, 2) : remoteNotes);
@@ -34,12 +36,20 @@ export function NotesThread({
   }, [comments]);
 
   const send = () => {
-    if (!draft.trim()) return;
+    if (!draft.trim() && !attachment) return;
     const text = draft.trim();
     setDraft("");
-    void createNote({ text }).then((note) => {
+    const attachName = attachment?.name;
+    setAttachment(null);
+    void createNote({ text, attachment_name: attachName }).then((note) => {
       if (isAuthOff && note) setComments((p) => [...p, note]);
     });
+  };
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) setAttachment(file);
+    e.target.value = "";
   };
 
   const findMember = (memberId: string) =>
@@ -87,7 +97,15 @@ export function NotesThread({
                   <span className="text-[11px] text-[var(--figma-gray400)]">{m.role}</span>
                   <span className="ml-auto text-[11px] text-[var(--figma-gray400)]">{c.time}</span>
                 </div>
-                <p className="m-0 text-[13px] leading-relaxed text-[var(--figma-gray500)]">{c.text}</p>
+                {c.attachmentName && (
+                  <div className="mb-2 flex items-center gap-2 rounded-lg border border-[var(--figma-border)] bg-[var(--figma-gray50)] px-3 py-2">
+                    <MaterialIcon name="attach_file" size={16} className="text-[var(--figma-gray500)]" />
+                    <span className="text-[12px] font-medium text-[var(--figma-navy)] truncate">
+                      {c.attachmentName}
+                    </span>
+                  </div>
+                )}
+                {c.text && <p className="m-0 text-[13px] leading-relaxed text-[var(--figma-gray500)]">{c.text}</p>}
               </div>
             </div>
           );
@@ -96,16 +114,38 @@ export function NotesThread({
       </div>
 
       <div
-        className="flex items-end gap-2.5 rounded-2xl border border-[var(--figma-border)] bg-white px-4 py-3.5"
+        className="flex flex-col gap-2 rounded-2xl border border-[var(--figma-border)] bg-white px-4 py-3.5"
         style={{ boxShadow: "var(--neu-card)" }}
       >
-        <button
-          type="button"
-          className="flex size-[34px] shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-none bg-[var(--figma-gray100)] transition-colors duration-150 hover:bg-[var(--figma-gray200)]"
-        >
-          <MaterialIcon name="attach_file" outlined size={18} className="text-[var(--figma-gray500)]" />
-        </button>
-        <textarea
+        {attachment && (
+          <div className="flex w-max items-center gap-2 rounded-lg bg-[var(--figma-gray100)] px-3 py-1.5">
+            <MaterialIcon name="attach_file" size={14} className="text-[var(--figma-gray500)]" />
+            <span className="text-[12px] font-medium text-[var(--figma-navy)] truncate max-w-[200px]">
+              {attachment.name}
+            </span>
+            <button
+              onClick={() => setAttachment(null)}
+              className="ml-1 flex cursor-pointer items-center justify-center rounded-full border-none bg-transparent hover:bg-[var(--figma-gray200)]"
+            >
+              <MaterialIcon name="close" size={14} className="text-[var(--figma-gray600)]" />
+            </button>
+          </div>
+        )}
+        <div className="flex items-end gap-2.5">
+          <input
+            type="file"
+            className="hidden"
+            ref={fileRef}
+            onChange={handleFile}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex size-[34px] shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-none bg-[var(--figma-gray100)] transition-colors duration-150 hover:bg-[var(--figma-gray200)]"
+          >
+            <MaterialIcon name="attach_file" outlined size={18} className="text-[var(--figma-gray500)]" />
+          </button>
+          <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onFocus={() => setFocused(true)}
@@ -123,23 +163,24 @@ export function NotesThread({
             border: focused ? "1.5px solid var(--figma-teal)" : "1.5px solid var(--figma-border)",
           }}
         />
-        <button
-          type="button"
-          onClick={send}
-          className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-none transition-all duration-200"
-          style={{
-            background: draft.trim()
-              ? "linear-gradient(135deg, var(--figma-navy), var(--figma-teal))"
-              : "var(--figma-gray200)",
-            boxShadow: draft.trim() ? "var(--neu-raised)" : "none",
-          }}
-        >
-          <MaterialIcon
-            name="send"
-            size={18}
-            className={draft.trim() ? "text-white" : "text-[var(--figma-gray400)]"}
-          />
-        </button>
+          <button
+            type="button"
+            onClick={send}
+            className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-none transition-all duration-200"
+            style={{
+              background: (draft.trim() || attachment)
+                ? "linear-gradient(135deg, var(--figma-navy), var(--figma-teal))"
+                : "var(--figma-gray200)",
+              boxShadow: (draft.trim() || attachment) ? "var(--neu-raised)" : "none",
+            }}
+          >
+            <MaterialIcon
+              name="send"
+              size={18}
+              className={(draft.trim() || attachment) ? "text-white" : "text-[var(--figma-gray400)]"}
+            />
+          </button>
+        </div>
       </div>
     </div>
   );

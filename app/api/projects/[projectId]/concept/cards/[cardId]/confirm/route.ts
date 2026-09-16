@@ -2,21 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireAuthorization } from "@/lib/api/bff-auth";
 import { backendFetch } from "@/lib/api/backend";
-import type { ConceptTreeResponse } from "@/types/concept";
+import type { ConceptCardApi } from "@/types/concept";
 
-type RouteContext = { params: Promise<{ projectId: string }> };
+type RouteContext = { params: Promise<{ projectId: string; cardId: string }> };
 
-export async function GET(req: NextRequest, context: RouteContext) {
+export async function PATCH(req: NextRequest, context: RouteContext) {
   const authorization = req.headers.get("authorization");
   const authError = requireAuthorization(authorization);
   if (authError) return authError;
 
-  const { projectId } = await context.params;
-  const result = await backendFetch<ConceptTreeResponse>(
-    `/projects/${projectId}/concepts`,
+  const { projectId, cardId } = await context.params;
+  const body = await req.json();
+  const result = await backendFetch<ConceptCardApi>(
+    `/projects/${projectId}/concepts/cards/${cardId}/confirm`,
     {
-      method: "GET",
+      method: "PATCH",
       headers: { Authorization: authorization! },
+      body: JSON.stringify(body),
     },
   );
 

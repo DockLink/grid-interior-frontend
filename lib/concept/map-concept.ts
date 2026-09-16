@@ -13,7 +13,10 @@ import type {
 } from "@/types/concept";
 
 function asConfirm(status: string): ConfirmStatus {
-  return status === "confirmed" || status === "approved" ? "confirmed" : "pending";
+  const normalized = status.trim().toLowerCase();
+  return normalized === "confirmed" || normalized === "approved"
+    ? "confirmed"
+    : "pending";
 }
 
 function asFileType(type: string | null | undefined): ConceptFileType {

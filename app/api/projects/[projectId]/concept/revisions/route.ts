@@ -14,7 +14,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
   const { projectId } = await context.params;
   const body = await req.json();
   const result = await backendFetch<ConceptRevisionApi>(
-    `/projects/${projectId}/concept/revisions`,
+    `/projects/${projectId}/concepts/revisions`,
     {
       method: "POST",
       headers: { Authorization: authorization! },

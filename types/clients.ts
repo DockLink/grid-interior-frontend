@@ -168,7 +168,6 @@ export interface CreateCommLogPayload {
   note: string;
   date?: string;
   time?: string;
-  member_id?: string;
 }
 
 export interface PipelineCard {
@@ -187,4 +186,27 @@ export interface LeadPipelineResponse {
   proposal: PipelineCard[];
   won: PipelineCard[];
   lost: PipelineCard[];
+}
+
+export type InvoiceStatus = "Paid" | "Unpaid" | "Overdue";
+
+export interface InvoiceApi {
+  id: string;
+  client_id: string;
+  amount: number | string;
+  status: InvoiceStatus;
+  file_url: string;
+  file_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Invoice {
+  id: string;
+  clientId: string;
+  amount: number;
+  status: InvoiceStatus;
+  fileUrl: string;
+  fileName: string;
+  createdAt: string;
 }

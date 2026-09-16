@@ -61,9 +61,10 @@ export function useUsers(params: UsersQueryParams = { page: 1, limit: 20 }) {
       qc.setQueryData<UsersListResponse>(qKey, (prev) =>
         prev ? { ...prev, data: prev.data.map((u) => (u.id === updated.id ? updated : u)) } : prev
       );
+      void qc.invalidateQueries({ queryKey: queryKeys.users.all });
     },
     onError: () => {
-      void qc.invalidateQueries({ queryKey: qKey });
+      void qc.invalidateQueries({ queryKey: queryKeys.users.all });
     },
   });
 
@@ -114,6 +115,7 @@ export function useUsers(params: UsersQueryParams = { page: 1, limit: 20 }) {
             }
           : prev
       );
+      void qc.invalidateQueries({ queryKey: queryKeys.users.all });
     },
   });
 
@@ -147,6 +149,7 @@ export function useUsers(params: UsersQueryParams = { page: 1, limit: 20 }) {
             : prev.meta,
         };
       });
+      void qc.invalidateQueries({ queryKey: queryKeys.users.all });
     },
   });
 

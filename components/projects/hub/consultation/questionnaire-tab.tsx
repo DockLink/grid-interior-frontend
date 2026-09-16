@@ -1,12 +1,63 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
+import { useOptionalProjectContext } from "@/components/projects/project-context";
 import { cn } from "@/lib/utils";
+import type { ActiveProjectView } from "@/types/project-hub";
 
 import { NeuTextarea, SectionCard, SectionTitle } from "./consultation-ui";
 import { SectionNotes } from "./section-notes";
+
+function projectLocation(project: ActiveProjectView): string {
+  const loc = project.location?.trim();
+  if (!loc || loc === "—") return "";
+  return loc;
+}
+
+function questionnaireDefaults(
+  project: ActiveProjectView,
+  client?: { contact_number?: string | null; contact_email?: string | null } | null,
+) {
+  return {
+    name: project.clientName === "No client" ? "" : project.clientName,
+    phone: client?.contact_number?.trim() || "",
+    email: client?.contact_email?.trim() || "",
+    location: projectLocation(project) || "",
+    spaceType: "",
+    scope: "",
+    siteVisit: null as boolean | null,
+    tenure: "",
+    consultWhen: "",
+    drawings: null as boolean | null,
+    size: "",
+    measureService: null as boolean | null,
+    engineerAnalysis: null as boolean | null,
+    goals: "",
+    stylesPref: "",
+    mustHaves: "",
+    avoid: "",
+    budget: "",
+    budgetNotes: "",
+    startDate: "",
+    endDate: "",
+    likes: "",
+    dislikes: "",
+    keepFurniture: "",
+    useSpace: "",
+    functional: "",
+    specialNeeds: "",
+    colors: "",
+    materials: "",
+    inspoFileName: null as string | null,
+    brands: "",
+    structural: "",
+    lighting: "",
+    temperature: "",
+    concerns: "",
+  };
+}
 
 function PillGroup({
   options,
@@ -132,63 +183,67 @@ function YesNo({
   );
 }
 
-export function QuestionnaireTab({ projectId }: { projectId: string }) {
+export function QuestionnaireTab({ project }: { project: ActiveProjectView }) {
+  const apiClient = useOptionalProjectContext()?.project?.client;
+  const seed = questionnaireDefaults(project, apiClient);
+
   const touch = <T,>(fn: (v: T) => void) => (v: T) => {
     fn(v);
   };
 
-  const [name, setName] = useState("Giulia Marchetti");
-  const [phone, setPhone] = useState("+94 77 123 4567");
-  const [email, setEmail] = useState("giulia.marchetti@example.com");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setInspoFileName(e.target.files[0].name);
+    }
+  };
+
+  const [name, setName] = useState(seed.name);
+  const [phone, setPhone] = useState(seed.phone);
+  const [email, setEmail] = useState(seed.email);
   const [comms, setComms] = useState("Email");
 
-  const [spaceType, setSpaceType] = useState("Residential");
+  const [spaceType, setSpaceType] = useState(seed.spaceType);
   const [spaceOther, setSpaceOther] = useState("");
-  const [scope, setScope] = useState("Full renovation");
+  const [scope, setScope] = useState(seed.scope);
   const [scopeOther, setScopeOther] = useState("");
-  const [siteVisit, setSiteVisit] = useState<boolean | null>(true);
-  const [location, setLocation] = useState("14 Via Colombo, Dehiwala");
-  const [tenure, setTenure] = useState("Owned");
-  const [consultWhen, setConsultWhen] = useState("2026-07-30T10:00");
-  const [drawings, setDrawings] = useState<boolean | null>(true);
-  const [size, setSize] = useState("2,450 sq ft");
-  const [measureService, setMeasureService] = useState<boolean | null>(true);
-  const [engineerAnalysis, setEngineerAnalysis] = useState<boolean | null>(false);
+  const [siteVisit, setSiteVisit] = useState<boolean | null>(seed.siteVisit);
+  const [location, setLocation] = useState(seed.location);
+  const [tenure, setTenure] = useState(seed.tenure);
+  const [consultWhen, setConsultWhen] = useState(seed.consultWhen);
+  const [drawings, setDrawings] = useState<boolean | null>(seed.drawings);
+  const [size, setSize] = useState(seed.size);
+  const [measureService, setMeasureService] = useState<boolean | null>(seed.measureService);
+  const [engineerAnalysis, setEngineerAnalysis] = useState<boolean | null>(seed.engineerAnalysis);
 
-  const [goals, setGoals] = useState(
-    "Create a warm contemporary home that feels open, with strong indoor-outdoor connection and generous storage.",
-  );
-  const [stylesPref, setStylesPref] = useState("Contemporary with warm, natural tones. Clean lines, hidden joinery.");
-  const [mustHaves, setMustHaves] = useState("Integrated storage, large dining for entertaining, dedicated work nook.");
-  const [avoid, setAvoid] = useState("Cold grey palettes, cluttered open shelving, overly ornate classical details.");
+  const [goals, setGoals] = useState(seed.goals);
+  const [stylesPref, setStylesPref] = useState(seed.stylesPref);
+  const [mustHaves, setMustHaves] = useState(seed.mustHaves);
+  const [avoid, setAvoid] = useState(seed.avoid);
 
-  const [budget, setBudget] = useState("LKR 28–32 million (client willing to share)");
-  const [budgetNotes, setBudgetNotes] = useState("Quality over quantity. Kitchen and living are the priority spend.");
-  const [startDate, setStartDate] = useState("2026-09-01");
-  const [endDate, setEndDate] = useState("2026-12-15");
+  const [budget, setBudget] = useState(seed.budget);
+  const [budgetNotes, setBudgetNotes] = useState(seed.budgetNotes);
+  const [startDate, setStartDate] = useState(seed.startDate);
+  const [endDate, setEndDate] = useState(seed.endDate);
 
-  const [likes, setLikes] = useState("Natural light in the living room, original hardwood on ground floor.");
-  const [dislikes, setDislikes] = useState("Cramped kitchen circulation, poor guest WC, no dedicated storage.");
-  const [keepFurniture, setKeepFurniture] = useState(
-    "Dining table (timber, 6-seater), original hardwood floor on ground level, entrance console.",
-  );
+  const [likes, setLikes] = useState(seed.likes);
+  const [dislikes, setDislikes] = useState(seed.dislikes);
+  const [keepFurniture, setKeepFurniture] = useState(seed.keepFurniture);
 
-  const [useSpace, setUseSpace] = useState("Entertaining family and clients; working from home two days a week.");
-  const [functional, setFunctional] = useState("Need a quiet work zone; kitchen must support cooking for 10+ guests.");
-  const [specialNeeds, setSpecialNeeds] = useState("Extra storage for seasonal items; step-free access to ground floor WC.");
+  const [useSpace, setUseSpace] = useState(seed.useSpace);
+  const [functional, setFunctional] = useState(seed.functional);
+  const [specialNeeds, setSpecialNeeds] = useState(seed.specialNeeds);
 
-  const [colors, setColors] = useState("Warm whites, terracotta, olive, natural oak.");
-  const [materials, setMaterials] = useState("Timber, linen, honed stone, brushed brass.");
-  const [inspoUploaded, setInspoUploaded] = useState(true);
-  const [brands, setBrands] = useState("Poliform kitchens, Flos lighting, Fiemme timber floors.");
+  const [colors, setColors] = useState(seed.colors);
+  const [materials, setMaterials] = useState(seed.materials);
+  const [inspoFileName, setInspoFileName] = useState<string | null>(seed.inspoFileName);
+  const [brands, setBrands] = useState(seed.brands);
 
-  const [structural, setStructural] = useState(
-    "Existing load-bearing wall on the east side cannot be removed. Minimum ceiling height 2.7m.",
-  );
-  const [lighting, setLighting] = useState("Maximise natural light; layered ambient + task in kitchen and study.");
-  const [temperature, setTemperature] = useState("Warm, residential feel — avoid cool white lighting.");
+  const [structural, setStructural] = useState(seed.structural);
+  const [lighting, setLighting] = useState(seed.lighting);
+  const [temperature, setTemperature] = useState(seed.temperature);
 
-  const [concerns, setConcerns] = useState("Timeline around school holidays; dust control during occupancy.");
+  const [concerns, setConcerns] = useState(seed.concerns);
   const [other, setOther] = useState("");
 
   return (
@@ -196,8 +251,8 @@ export function QuestionnaireTab({ projectId }: { projectId: string }) {
       <div className="mb-5 flex items-start gap-2 rounded-[10px] border border-[#FDE68A] bg-[#FFFBEB] px-3.5 py-2.5 text-[12px] text-[#92400E]">
         <MaterialIcon name="info" outlined size={16} className="mt-0.5 shrink-0" />
         <span>
-          Questionnaire answers are draft-only in this browser session and are not saved to the server yet.
-          Section notes below do persist.
+          Questionnaire answers are draft-only in this browser session and are not saved to the server
+          yet. Section notes below do persist.
         </span>
       </div>
 
@@ -360,13 +415,22 @@ export function QuestionnaireTab({ projectId }: { projectId: string }) {
             <span className="mb-1.5 block text-[13px] font-medium text-[var(--figma-navy)]">
               Inspirational images or design references
             </span>
-            {inspoUploaded ? (
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              onChange={handleFileUpload}
+            />
+            {inspoFileName ? (
               <div className="flex items-center gap-2 rounded-[10px] border border-[var(--figma-border)] bg-[var(--figma-gray50)] px-3.5 py-3">
                 <MaterialIcon name="image" outlined size={18} className="text-[var(--figma-teal)]" />
-                <span className="text-[13px] font-medium text-[var(--figma-navy)]">moodboard_client_refs.pdf</span>
+                <span className="text-[13px] font-medium text-[var(--figma-navy)]">{inspoFileName}</span>
                 <button
                   type="button"
-                  onClick={() => touch(setInspoUploaded)(false)}
+                  onClick={() => {
+                    setInspoFileName(null);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
                   className="ml-auto cursor-pointer border-none bg-transparent text-[12px] text-[var(--figma-gray400)]"
                 >
                   Remove
@@ -375,7 +439,7 @@ export function QuestionnaireTab({ projectId }: { projectId: string }) {
             ) : (
               <button
                 type="button"
-                onClick={() => touch(setInspoUploaded)(true)}
+                onClick={() => fileInputRef.current?.click()}
                 className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-[14px] border-2 border-dashed border-[var(--figma-border)] bg-[var(--figma-gray50)] px-6 py-8"
               >
                 <MaterialIcon name="upload" outlined size={22} className="text-[var(--figma-teal)]" />
@@ -429,7 +493,7 @@ export function QuestionnaireTab({ projectId }: { projectId: string }) {
         </div>
       </SectionCard>
 
-      <SectionNotes section="questionnaire" projectId={projectId} />
+      <SectionNotes section="questionnaire" projectId={project.id} />
     </div>
   );
 }

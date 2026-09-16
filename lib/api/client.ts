@@ -5,11 +5,18 @@ export async function apiClient<T>(
   path: string,
   init?: RequestInit
 ): Promise<T> {
+  const isFormData = init?.body instanceof FormData;
+  const defaultHeaders: Record<string, string> = {
+    Accept: "application/json",
+  };
+  if (!isFormData) {
+    defaultHeaders["Content-Type"] = "application/json";
+  }
+
   const res = await fetch(`/api${path}`, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
+      ...defaultHeaders,
       ...init?.headers,
     },
   });

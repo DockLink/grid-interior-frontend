@@ -137,7 +137,8 @@ export function ClientFormModal({
   const set = <K extends keyof ClientFormValues>(key: K, value: ClientFormValues[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     if (key === "name" || key === "email") {
-      setErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev));
+      const errorKey = key as "name" | "email";
+      setErrors((prev) => (prev[errorKey] ? { ...prev, [errorKey]: undefined } : prev));
     }
   };
 

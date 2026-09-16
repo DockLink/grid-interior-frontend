@@ -15,13 +15,11 @@ import { ClientFormModal } from "@/components/clients/client-form-modal";
 import { FollowUpPanel } from "@/components/clients/follow-up-panel";
 import { LogCommModal } from "@/components/clients/log-comm-modal";
 import { CommLogTab } from "@/components/clients/profile/comm-log-tab";
-import { DocumentsTab } from "@/components/clients/profile/documents-tab";
 import { InvoicesTab } from "@/components/clients/profile/invoices-tab";
 import { LinkedProjectsTab } from "@/components/clients/profile/linked-projects-tab";
 import { OverviewTab } from "@/components/clients/profile/overview-tab";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { useClient } from "@/hooks/use-client";
-import { useClientDocuments } from "@/hooks/use-client-documents";
 import { useClientProjects } from "@/hooks/use-client-projects";
 import { useClients } from "@/hooks/use-clients";
 import { useCommLog } from "@/hooks/use-comm-log";
@@ -31,13 +29,12 @@ import { NAV_ROUTES } from "@/types/navigation";
 import type { Client, CreateCommLogPayload } from "@/types/clients";
 import { cn } from "@/lib/utils";
 
-type Tab = "overview" | "comms" | "projects" | "documents" | "invoices";
+type Tab = "overview" | "comms" | "projects" | "invoices";
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "overview", label: "Overview", icon: "person" },
   { id: "comms", label: "Communication Log", icon: "forum" },
   { id: "projects", label: "Linked Projects", icon: "folder_open" },
-  { id: "documents", label: "Documents", icon: "description" },
   { id: "invoices", label: "Invoices", icon: "receipt_long" },
 ];
 
@@ -79,13 +76,6 @@ export function ClientProfileScreen({
     isLoading: projectsLoading,
     refetch: refetchProjects,
   } = useClientProjects(authDisabled ? null : clientId);
-  const {
-    folders,
-    files: documentFiles,
-    linkedProjects: docProjects,
-    isLoading: documentsLoading,
-    refetch: refetchDocuments,
-  } = useClientDocuments(authDisabled ? null : clientId);
 
   const client = useMemo(() => {
     if (authDisabled) {
@@ -124,9 +114,8 @@ export function ClientProfileScreen({
     }
   };
 
-  const refreshProjectsAndDocs = () => {
+  const refreshProjects = () => {
     void refetchProjects();
-    void refetchDocuments();
   };
 
   if (isLoading) {
@@ -279,16 +268,7 @@ export function ClientProfileScreen({
           clientId={clientId}
           projects={authDisabled ? [] : linkedProjects}
           isLoading={!authDisabled && projectsLoading}
-          onRefresh={refreshProjectsAndDocs}
-        />
-      )}
-      {activeTab === "documents" && (
-        <DocumentsTab
-          folders={authDisabled ? [] : folders}
-          files={authDisabled ? [] : documentFiles}
-          linkedProjects={authDisabled ? [] : docProjects}
-          isLoading={!authDisabled && documentsLoading}
-          onRefresh={() => void refetchDocuments()}
+          onRefresh={refreshProjects}
         />
       )}
       {activeTab === "invoices" && <InvoicesTab client={client} />}

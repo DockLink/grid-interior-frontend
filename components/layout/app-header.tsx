@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Settings } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
-import { useCommandPalette } from "@/components/layout/command-palette";
+
 import { useNotifications } from "@/hooks/use-notifications";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { usePageMeta } from "@/hooks/use-page-meta";
@@ -23,7 +23,7 @@ export function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, primaryRole } = useAuth();
-  const { setOpen: setCommandPaletteOpen } = useCommandPalette();
+
   const {
     notifications,
     unreadCount,
@@ -35,8 +35,7 @@ export function AppHeader() {
   const sidebarRole = primaryRole ? toSidebarRole(primaryRole) : null;
 
   const [showNotifs, setShowNotifs] = useState(false);
-  const [searchFocus, setSearchFocus] = useState(false);
-  const [searchVal, setSearchVal] = useState("");
+
   const notifRef = useRef<HTMLDivElement>(null);
 
   const headerNotifs = useMemo(
@@ -81,47 +80,7 @@ export function AppHeader() {
         )}
       </div>
 
-      <div
-        className="flex h-[38px] max-w-[420px] flex-1 items-center gap-2 rounded-[24px] px-4 transition-all duration-150"
-        style={{
-          boxShadow: searchFocus
-            ? "var(--neu-inset), 0 0 0 2px var(--figma-teal)"
-            : "var(--neu-inset)",
-          border: searchFocus
-            ? "1.5px solid var(--figma-teal)"
-            : "1.5px solid var(--figma-border)",
-        }}
-      >
-        <MaterialIcon
-          name="search"
-          size={18}
-          className={searchFocus ? "text-[var(--figma-teal)]" : "text-[var(--figma-gray400)]"}
-        />
-        <input
-          value={searchVal}
-          onChange={(e) => setSearchVal(e.target.value)}
-          onFocus={() => setSearchFocus(true)}
-          onBlur={() => setSearchFocus(false)}
-          placeholder="Search clients, projects, suppliers..."
-          className="w-full border-none bg-transparent text-[13px] text-[var(--figma-navy)] outline-none placeholder:text-[var(--figma-gray400)]"
-        />
-        {searchVal ? (
-          <button
-            type="button"
-            onClick={() => setSearchVal("")}
-            className="flex border-none bg-transparent p-0"
-          >
-            <MaterialIcon name="close" size={16} className="text-[var(--figma-gray400)]" />
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => setCommandPaletteOpen(true)}
-          className="shrink-0 rounded border border-[var(--figma-border)] bg-[var(--figma-gray100)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--figma-gray400)]"
-        >
-          ⌘K
-        </button>
-      </div>
+
 
       <div className="flex-1" />
 

@@ -47,7 +47,7 @@ export function PaidConsultationRecord({
       <PaidTabNav tab={tab} setTab={handleTabChange} />
 
       <div className={readOnly ? "pointer-events-none opacity-80" : undefined}>
-        {tab === "questionnaire" && <QuestionnaireTab projectId={project.id} />}
+        {tab === "questionnaire" && <QuestionnaireTab key={project.id} project={project} />}
         {tab === "site" && <SiteMeasurementsTab projectId={project.id} />}
         {tab === "inventory" && <InventoryTab projectId={project.id} />}
         {tab === "notes" && (

@@ -14,7 +14,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const { projectId, cardId } = await context.params;
   const body = await req.json();
   const result = await backendFetch<ConceptCardApi>(
-    `/projects/${projectId}/concept/cards/${cardId}`,
+    `/projects/${projectId}/concepts/cards/${cardId}`,
     {
       method: "PATCH",
       headers: { Authorization: authorization! },
@@ -33,7 +33,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
 
   const { projectId, cardId } = await context.params;
   const result = await backendFetch<{ id: string; deleted: boolean }>(
-    `/projects/${projectId}/concept/cards/${cardId}`,
+    `/projects/${projectId}/concepts/cards/${cardId}`,
     {
       method: "DELETE",
       headers: { Authorization: authorization! },

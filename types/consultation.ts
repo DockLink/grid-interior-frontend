@@ -64,6 +64,8 @@ export interface ConsultComment {
   memberId: string;
   text: string;
   time: string;
+  attachmentName?: string | null;
+  attachmentUrl?: string | null;
 }
 
 /* ---------- API wire types ---------- */
@@ -95,6 +97,8 @@ export interface ConsultNoteApi {
   author_user_id: string;
   text: string;
   created_at: string;
+  attachment_name?: string | null;
+  attachment_url?: string | null;
 }
 
 export interface ConsultAudioApi {
@@ -152,6 +156,8 @@ export type ConsultInventoryUpdatePayload = Partial<ConsultInventoryCreatePayloa
 
 export interface ConsultNoteCreatePayload {
   text: string;
+  attachment_name?: string | null;
+  attachment_url?: string | null;
 }
 
 export interface ConsultAudioCreatePayload {

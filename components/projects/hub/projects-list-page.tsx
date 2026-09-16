@@ -584,13 +584,18 @@ export function ProjectsListPage() {
 
       {showNewProject && (
         <NewProjectModal
+          isHistorical={tab === "historical"}
           onClose={() => setShowNewProject(false)}
           onCreate={() => {
             setShowNewProject(false);
             setRefreshKey((k) => k + 1);
-            setTab("active");
-            setPage(1);
-            void activeQuery.refetch();
+            if (tab === "active") {
+              setPage(1);
+              void activeQuery.refetch();
+            } else {
+              setPage(1);
+              void historicalQuery.refetch();
+            }
           }}
         />
       )}

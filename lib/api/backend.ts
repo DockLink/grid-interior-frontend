@@ -11,11 +11,18 @@ export async function backendFetch<T>(
   path: string,
   init?: RequestInit
 ): Promise<BackendResult<T>> {
+  const isFormData = init?.body instanceof FormData;
+  const defaultHeaders: Record<string, string> = {
+    Accept: "application/json",
+  };
+  if (!isFormData) {
+    defaultHeaders["Content-Type"] = "application/json";
+  }
+
   const res = await fetch(`${BACKEND_API_URL}${path}`, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
+      ...defaultHeaders,
       ...init?.headers,
     },
     cache: "no-store",

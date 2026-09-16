@@ -1,26 +1,33 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { GradientBtn, OutlineBtn, SectionCard } from "@/components/projects/hub/consultation/consultation-ui";
-import { useProjectFiles } from "@/hooks/use-project-files";
 import { useDetailCategories } from "@/hooks/use-detail-categories";
+import { useProjectFiles } from "@/hooks/use-project-files";
+import { useProjectTaskables } from "@/hooks/use-project-taskables";
 import { authApiClient } from "@/lib/api/authenticated-client";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import {
+  categoryFolderDisplayName,
+  matchDetailCategoryFolder,
+} from "@/lib/detail/category-folders";
+import { markProjectSubmittedForReview } from "@/lib/detail/local-detail-store";
 import {
   drawingTypeFromFile,
   formatFileDate,
   formatFileSize,
 } from "@/lib/files/map-project-file";
 import { resolveDetailedDrawingsFolder } from "@/lib/files/resolve-folder";
+import { findStageTaskable } from "@/lib/projects/seed-phases";
 import { queryKeys } from "@/lib/query/keys";
 import { cn } from "@/lib/utils";
 import type { DetailCategory, DetailCategoryId, DetailDrawingFile } from "@/types/detail";
 import type { ActiveProjectView } from "@/types/project-hub";
-import type { ProjectFile, ProjectFolderNode } from "@/types/files";
+import type { ProjectFile } from "@/types/files";
 
 const TYPE_CONFIG = {
   pdf: { icon: "picture_as_pdf", color: "#EF4444", bg: "#FEE2E2", label: "PDF" },
@@ -28,31 +35,12 @@ const TYPE_CONFIG = {
   img: { icon: "image", color: "var(--figma-teal)", bg: "rgba(14,124,134,0.10)", label: "IMG" },
 } as const;
 
-const CATEGORY_FOLDER_ALIASES: Record<DetailCategoryId, string[]> = {
-  electrical: ["electrical"],
-  flooring: ["flooring"],
-  ceiling: ["ceiling"],
-  walls: ["walls", "doors", "windows"],
-  furniture: ["furniture", "ff&e", "ffe"],
-  interior: ["interior", "elements"],
-};
+const ACCEPTED_EXTENSIONS = [".pdf", ".dwg", ".dxf", ".png", ".jpg", ".jpeg"];
+const ACCEPT_ATTR = ACCEPTED_EXTENSIONS.join(",");
 
-function matchCategoryFolder(
-  detailed: ProjectFolderNode | null,
-  categoryId: DetailCategoryId,
-  label: string,
-): string | null {
-  if (!detailed) return null;
-  const aliases = [
-    ...CATEGORY_FOLDER_ALIASES[categoryId],
-    label.toLowerCase().split(",")[0]?.trim() ?? "",
-  ].filter(Boolean);
-  const children = detailed.children ?? [];
-  const match = children.find((child) => {
-    const name = child.name.replace(/^\d+(\.\d+)*\s+/, "").toLowerCase();
-    return aliases.some((a) => name.includes(a));
-  });
-  return match?.path ?? detailed.path;
+function isAcceptedFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return ACCEPTED_EXTENSIONS.some((ext) => name.endsWith(ext));
 }
 
 function mapProjectFileToDetail(file: ProjectFile): DetailDrawingFile {
@@ -141,6 +129,7 @@ function CategorySection({
   liveFiles,
   authDisabled,
   onUpdate,
+  onNotesChange,
   onUploadFiles,
   onDeleteLive,
   onOpenLive,
@@ -150,6 +139,7 @@ function CategorySection({
   liveFiles: DetailDrawingFile[];
   authDisabled: boolean;
   onUpdate: (updated: Partial<DetailCategory>) => void;
+  onNotesChange: (notes: string) => void;
   onUploadFiles: (files: File[]) => void;
   onDeleteLive: (file: DetailDrawingFile) => void;
   onOpenLive: (file: DetailDrawingFile) => void;
@@ -160,7 +150,11 @@ function CategorySection({
   const files = authDisabled ? cat.files : liveFiles;
 
   const handleDropFiles = (list: FileList | null) => {
-    const next = list ? Array.from(list) : [];
+    const next = list ? Array.from(list).filter(isAcceptedFile) : [];
+    if (list && list.length && !next.length) {
+      toast.error("Only PDF, DWG, DXF, PNG, and JPG files are allowed.");
+      return;
+    }
     if (next.length) {
       onUploadFiles(next);
       return;
@@ -233,6 +227,7 @@ function CategorySection({
         type="file"
         className="hidden"
         multiple
+        accept={ACCEPT_ATTR}
         onChange={(e) => {
           handleDropFiles(e.target.files);
           e.target.value = "";
@@ -305,7 +300,7 @@ function CategorySection({
         </label>
         <textarea
           value={cat.notes}
-          onChange={(e) => onUpdate({ notes: e.target.value })}
+          onChange={(e) => onNotesChange(e.target.value)}
           onFocus={() => setNotesFocused(true)}
           onBlur={() => setNotesFocused(false)}
           rows={2}
@@ -333,12 +328,20 @@ export function DrawingsHubScreen({
   onBoq?: () => void;
 }) {
   const authDisabled = isAuthDisabled();
-  const { folderTree, uploadFile, deleteFile, getDownloadUrl } = useProjectFiles(project.id);
+  const qc = useQueryClient();
+  const { folderTree, uploadFile, deleteFile, getDownloadUrl, createFolder, reloadTree } =
+    useProjectFiles(project.id);
   const {
     categories: remoteCategories,
     updateCategory: persistCategory,
     isAuthOff,
   } = useDetailCategories(project.id);
+  const { tasks: stageTasks, setTaskableStatus } = useProjectTaskables(
+    authDisabled ? null : project.id,
+    "STAGE",
+    { limit: 100 },
+  );
+
   const detailedRoot = useMemo(
     () => resolveDetailedDrawingsFolder(folderTree),
     [folderTree],
@@ -348,20 +351,54 @@ export function DrawingsHubScreen({
   const [activeId, setActiveId] = useState<DetailCategoryId>("electrical");
   const [backHover, setBackHover] = useState(false);
   const [fileCounts, setFileCounts] = useState<Partial<Record<DetailCategoryId, number>>>({});
+  const [resolvedPaths, setResolvedPaths] = useState<Partial<Record<DetailCategoryId, string>>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const notesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ensuringFolderRef = useRef<Partial<Record<DetailCategoryId, Promise<string | null>>>>({});
 
   useEffect(() => {
     setCategories(remoteCategories);
   }, [remoteCategories]);
 
-  const activeCat = categories.find((c) => c.id === activeId)!;
-  const folderPath = authDisabled
-    ? null
-    : matchCategoryFolder(detailedRoot, activeId, activeCat.label);
+  useEffect(() => {
+    return () => {
+      if (notesTimerRef.current) clearTimeout(notesTimerRef.current);
+    };
+  }, []);
 
-  const { data: liveRaw = [], refetch } = useQuery({
-    queryKey: queryKeys.files.folder(project.id, folderPath ?? ""),
+  const activeCat = categories.find((c) => c.id === activeId)!;
+
+  const folderPathByCategory = useMemo(() => {
+    const map = {} as Record<DetailCategoryId, string | null>;
+    for (const cat of categories) {
+      map[cat.id] =
+        resolvedPaths[cat.id] ?? matchDetailCategoryFolder(detailedRoot, cat.id);
+    }
+    return map;
+  }, [categories, detailedRoot, resolvedPaths]);
+
+  const folderPath = authDisabled ? null : folderPathByCategory[activeId];
+
+  // Seed badge counts from folder tree fileCounts without listing parent folder.
+  useEffect(() => {
+    if (authDisabled || !folderTree?.fileCounts) return;
+    setFileCounts((prev) => {
+      const next = { ...prev };
+      for (const cat of categories) {
+        const path = folderPathByCategory[cat.id];
+        if (path && typeof folderTree.fileCounts[path] === "number") {
+          next[cat.id] = folderTree.fileCounts[path];
+        }
+      }
+      return next;
+    });
+  }, [authDisabled, folderTree, categories, folderPathByCategory]);
+
+  const { data: liveRaw = [] } = useQuery({
+    queryKey: queryKeys.files.folder(project.id, folderPath ?? `__empty__:${activeId}`),
     queryFn: async () => {
-      const qs = new URLSearchParams({ folderPath: folderPath! });
+      if (!folderPath) return [] as ProjectFile[];
+      const qs = new URLSearchParams({ folderPath });
       const res = await authApiClient<{ data: ProjectFile[] }>(
         `/projects/${project.id}/files?${qs}`,
       );
@@ -375,22 +412,89 @@ export function DrawingsHubScreen({
 
   useEffect(() => {
     if (authDisabled) return;
-    setFileCounts((prev) => ({ ...prev, [activeId]: liveFiles.length }));
-  }, [authDisabled, activeId, liveFiles.length]);
+    setFileCounts((prev) => ({
+      ...prev,
+      [activeId]: folderPath ? liveFiles.length : 0,
+    }));
+  }, [authDisabled, activeId, folderPath, liveFiles.length]);
 
-  const updateCategory = (id: DetailCategoryId, patch: Partial<DetailCategory>) => {
+  const updateCategoryLocal = (id: DetailCategoryId, patch: Partial<DetailCategory>) => {
     setCategories((p) => p.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-    if (!isAuthOff && ("complete" in patch || "notes" in patch)) {
-      void persistCategory(id, {
-        complete: patch.complete,
-        notes: patch.notes,
+  };
+
+  const persistComplete = (id: DetailCategoryId, complete: boolean) => {
+    updateCategoryLocal(id, { complete });
+    if (!isAuthOff) {
+      void persistCategory(id, { complete }).catch(() => {
+        /* local store already updated inside hook */
       });
+    } else {
+      void persistCategory(id, { complete });
     }
   };
 
+  const handleNotesChange = (notes: string) => {
+    const categoryId = activeId;
+    updateCategoryLocal(categoryId, { notes });
+    if (notesTimerRef.current) clearTimeout(notesTimerRef.current);
+    notesTimerRef.current = setTimeout(() => {
+      void persistCategory(categoryId, { notes }).catch(() => {
+        /* local store already updated inside hook */
+      });
+    }, 400);
+  };
+
+  async function ensureCategoryFolder(categoryId: DetailCategoryId): Promise<string | null> {
+    if (authDisabled) return null;
+    const existing = folderPathByCategory[categoryId];
+    if (existing) return existing;
+    if (!detailedRoot) {
+      toast.error("Detailed Drawings folder not found.");
+      return null;
+    }
+
+    const pending = ensuringFolderRef.current[categoryId];
+    if (pending) return pending;
+
+    const run = (async () => {
+      try {
+        const created = await createFolder(
+          categoryFolderDisplayName(categoryId),
+          detailedRoot.path,
+        );
+        setResolvedPaths((prev) => ({ ...prev, [categoryId]: created.path }));
+        await reloadTree();
+        return created.path;
+      } catch {
+        // Folder may already exist from a race — re-resolve from refreshed tree.
+        await reloadTree();
+        const tree = await qc.fetchQuery({
+          queryKey: queryKeys.files.tree(project.id),
+          queryFn: async () => {
+            const res = await authApiClient<{ data: NonNullable<typeof folderTree> }>(
+              `/projects/${project.id}/files/tree`,
+            );
+            return res.data;
+          },
+        });
+        const detailed = resolveDetailedDrawingsFolder(tree);
+        const path = matchDetailCategoryFolder(detailed, categoryId);
+        if (path) {
+          setResolvedPaths((prev) => ({ ...prev, [categoryId]: path }));
+        }
+        return path;
+      } finally {
+        delete ensuringFolderRef.current[categoryId];
+      }
+    })();
+
+    ensuringFolderRef.current[categoryId] = run;
+    return run;
+  }
+
   async function handleUpload(files: File[]) {
     if (authDisabled) {
-      updateCategory(activeId, {
+      updateCategoryLocal(activeId, {
         files: [
           ...activeCat.files,
           ...files.map((file, i) => ({
@@ -404,15 +508,31 @@ export function DrawingsHubScreen({
       });
       return;
     }
-    if (!folderPath) {
-      toast.error("Detailed Drawings folder not found.");
+
+    const targetPath = (await ensureCategoryFolder(activeId)) ?? folderPath;
+    if (!targetPath) {
+      toast.error("Could not resolve category folder for upload.");
       return;
     }
+
     try {
       for (const file of files) {
-        await uploadFile(folderPath, file);
+        await uploadFile(targetPath, file);
       }
-      await refetch();
+      await qc.invalidateQueries({
+        queryKey: queryKeys.files.folder(project.id, targetPath),
+      });
+      // Active query key may still be the previous path until re-render — fetch explicitly.
+      const qs = new URLSearchParams({ folderPath: targetPath });
+      const res = await authApiClient<{ data: ProjectFile[] }>(
+        `/projects/${project.id}/files?${qs}`,
+      );
+      qc.setQueryData(queryKeys.files.folder(project.id, targetPath), res.data ?? []);
+      await reloadTree();
+      setFileCounts((prev) => ({
+        ...prev,
+        [activeId]: (res.data ?? []).length,
+      }));
       toast.success("Files uploaded");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
@@ -420,10 +540,18 @@ export function DrawingsHubScreen({
   }
 
   async function handleDeleteLive(file: DetailDrawingFile) {
-    if (!file.fileId) return;
+    if (!file.fileId || !folderPath) return;
     try {
       await deleteFile(file.fileId);
-      await refetch();
+      const qs = new URLSearchParams({ folderPath });
+      const res = await authApiClient<{ data: ProjectFile[] }>(
+        `/projects/${project.id}/files?${qs}`,
+      );
+      qc.setQueryData(queryKeys.files.folder(project.id, folderPath), res.data ?? []);
+      setFileCounts((prev) => ({
+        ...prev,
+        [activeId]: (res.data ?? []).length,
+      }));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Delete failed");
     }
@@ -436,6 +564,38 @@ export function DrawingsHubScreen({
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not open file");
+    }
+  }
+
+  async function handleSubmitForReview() {
+    if (submitting) return;
+    const confirmed = window.confirm(
+      "Submit Detail Drawings for director review? You can still open Director Overview afterward.",
+    );
+    if (!confirmed) return;
+
+    setSubmitting(true);
+    try {
+      const categoryFlags = Object.fromEntries(
+        categories.map((c) => [c.id, c.complete]),
+      ) as Record<DetailCategoryId, boolean>;
+
+      markProjectSubmittedForReview(project, categoryFlags);
+
+      if (!authDisabled) {
+        const stage = findStageTaskable(stageTasks, "Detail Drawings");
+        if (stage && stage.status !== "IN_REVIEW" && stage.status !== "COMPLETED") {
+          await setTaskableStatus(stage.id, "IN_REVIEW");
+        }
+      }
+
+      await qc.invalidateQueries({ queryKey: queryKeys.detail.directorOverview() });
+      toast.success("Submitted for director review");
+      onDirectorOverview();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to submit for review");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -467,7 +627,13 @@ export function DrawingsHubScreen({
             <OutlineBtn label="Estimate Breakdown" icon="receipt_long" onClick={onBoq} small />
           )}
           <OutlineBtn label="Director Overview" icon="supervisor_account" onClick={onDirectorOverview} small />
-          <GradientBtn label="Submit for Review" icon="send" small />
+          <GradientBtn
+            label={submitting ? "Submitting…" : "Submit for Review"}
+            icon="send"
+            small
+            disabled={submitting}
+            onClick={() => void handleSubmitForReview()}
+          />
         </div>
       </div>
 
@@ -484,7 +650,7 @@ export function DrawingsHubScreen({
       <div className="mb-3 flex flex-wrap gap-1.5">
         {categories.map((cat) => {
           const active = cat.id === activeId;
-          const count = authDisabled ? cat.files.length : (fileCounts[cat.id] ?? cat.files.length);
+          const count = authDisabled ? cat.files.length : (fileCounts[cat.id] ?? 0);
           return (
             <button
               key={cat.id}
@@ -536,9 +702,16 @@ export function DrawingsHubScreen({
         <CategorySection
           cat={activeCat}
           folderPath={folderPath}
-          liveFiles={liveFiles}
+          liveFiles={folderPath ? liveFiles : []}
           authDisabled={authDisabled}
-          onUpdate={(patch) => updateCategory(activeId, patch)}
+          onUpdate={(patch) => {
+            if ("complete" in patch && typeof patch.complete === "boolean") {
+              persistComplete(activeId, patch.complete);
+              return;
+            }
+            updateCategoryLocal(activeId, patch);
+          }}
+          onNotesChange={handleNotesChange}
           onUploadFiles={(files) => void handleUpload(files)}
           onDeleteLive={(file) => void handleDeleteLive(file)}
           onOpenLive={(file) => void handleOpenLive(file)}

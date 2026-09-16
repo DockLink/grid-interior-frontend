@@ -174,12 +174,14 @@ export function NewProjectModal({
   onCreated,
   preselectedClientId,
   redirectOnCreate = true,
+  isHistorical = false,
 }: {
   onClose: () => void;
   onCreate?: () => void;
   onCreated?: (projectId: string) => void;
   preselectedClientId?: string;
   redirectOnCreate?: boolean;
+  isHistorical?: boolean;
 }) {
   const router = useRouter();
   const qc = useQueryClient();
@@ -306,6 +308,7 @@ export function NewProjectModal({
       latitude: latitude ?? undefined,
       longitude: longitude ?? undefined,
       client: { id: selectedClient },
+      ...(isHistorical ? { status: "INACTIVE" } : {}),
     };
 
     setSaving(true);

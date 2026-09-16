@@ -74,10 +74,11 @@ export function AreaSetupScreen({
   onSelectArea: (areaId: string) => void;
   onBack: () => void;
 }) {
-  const { areas: remoteAreas, createArea, isAuthOff } = useConcept(project.id);
+  const { areas: remoteAreas, createArea, isMutating } = useConcept(project.id);
   const [areas, setAreas] = useState(remoteAreas);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -85,26 +86,36 @@ export function AreaSetupScreen({
   }, [remoteAreas]);
 
   const commitAdd = () => {
-    if (!newName.trim()) {
-      setAdding(false);
+    if (!newName.trim() || isMutating) {
+      if (!newName.trim()) setAdding(false);
       return;
     }
     const name = newName.trim();
-    setNewName("");
-    setAdding(false);
-    void createArea({ name, icon: "room" }).then((created) => {
-      if (isAuthOff && created) {
-        setAreas((p) => [
-          ...p,
-          {
-            id: created.id,
-            name: created.name,
-            icon: created.icon,
-            conceptCount: created.conceptCount,
-          },
-        ]);
-      }
-    });
+    setCreateError(null);
+    void createArea({ name, icon: "door_front" })
+      .then((created) => {
+        if (created) {
+          setAreas((p) => {
+            if (p.some((a) => a.id === created.id)) return p;
+            return [
+              ...p,
+              {
+                id: created.id,
+                name: created.name,
+                icon: created.icon,
+                conceptCount: created.conceptCount,
+              },
+            ];
+          });
+        }
+        setNewName("");
+        setAdding(false);
+      })
+      .catch((err: unknown) => {
+        const message =
+          err instanceof Error ? err.message : "Failed to create area";
+        setCreateError(message);
+      });
   };
 
   const focusInput = () => setTimeout(() => inputRef.current?.focus(), 50);
@@ -139,6 +150,7 @@ export function AreaSetupScreen({
             label="Add First Area"
             icon="add"
             onClick={() => {
+              setCreateError(null);
               setAdding(true);
               focusInput();
             }}
@@ -161,28 +173,40 @@ export function AreaSetupScreen({
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") commitAdd();
-                  if (e.key === "Escape") setAdding(false);
+                  if (e.key === "Escape") {
+                    setAdding(false);
+                    setCreateError(null);
+                  }
                 }}
                 autoFocus
+                disabled={isMutating}
                 placeholder="Area name…"
-                className="rounded-[9px] border-[1.5px] border-[var(--figma-teal)] bg-white px-3 py-2 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
+                className="rounded-[9px] border-[1.5px] border-[var(--figma-teal)] bg-white px-3 py-2 text-[13px] text-[var(--figma-navy)] outline-none neu-inset disabled:opacity-60"
               />
+              {createError ? (
+                <div className="text-[11px] font-medium text-[var(--figma-alert)]">
+                  {createError}
+                </div>
+              ) : null}
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={commitAdd}
-                  className="flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-[9px] border-none bg-[var(--figma-teal)] py-[7px] text-xs font-semibold text-white"
+                  disabled={isMutating}
+                  className="flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-[9px] border-none bg-[var(--figma-teal)] py-[7px] text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <MaterialIcon name="check" outlined size={14} />
-                  Confirm
+                  {isMutating ? "Saving…" : "Confirm"}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setAdding(false);
                     setNewName("");
+                    setCreateError(null);
                   }}
-                  className="cursor-pointer rounded-[9px] border border-[var(--figma-border)] bg-white px-2.5 py-[7px] text-xs text-[var(--figma-gray400)]"
+                  disabled={isMutating}
+                  className="cursor-pointer rounded-[9px] border border-[var(--figma-border)] bg-white px-2.5 py-[7px] text-xs text-[var(--figma-gray400)] disabled:opacity-60"
                 >
                   ✕
                 </button>
@@ -192,6 +216,7 @@ export function AreaSetupScreen({
             <button
               type="button"
               onClick={() => {
+                setCreateError(null);
                 setAdding(true);
                 focusInput();
               }}

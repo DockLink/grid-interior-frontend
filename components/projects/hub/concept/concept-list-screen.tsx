@@ -130,18 +130,18 @@ export function ConceptListScreen({
     areas,
     cards,
     createCard,
-    updateCard,
-    isAuthOff,
+    confirmCard,
   } = useConcept(projectId);
   const area = areas.find((a) => a.id === areaId) ?? areas[0] ?? {
     id: areaId,
     name: "Area",
-    icon: "room",
+    icon: "door_front",
     conceptCount: 0,
   };
   const remoteConcepts = cards.filter((c) => c.areaId === areaId);
   const [concepts, setConcepts] = useState(remoteConcepts);
   const [showUpload, setShowUpload] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     setConcepts(remoteConcepts);
@@ -150,18 +150,29 @@ export function ConceptListScreen({
   const atCap = concepts.length >= MAX_CONCEPTS_PER_AREA;
 
   const handleFinalize = (id: string) => {
+    const previous = concepts;
     setConcepts((prev) =>
       prev.map((c) => ({
         ...c,
         confirmStatus: c.id === id ? "confirmed" : "pending",
       })),
     );
-    void updateCard(id, { confirm_status: "confirmed" });
-    for (const c of concepts) {
-      if (c.id !== id && c.confirmStatus === "confirmed") {
-        void updateCard(c.id, { confirm_status: "pending" });
+    setActionError(null);
+    void (async () => {
+      try {
+        await confirmCard(id, "confirmed");
+        for (const c of previous) {
+          if (c.id !== id && c.confirmStatus === "confirmed") {
+            await confirmCard(c.id, "pending");
+          }
+        }
+      } catch (err: unknown) {
+        setConcepts(previous);
+        setActionError(
+          err instanceof Error ? err.message : "Failed to finalize concept",
+        );
       }
-    }
+    })();
   };
 
   const handleUpload = () => {
@@ -176,11 +187,17 @@ export function ConceptListScreen({
       file_type: (isPdf ? "pdf" : "jpg") as "pdf" | "jpg",
       file_size: isPdf ? "2.8 MB" : "1.6 MB",
       thumb_url: isPdf ? "" : SAMPLE_THUMBS[(nextIndex - 1) % SAMPLE_THUMBS.length],
-      confirm_status: "pending" as const,
     };
-    void createCard(areaId, payload).then((created) => {
-      if (isAuthOff && created) setConcepts((prev) => [...prev, created]);
-    });
+    setActionError(null);
+    void createCard(areaId, payload)
+      .then((created) => {
+        if (created) setConcepts((prev) => [...prev, created]);
+      })
+      .catch((err: unknown) => {
+        setActionError(
+          err instanceof Error ? err.message : "Failed to add concept",
+        );
+      });
     setShowUpload(false);
   };
 
@@ -202,6 +219,12 @@ export function ConceptListScreen({
           />
         )}
       </div>
+
+      {actionError ? (
+        <div className="mb-4 text-[13px] font-medium text-[var(--figma-alert)]">
+          {actionError}
+        </div>
+      ) : null}
 
       {showUpload && !atCap && (
         <div className="mb-6 rounded-2xl bg-white p-5" style={{ boxShadow: "var(--neu-card)" }}>

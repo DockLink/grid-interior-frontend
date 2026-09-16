@@ -55,9 +55,31 @@ export function FreeConsultationRecord({
 
   const [tasks, setTasks] = useState<ConsultTask[]>(remoteTasks);
   const [notes, setNotes] = useState("");
-  const [dateVal, setDateVal] = useState("2026-07-24");
-  const [timeVal, setTimeVal] = useState("10:00");
+  const [dateVal, setDateVal] = useState("");
+  const [timeVal, setTimeVal] = useState("");
   const [completing, setCompleting] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(`consultation-date-time-${project.id}`);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.d) setDateVal(parsed.d);
+        if (parsed.t) setTimeVal(parsed.t);
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [project.id]);
+
+  useEffect(() => {
+    if (dateVal || timeVal) {
+      localStorage.setItem(
+        `consultation-date-time-${project.id}`,
+        JSON.stringify({ d: dateVal, t: timeVal }),
+      );
+    }
+  }, [dateVal, timeVal, project.id]);
   const [localCompleted, setLocalCompleted] = useState(false);
 
   useEffect(() => {
@@ -156,7 +178,7 @@ export function FreeConsultationRecord({
                     assignee_user_id: teamMembers[0] ? String(teamMembers[0].id) : "1",
                     status: "pending",
                   }).then((task) => {
-                    if (isAuthOff && task) setTasks((p) => [...p, task]);
+                    if (task) setTasks((p) => [...p, task]);
                   });
                 }}
                 className="flex cursor-pointer items-center gap-1.5 border-none bg-transparent text-xs font-semibold text-[var(--figma-teal)]"
