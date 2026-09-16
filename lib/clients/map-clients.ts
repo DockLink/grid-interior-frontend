@@ -5,6 +5,8 @@ import type { Client, ClientApi, ClientsListMeta, ClientsListResponse, CommLogEn
   LeadSource,
   PipelineCard,
   PreferredContact,
+  Invoice,
+  InvoiceApi,
 } from "@/types/clients";
 
 const AVATAR_COLORS = [
@@ -132,13 +134,27 @@ export function mapClientsListResponse(raw: ClientsListResponse | {
 }): { data: Client[]; meta: { total: number; page: number; limit: number; totalPages: number } } {
   const data = (raw.data ?? []).map((item) => mapClientApiToView(item as ClientApi));
   const meta = raw.meta ?? {};
+  const total = (meta.total as number) ?? data.length;
+  const limit = (meta.limit as number) ?? data.length;
   return {
     data,
     meta: {
-      total: (meta.total as number) ?? data.length,
+      total,
       page: (meta.page as number) ?? 1,
-      limit: (meta.limit as number) ?? data.length,
-      totalPages: (meta.totalPages as number) ?? 1,
+      limit,
+      totalPages: (meta.totalPages as number) ?? (limit > 0 ? Math.ceil(total / limit) : 1),
     },
+  };
+}
+
+export function mapInvoiceApiToView(raw: InvoiceApi | Record<string, unknown>): Invoice {
+  return {
+    id: pickString(raw as Record<string, unknown>, "id") ?? "",
+    clientId: pickString(raw as Record<string, unknown>, "client_id", "clientId") ?? "",
+    amount: Number((raw as Record<string, unknown>).amount) || 0,
+    status: (pickString(raw as Record<string, unknown>, "status") as Invoice["status"]) ?? "Unpaid",
+    fileUrl: pickString(raw as Record<string, unknown>, "file_url", "fileUrl") ?? "",
+    fileName: pickString(raw as Record<string, unknown>, "file_name", "fileName") ?? "",
+    createdAt: pickString(raw as Record<string, unknown>, "created_at", "createdAt") ?? "",
   };
 }

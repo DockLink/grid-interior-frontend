@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { useConsultation } from "@/hooks/use-consultation";
@@ -111,6 +111,7 @@ export function AudioTab({ projectId }: { projectId: string }) {
   const [audioFiles, setAudioFiles] = useState<ConsultAudioFile[]>(remoteAudio);
   const [playing, setPlaying] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setAudioFiles(remoteAudio);
@@ -118,23 +119,51 @@ export function AudioTab({ projectId }: { projectId: string }) {
 
   const togglePlay = (id: string) => setPlaying((p) => (p === id ? null : id));
 
-  const addAudio = (name: string) => {
+  const addAudio = (name: string, sizeBytes?: number) => {
+    const size = sizeBytes ? `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB` : "—";
     void createAudio({
       name,
       duration: "00:00",
       date: "Just now",
-      size: "—",
+      size,
     }).then((created) => {
       if (isAuthOff && created) setAudioFiles((p) => [...p, created]);
     });
   };
 
+  const processFile = (file: File) => {
+    if (file.size > 200 * 1024 * 1024) {
+      alert("File size exceeds 200MB limit.");
+      return;
+    }
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!["mp3", "m4a", "wav"].includes(ext || "")) {
+      alert("Unsupported file type. Please upload MP3, M4A, or WAV.");
+      return;
+    }
+    addAudio(file.name, file.size);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+    e.target.value = "";
+  };
+
   return (
     <div>
+      <input
+        type="file"
+        ref={fileRef}
+        onChange={handleFileChange}
+        className="hidden"
+        accept=".mp3,.m4a,.wav"
+      />
       <SectionCard>
         <div
           role="button"
           tabIndex={0}
+          onClick={() => fileRef.current?.click()}
           onDragOver={(e) => {
             e.preventDefault();
             setDragOver(true);
@@ -143,7 +172,8 @@ export function AudioTab({ projectId }: { projectId: string }) {
           onDrop={(e) => {
             e.preventDefault();
             setDragOver(false);
-            addAudio("new_recording.m4a");
+            const file = e.dataTransfer.files?.[0];
+            if (file) processFile(file);
           }}
           className="flex cursor-pointer flex-col items-center gap-3 rounded-[14px] border-2 border-dashed px-8 py-9 transition-all duration-200 neu-inset"
           style={{
@@ -182,7 +212,7 @@ export function AudioTab({ projectId }: { projectId: string }) {
               label="Add Audio"
               icon="add"
               small
-              onClick={() => addAudio("recording.m4a")}
+              onClick={() => fileRef.current?.click()}
             />
           }
         />

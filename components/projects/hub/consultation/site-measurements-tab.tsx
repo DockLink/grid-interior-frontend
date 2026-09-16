@@ -72,8 +72,8 @@ export function SiteMeasurementsTab({ projectId }: { projectId: string }) {
   const [sketchUploaded, setSketchUploaded] = useState(true);
   const [dragOver, setDragOver] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [visitDate, setVisitDate] = useState("2026-07-30");
-  const [visitTime, setVisitTime] = useState("10:00");
+  const [visitDate, setVisitDate] = useState("");
+  const [visitTime, setVisitTime] = useState("");
   const [visitStatus, setVisitStatus] = useState<"scheduled" | "completed" | "cancelled">(
     "scheduled",
   );
@@ -214,6 +214,7 @@ export function SiteMeasurementsTab({ projectId }: { projectId: string }) {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setSketchUploaded(false)}
                   className="flex cursor-pointer items-center gap-1 rounded-lg border border-[var(--figma-teal)] bg-white/90 px-2.5 py-[5px] text-[11px] text-[var(--figma-teal)]"
                 >
                   <MaterialIcon name="upload" outlined size={14} />
@@ -282,9 +283,8 @@ export function SiteMeasurementsTab({ projectId }: { projectId: string }) {
             <button
               type="button"
               onClick={() => {
-                void createRoom({ name: "", length: "", width: "", height: "" }).then((room) => {
-                  if (isAuthOff && room) setRooms((p) => [...p, room]);
-                });
+                const tempId = `mock-room-${Date.now()}`;
+                setRooms((p) => [...p, { id: tempId, name: "", length: "", width: "", height: "" }]);
               }}
               className="flex cursor-pointer items-center gap-1.5 border-none bg-transparent text-xs font-semibold text-[var(--figma-teal)]"
             >
@@ -328,6 +328,19 @@ export function SiteMeasurementsTab({ projectId }: { projectId: string }) {
             onClick={() => {
               setSaved(true);
               setTimeout(() => setSaved(false), 2000);
+              const pendingRooms = rooms.filter((r) => r.id.startsWith("mock-"));
+              pendingRooms.forEach((room) => {
+                void createRoom({
+                  name: room.name,
+                  length: room.length,
+                  width: room.width,
+                  height: room.height,
+                }).then((created) => {
+                  if (created) {
+                    setRooms((prev) => prev.map((p) => (p.id === room.id ? created : p)));
+                  }
+                });
+              });
             }}
           />
         </div>

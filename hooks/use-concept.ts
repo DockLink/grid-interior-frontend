@@ -84,7 +84,7 @@ export function useConcept(
         return mapConceptAreaApi({
           id: `mock-area-${Date.now()}`,
           name: payload.name,
-          icon: payload.icon ?? "room",
+          icon: payload.icon ?? "door_front",
           concept_count: 0,
           cards: [],
         });
@@ -95,8 +95,22 @@ export function useConcept(
       });
       return mapConceptAreaApi(raw);
     },
-    onSuccess: () => {
-      void invalidate();
+    onSuccess: (created) => {
+      if (!created) return;
+      const { cards: _cards, ...area } = created;
+      qc.setQueryData(qKey, (prev: typeof data) => {
+        if (!prev) {
+          return {
+            areas: [area],
+            cards: [],
+            renders: [],
+            revisions: [],
+          };
+        }
+        if (prev.areas.some((a) => a.id === area.id)) return prev;
+        return { ...prev, areas: [...prev.areas, area] };
+      });
+      if (!authOff) void invalidate();
     },
   });
 
@@ -122,14 +136,27 @@ export function useConcept(
           areaId,
         );
       }
+      // Backend Create DTO rejects unknown fields (forbidNonWhitelisted).
+      const { confirm_status: _confirm, ...apiPayload } = payload;
       const raw = await authApiClient<ConceptCardApi>(
         `${base(projectId)}/areas/${areaId}/cards`,
-        { method: "POST", body: JSON.stringify(payload) },
+        { method: "POST", body: JSON.stringify(apiPayload) },
       );
       return mapConceptCardApi(raw, areaId);
     },
-    onSuccess: () => {
-      void invalidate();
+    onSuccess: (created) => {
+      if (created) {
+        qc.setQueryData(qKey, (prev: typeof data) => {
+          if (!prev) return prev;
+          const areas = prev.areas.map((a) =>
+            a.id === created.areaId
+              ? { ...a, conceptCount: a.conceptCount + 1 }
+              : a,
+          );
+          return { ...prev, areas, cards: [...prev.cards, created] };
+        });
+      }
+      if (!authOff) void invalidate();
     },
   });
 
@@ -142,14 +169,66 @@ export function useConcept(
       payload: ConceptCardUpdatePayload;
     }) => {
       if (authOff) return null;
+      // confirm_status is handled by confirmCard (separate Nest endpoint).
+      const { confirm_status: _confirm, ...apiPayload } = payload;
       const raw = await authApiClient<ConceptCardApi>(
         `${base(projectId)}/cards/${cardId}`,
-        { method: "PATCH", body: JSON.stringify(payload) },
+        { method: "PATCH", body: JSON.stringify(apiPayload) },
       );
       return mapConceptCardApi(raw);
     },
     onSuccess: () => {
       void invalidate();
+    },
+  });
+
+  const confirmCardMutation = useMutation({
+    mutationFn: async ({
+      cardId,
+      status,
+    }: {
+      cardId: string;
+      status: "confirmed" | "pending";
+    }) => {
+      if (authOff) {
+        const cached = qc.getQueryData<{
+          cards: { id: string; areaId: string; confirmStatus: string }[];
+        }>(qKey);
+        const existing = cached?.cards.find((c) => c.id === cardId);
+        if (!existing) return null;
+        return { ...existing, confirmStatus: status } as ReturnType<
+          typeof mapConceptCardApi
+        >;
+      }
+      const raw = await authApiClient<ConceptCardApi>(
+        `${base(projectId)}/cards/${cardId}/confirm`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            status: status === "confirmed" ? "CONFIRMED" : "PENDING",
+          }),
+        },
+      );
+      return mapConceptCardApi(raw);
+    },
+    onSuccess: (updated) => {
+      if (updated) {
+        qc.setQueryData(qKey, (prev: typeof data) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            cards: prev.cards.map((c) =>
+              c.id === updated.id
+                ? updated
+                : updated.confirmStatus === "confirmed" &&
+                    c.areaId === updated.areaId
+                  ? { ...c, confirmStatus: "pending" as const }
+                  : c,
+            ),
+          };
+        });
+      }
+      if (!authOff) void invalidate();
     },
   });
 
@@ -225,6 +304,8 @@ export function useConcept(
       createCardMutation.mutateAsync({ areaId, payload }),
     updateCard: (cardId: string, payload: ConceptCardUpdatePayload) =>
       updateCardMutation.mutateAsync({ cardId, payload }),
+    confirmCard: (cardId: string, status: "confirmed" | "pending") =>
+      confirmCardMutation.mutateAsync({ cardId, status }),
     createRender: (payload: ConceptRenderCreatePayload) =>
       createRenderMutation.mutateAsync(payload),
     deleteRender: (renderId: string) => deleteRenderMutation.mutateAsync(renderId),
@@ -234,6 +315,7 @@ export function useConcept(
       createAreaMutation.isPending ||
       createCardMutation.isPending ||
       updateCardMutation.isPending ||
+      confirmCardMutation.isPending ||
       createRenderMutation.isPending ||
       deleteRenderMutation.isPending ||
       createRevisionMutation.isPending,

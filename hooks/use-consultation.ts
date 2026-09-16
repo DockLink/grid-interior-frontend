@@ -201,6 +201,8 @@ export function useConsultation(
           author_user_id: "1",
           text: payload.text,
           created_at: new Date().toISOString(),
+          attachment_name: payload.attachment_name ?? null,
+          attachment_url: payload.attachment_url ?? null,
         });
       }
       const raw = await authApiClient<ConsultNoteApi>(`${base(projectId)}/notes`, {

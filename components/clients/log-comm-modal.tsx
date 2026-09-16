@@ -58,9 +58,6 @@ export function LogCommModal({
       date,
       time: currentCommLogTime(),
     };
-    if (!authDisabled && currentUserId) {
-      payload.member_id = currentUserId;
-    }
     onSave(payload);
   };
 

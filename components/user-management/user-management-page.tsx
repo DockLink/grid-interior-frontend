@@ -268,7 +268,8 @@ export function UserManagementPage() {
           background: "var(--ds-surface-elevated)",
           borderRadius: "12px",
           border: "1px solid var(--ds-separator)",
-          overflow: "hidden",
+          // Keep visible so row action menus are not clipped on the last row.
+          overflow: "visible",
         }}
       >
         <div
@@ -284,6 +285,7 @@ export function UserManagementPage() {
             fontSize: "12px",
             color: "var(--ds-secondary-label)",
             fontWeight: 500,
+            borderRadius: "12px 12px 0 0",
           }}
         >
           <span>Name</span>

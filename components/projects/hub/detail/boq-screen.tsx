@@ -6,11 +6,27 @@ import { toast } from "sonner";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { OutlineBtn, SectionCard } from "@/components/projects/hub/consultation/consultation-ui";
 import { useProjectBoqSummary } from "@/hooks/use-boq";
+import { useDetailCategories } from "@/hooks/use-detail-categories";
+import { useProjectFiles } from "@/hooks/use-project-files";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { matchDetailCategoryFolder } from "@/lib/detail/category-folders";
+import { resolveDetailedDrawingsFolder } from "@/lib/files/resolve-folder";
 import { DETAIL_CATEGORIES } from "@/lib/projects/mock-detail";
 import { formatLKR } from "@/types/detail";
-import type { DetailCategory, DetailCategoryId } from "@/types/detail";
+import type { DetailCategoryId } from "@/types/detail";
 import { projectExecutionRoute } from "@/types/navigation";
 import type { ActiveProjectView } from "@/types/project-hub";
+
+type BoqCardCategory = {
+  id: DetailCategoryId;
+  label: string;
+  icon: string;
+  color: string;
+  accentBg: string;
+  complete: boolean;
+  estimate: number;
+  fileCount: number;
+};
 
 function exportBoqSummaryCsv(
   rows: { label: string; estimate: number; pct: number }[],
@@ -33,9 +49,14 @@ function exportBoqSummaryCsv(
   URL.revokeObjectURL(url);
 }
 
-function BoqCategoryCard({ cat, pct }: { cat: DetailCategory; pct: number }) {
+function budgetShare(estimate: number, total: number): number {
+  if (!(total > 0) || !Number.isFinite(estimate)) return 0;
+  return estimate / total;
+}
+
+function BoqCategoryCard({ cat, pct }: { cat: BoqCardCategory; pct: number }) {
   const [hov, setHov] = useState(false);
-  const safePct = Number.isFinite(pct) ? pct : 0;
+  const safePct = Number.isFinite(pct) ? Math.max(0, pct) : 0;
 
   return (
     <div
@@ -58,7 +79,7 @@ function BoqCategoryCard({ cat, pct }: { cat: DetailCategory; pct: number }) {
         <div>
           <div className="text-[13px] font-bold text-[var(--figma-navy)]">{cat.label}</div>
           <div className="text-[10px] text-[var(--figma-gray400)]">
-            {cat.files.length} file{cat.files.length !== 1 ? "s" : ""}
+            {cat.fileCount} file{cat.fileCount !== 1 ? "s" : ""}
           </div>
         </div>
         {cat.complete && (
@@ -82,20 +103,52 @@ function BoqCategoryCard({ cat, pct }: { cat: DetailCategory; pct: number }) {
 }
 
 export function BoqScreen({ project, onBack }: { project: ActiveProjectView; onBack: () => void }) {
+  const authOff = isAuthDisabled();
   const { buckets, isLoading, error } = useProjectBoqSummary(project.id);
+  const { categories: detailCategories } = useDetailCategories(project.id);
+  const { folderTree } = useProjectFiles(project.id);
 
-  const cats = useMemo(() => {
+  const detailedRoot = useMemo(
+    () => resolveDetailedDrawingsFolder(folderTree),
+    [folderTree],
+  );
+
+  const fileCountByCategory = useMemo(() => {
+    const counts = {} as Record<DetailCategoryId, number>;
+    for (const cat of DETAIL_CATEGORIES) {
+      if (authOff) {
+        counts[cat.id] = cat.files.length;
+        continue;
+      }
+      const path = matchDetailCategoryFolder(detailedRoot, cat.id);
+      const fromTree =
+        path && folderTree?.fileCounts
+          ? folderTree.fileCounts[path]
+          : undefined;
+      counts[cat.id] = typeof fromTree === "number" ? fromTree : 0;
+    }
+    return counts;
+  }, [authOff, detailedRoot, folderTree]);
+
+  const cats = useMemo((): BoqCardCategory[] => {
     const estimateById = new Map(buckets.map((b) => [b.id, b.estimate]));
+    const labelById = new Map(buckets.map((b) => [b.id, b.label]));
+    const completeById = new Map(detailCategories.map((c) => [c.id, c.complete]));
     return DETAIL_CATEGORIES.map((cat) => ({
-      ...cat,
-      estimate: estimateById.get(cat.id) ?? cat.estimate,
-      label:
-        (buckets.find((b) => b.id === cat.id)?.label as string | undefined) ?? cat.label,
+      id: cat.id,
+      label: labelById.get(cat.id) ?? cat.label,
+      icon: cat.icon,
+      color: cat.color,
+      accentBg: cat.accentBg,
+      complete: completeById.get(cat.id) ?? false,
+      // Never fall back to mock estimates — show LKR 0 when cost data is missing.
+      estimate: estimateById.get(cat.id) ?? 0,
+      fileCount: fileCountByCategory[cat.id] ?? 0,
     }));
-  }, [buckets]);
+  }, [buckets, detailCategories, fileCountByCategory]);
 
   const estimateSum = cats.reduce((s, c) => s + c.estimate, 0);
-  const grand = estimateSum || 1;
+  const totalFiles = cats.reduce((s, c) => s + c.fileCount, 0);
   const [backHover, setBackHover] = useState(false);
   const [linkHover, setLinkHover] = useState(false);
 
@@ -127,7 +180,7 @@ export function BoqScreen({ project, onBack }: { project: ActiveProjectView; onB
               cats.map((c) => ({
                 label: c.label,
                 estimate: c.estimate,
-                pct: (c.estimate / grand) * 100,
+                pct: budgetShare(c.estimate, estimateSum) * 100,
               })),
               project.name,
               estimateSum,
@@ -160,8 +213,8 @@ export function BoqScreen({ project, onBack }: { project: ActiveProjectView; onB
         {cats.map((cat) => (
           <BoqCategoryCard
             key={cat.id}
-            cat={cat as DetailCategory}
-            pct={cat.estimate / grand}
+            cat={cat}
+            pct={budgetShare(cat.estimate, estimateSum)}
           />
         ))}
       </div>
@@ -177,7 +230,7 @@ export function BoqScreen({ project, onBack }: { project: ActiveProjectView; onB
           <div className="text-right">
             <div className="mb-1 text-[11px] text-[var(--figma-gray400)]">All categories</div>
             <div className="text-xs font-semibold text-[var(--figma-teal)]">
-              {cats.length} categories · {cats.reduce((s, c) => s + c.files.length, 0)} drawings uploaded
+              {cats.length} categories · {totalFiles} drawings uploaded
             </div>
           </div>
         </div>
@@ -185,10 +238,11 @@ export function BoqScreen({ project, onBack }: { project: ActiveProjectView; onB
         <div className="mb-3">
           <div className="flex h-[18px] gap-0.5 overflow-hidden rounded-[9px]">
             {cats.map((cat) => {
-              const pct = (cat.estimate / grand) * 100;
+              const pct = budgetShare(cat.estimate, estimateSum) * 100;
+              if (pct <= 0) return null;
               return (
                 <div
-                  key={cat.id as DetailCategoryId}
+                  key={cat.id}
                   title={`${cat.label}: ${formatLKR(cat.estimate)}`}
                   className="h-full transition-[width] duration-[600ms] ease-out"
                   style={{
@@ -208,7 +262,7 @@ export function BoqScreen({ project, onBack }: { project: ActiveProjectView; onB
               <div className="size-2.5 shrink-0 rounded-sm" style={{ background: cat.color }} />
               <span className="text-[11px] text-[var(--figma-gray500)]">{cat.label.split(",")[0]}</span>
               <span className="text-[11px] font-semibold text-[var(--figma-navy)]">
-                {((cat.estimate / grand) * 100).toFixed(0)}%
+                {(budgetShare(cat.estimate, estimateSum) * 100).toFixed(0)}%
               </span>
             </div>
           ))}

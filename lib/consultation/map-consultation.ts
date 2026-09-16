@@ -71,6 +71,8 @@ export function mapConsultNoteApi(note: ConsultNoteApi): ConsultComment {
     memberId: note.author_user_id ?? "",
     text: note.text ?? "",
     time,
+    attachmentName: note.attachment_name ?? null,
+    attachmentUrl: note.attachment_url ?? null,
   };
 }
 

@@ -129,6 +129,7 @@ export interface CreateProjectRequest {
   latitude?: number;
   longitude?: number;
   vimeo_url?: string;
+  status?: ProjectStatus;
   images?: string[];
   brief_attachments?: string[];
   /**

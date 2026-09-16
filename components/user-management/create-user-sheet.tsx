@@ -52,11 +52,18 @@ export function CreateUserSheet({
     e.preventDefault();
     if (!canSubmit) return;
     setError(null);
+
+    const emailTrimmed = email.trim();
+    if (!/^[a-z0-9]/.test(emailTrimmed)) {
+      setError("Email must not start with a capital letter or special character");
+      return;
+    }
+
     try {
       await onSubmit({
         first_name: firstName.trim(),
         last_name: lastName.trim() || undefined,
-        email: email.trim(),
+        email: emailTrimmed,
         password,
         role,
       });

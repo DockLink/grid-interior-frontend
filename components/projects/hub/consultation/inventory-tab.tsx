@@ -103,7 +103,7 @@ export function InventoryTab({ projectId }: { projectId: string }) {
     if (!item) return;
     const next = !item.measured;
     setItems((p) => p.map((it) => (it.id === id ? { ...it, measured: next } : it)));
-    if (!isAuthOff) void updateInventory(id, { measured: next });
+    if (!isAuthOff && !id.startsWith("mock-")) void updateInventory(id, { measured: next });
   };
 
   return (
@@ -156,7 +156,7 @@ export function InventoryTab({ projectId }: { projectId: string }) {
                         setItems((p) =>
                           p.map((i) => (i.id === item.id ? { ...i, [field]: val } : i)),
                         );
-                        if (!isAuthOff && field !== "measured") {
+                        if (!isAuthOff && field !== "measured" && !item.id.startsWith("mock-")) {
                           void updateInventory(item.id, { [field]: val });
                         }
                       }}
@@ -165,23 +165,52 @@ export function InventoryTab({ projectId }: { projectId: string }) {
                 </tbody>
               </table>
             </div>
-            <div className="mt-4">
+            <div className="mt-4 flex items-center justify-between">
               <GradientBtn
                 label="Add Item"
                 icon="add"
                 small
                 onClick={() => {
-                  void createInventory({
-                    name: "",
-                    spec: "",
-                    h: "",
-                    w: "",
-                    l: "",
-                    qty: "1",
-                    notes: "",
-                    measured: false,
-                  }).then((created) => {
-                    if (isAuthOff && created) setItems((p) => [...p, created]);
+                  const tempId = `mock-inv-${Date.now()}`;
+                  setItems((p) => [
+                    ...p,
+                    {
+                      id: tempId,
+                      name: "",
+                      spec: "",
+                      h: "",
+                      w: "",
+                      l: "",
+                      qty: "1",
+                      notes: "",
+                      measured: false,
+                    },
+                  ]);
+                }}
+              />
+              <GradientBtn
+                label="Save Items"
+                icon="save"
+                small
+                onClick={() => {
+                  const pendingItems = items.filter((i) => i.id.startsWith("mock-"));
+                  pendingItems.forEach((item) => {
+                    if (item.name.trim() !== "") {
+                      void createInventory({
+                        name: item.name,
+                        spec: item.spec,
+                        h: item.h,
+                        w: item.w,
+                        l: item.l,
+                        qty: item.qty,
+                        notes: item.notes,
+                        measured: item.measured,
+                      }).then((created) => {
+                        if (created) {
+                          setItems((prev) => prev.map((p) => (p.id === item.id ? created : p)));
+                        }
+                      });
+                    }
                   });
                 }}
               />
