@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { useConsultation } from "@/hooks/use-consultation";
+import { useUploadFile } from "@/hooks/use-upload-file";
 import type { ConsultAudioFile } from "@/types/consultation";
 
 import { OutlineBtn, SectionCard, SectionTitle } from "./consultation-ui";
@@ -108,9 +109,11 @@ export function AudioTab({ projectId }: { projectId: string }) {
     deleteAudio,
     isAuthOff,
   } = useConsultation(projectId);
+  const { uploadFile } = useUploadFile();
   const [audioFiles, setAudioFiles] = useState<ConsultAudioFile[]>(remoteAudio);
   const [playing, setPlaying] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -119,19 +122,20 @@ export function AudioTab({ projectId }: { projectId: string }) {
 
   const togglePlay = (id: string) => setPlaying((p) => (p === id ? null : id));
 
-  const addAudio = (name: string, sizeBytes?: number) => {
+  const addAudio = (name: string, sizeBytes?: number, storageFileId?: string) => {
     const size = sizeBytes ? `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB` : "—";
     void createAudio({
       name,
       duration: "00:00",
       date: "Just now",
       size,
+      storage_file_id: storageFileId,
     }).then((created) => {
       if (isAuthOff && created) setAudioFiles((p) => [...p, created]);
     });
   };
 
-  const processFile = (file: File) => {
+  const processFile = async (file: File) => {
     if (file.size > 200 * 1024 * 1024) {
       alert("File size exceeds 200MB limit.");
       return;
@@ -141,12 +145,20 @@ export function AudioTab({ projectId }: { projectId: string }) {
       alert("Unsupported file type. Please upload MP3, M4A, or WAV.");
       return;
     }
-    addAudio(file.name, file.size);
+    try {
+      setIsUploading(true);
+      const { token } = await uploadFile(file);
+      addAudio(file.name, file.size, token);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to upload file");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) processFile(file);
+    if (file) void processFile(file);
     e.target.value = "";
   };
 
@@ -163,19 +175,29 @@ export function AudioTab({ projectId }: { projectId: string }) {
         <div
           role="button"
           tabIndex={0}
-          onClick={() => fileRef.current?.click()}
+          onClick={() => !isUploading && fileRef.current?.click()}
+          onDragEnter={(e) => {
+            e.preventDefault();
+            if (!isUploading) setDragOver(true);
+          }}
           onDragOver={(e) => {
             e.preventDefault();
-            setDragOver(true);
+            if (!isUploading) setDragOver(true);
           }}
-          onDragLeave={() => setDragOver(false)}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+          }}
           onDrop={(e) => {
             e.preventDefault();
             setDragOver(false);
+            if (isUploading) return;
             const file = e.dataTransfer.files?.[0];
-            if (file) processFile(file);
+            if (file) void processFile(file);
           }}
-          className="flex cursor-pointer flex-col items-center gap-3 rounded-[14px] border-2 border-dashed px-8 py-9 transition-all duration-200 neu-inset"
+          className={`flex ${
+            isUploading ? "cursor-wait opacity-70" : "cursor-pointer"
+          } flex-col items-center gap-3 rounded-[14px] border-2 border-dashed px-8 py-9 transition-all duration-200 neu-inset`}
           style={{
             borderColor: dragOver ? "var(--figma-teal)" : "var(--figma-border)",
             background: dragOver ? "rgba(14,124,134,0.04)" : "var(--figma-gray50)",
@@ -195,9 +217,13 @@ export function AudioTab({ projectId }: { projectId: string }) {
             />
           </div>
           <div className="text-center">
-            <div className="mb-1 text-sm font-semibold text-[var(--figma-navy)]">Upload Audio Recording</div>
+            <div className="mb-1 text-sm font-semibold text-[var(--figma-navy)]">
+              {isUploading ? "Uploading..." : "Upload Audio Recording"}
+            </div>
             <div className="text-xs text-[var(--figma-gray500)]">
-              Drag & drop or click to browse · MP3, M4A, WAV up to 200 MB
+              {isUploading
+                ? "Please wait while your file is being uploaded."
+                : "Drag & drop or click to browse · MP3, M4A, WAV up to 200 MB"}
             </div>
           </div>
         </div>
