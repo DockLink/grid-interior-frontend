@@ -4,8 +4,18 @@ import { PHASE_CFG, PHASES } from "@/lib/projects/design-tokens";
 
 import { MaterialIcon } from "./material-icon";
 
-export function PhaseStepper({ currentPhaseIndex }: { currentPhaseIndex: number }) {
-  const progressPct = Math.min(100, (currentPhaseIndex / (PHASES.length - 1)) * 100);
+export function PhaseStepper({
+  currentPhaseIndex,
+  progressPct: progressPctOverride,
+}: {
+  currentPhaseIndex: number;
+  /** Optional overall fill (0–100). Defaults to phase-index position. */
+  progressPct?: number;
+}) {
+  const progressPct =
+    typeof progressPctOverride === "number"
+      ? Math.min(100, Math.max(0, progressPctOverride))
+      : Math.min(100, (currentPhaseIndex / (PHASES.length - 1)) * 100);
 
   return (
     <div className="neu-card mb-6 rounded-2xl bg-white px-7 py-5">

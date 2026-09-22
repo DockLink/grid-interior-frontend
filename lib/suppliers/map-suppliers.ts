@@ -5,9 +5,16 @@ import type {
   PaymentStatus,
   SubVendor,
   SubVendorApi,
+  SubVendorHistory,
+  SubVendorHistoryApi,
+  SubVendorHistoryStatus,
+  SubVendorPayment,
+  SubVendorPaymentApi,
   Supplier,
   SupplierApi,
   SupplierCategory,
+  SupplierOrder,
+  SupplierOrderApi,
   SupplierRange,
   SupplierStatus,
 } from "@/types/suppliers";
@@ -56,6 +63,12 @@ export const DELIVERY_STATUS_CFG: Record<DeliveryStatus, { color: string; bg: st
   Delayed: { color: "#F26D6D", bg: "rgba(242,109,109,0.10)" },
 };
 
+export const HISTORY_STATUS_CFG: Record<SubVendorHistoryStatus, { color: string; bg: string }> = {
+  Completed: { color: "#3FA66B", bg: "rgba(63,166,107,0.10)" },
+  "In Progress": { color: "#0E7C86", bg: "rgba(14,124,134,0.10)" },
+  Cancelled: { color: "#F26D6D", bg: "rgba(242,109,109,0.10)" },
+};
+
 function parseSupplierRange(raw: Record<string, unknown>): SupplierRange {
   const value = pickString(raw, "supplier_range", "supplierRange");
   if (value === "Budget" || value === "Standard" || value === "Premium") return value;
@@ -89,6 +102,71 @@ export function mapSupplierApiToView(raw: SupplierApi | Record<string, unknown>)
   };
 }
 
+function formatOrderDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatOrderAmount(raw: number | string | null | undefined): string {
+  if (raw == null || raw === "") return "—";
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return "—";
+    if (/[€$£]/.test(trimmed) || /[a-zA-Z]/.test(trimmed)) return trimmed;
+    const asNumber = Number(trimmed.replace(/,/g, ""));
+    if (!Number.isFinite(asNumber)) return trimmed;
+    return `€ ${asNumber.toLocaleString("en-US")}`;
+  }
+  if (!Number.isFinite(raw)) return "—";
+  return `€ ${raw.toLocaleString("en-US")}`;
+}
+
+function parseDeliveryStatus(raw: string | null | undefined): DeliveryStatus {
+  if (raw === "Delivered" || raw === "Pending" || raw === "Delayed") return raw;
+  return "Pending";
+}
+
+function parsePaymentStatus(raw: string | null | undefined): PaymentStatus {
+  if (raw === "Paid" || raw === "Partial" || raw === "Unpaid") return raw;
+  const normalized = (raw ?? "").toLowerCase().replace(/_/g, " ").trim();
+  if (normalized === "paid") return "Paid";
+  if (normalized === "partial") return "Partial";
+  if (normalized === "unpaid") return "Unpaid";
+  return "Unpaid";
+}
+
+export function mapSupplierOrderApiToView(
+  raw: SupplierOrderApi | Record<string, unknown>,
+): SupplierOrder {
+  const record = raw as Record<string, unknown>;
+  const amountRaw = record.amount;
+  return {
+    id: pickString(record, "id") ?? "",
+    date: formatOrderDate(pickString(record, "order_date", "orderDate", "date")),
+    project:
+      pickString(record, "project_name", "projectName", "project") ?? "—",
+    item: pickString(record, "item") ?? "—",
+    quantity: pickString(record, "quantity") ?? "—",
+    deliveryStatus: parseDeliveryStatus(
+      pickString(record, "delivery_status", "deliveryStatus"),
+    ),
+    paymentStatus: parsePaymentStatus(
+      pickString(record, "payment_status", "paymentStatus"),
+    ),
+    amount: formatOrderAmount(
+      typeof amountRaw === "number" || typeof amountRaw === "string"
+        ? amountRaw
+        : null,
+    ),
+  };
+}
+
 export function mapSubVendorApiToView(raw: SubVendorApi | Record<string, unknown>): SubVendor {
   return {
     id: pickString(raw as Record<string, unknown>, "id") ?? "",
@@ -109,5 +187,63 @@ export function mapSubVendorApiToView(raw: SubVendorApi | Record<string, unknown
       (pickString(raw as Record<string, unknown>, "payment_record", "paymentRecord") as SubVendor["paymentRecord"]) ??
       "Good",
     notes: pickString(raw as Record<string, unknown>, "notes") ?? undefined,
+  };
+}
+
+function formatHistoryDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function parseHistoryStatus(raw: string | null | undefined): SubVendorHistoryStatus {
+  if (raw === "Completed" || raw === "In Progress" || raw === "Cancelled") return raw;
+  const normalized = (raw ?? "").toLowerCase().replace(/_/g, " ").trim();
+  if (normalized === "completed" || normalized === "complete") return "Completed";
+  if (normalized === "in progress" || normalized === "in-progress" || normalized === "active") {
+    return "In Progress";
+  }
+  if (normalized === "cancelled" || normalized === "canceled") return "Cancelled";
+  return "Completed";
+}
+
+export function mapSubVendorHistoryApiToView(
+  raw: SubVendorHistoryApi | Record<string, unknown>,
+): SubVendorHistory {
+  const record = raw as Record<string, unknown>;
+  const amountRaw = record.amount;
+  return {
+    id: pickString(record, "id") ?? "",
+    project: pickString(record, "project_name", "projectName", "project") ?? "—",
+    startDate: formatHistoryDate(pickString(record, "start_date", "startDate")),
+    endDate: formatHistoryDate(pickString(record, "end_date", "endDate")),
+    scope: pickString(record, "scope") ?? "—",
+    status: parseHistoryStatus(pickString(record, "status")),
+    amount:
+      amountRaw == null || amountRaw === ""
+        ? undefined
+        : formatOrderAmount(
+            typeof amountRaw === "number" || typeof amountRaw === "string" ? amountRaw : null,
+          ),
+  };
+}
+
+export function mapSubVendorPaymentApiToView(
+  raw: SubVendorPaymentApi | Record<string, unknown>,
+): SubVendorPayment {
+  const record = raw as Record<string, unknown>;
+  const amountRaw = record.amount;
+  return {
+    id: pickString(record, "id") ?? "",
+    project: pickString(record, "project_name", "projectName", "project") ?? "—",
+    amount: formatOrderAmount(
+      typeof amountRaw === "number" || typeof amountRaw === "string" ? amountRaw : null,
+    ),
+    date: formatOrderDate(pickString(record, "payment_date", "paymentDate", "date")),
+    status: parsePaymentStatus(pickString(record, "status", "payment_status", "paymentStatus")),
   };
 }

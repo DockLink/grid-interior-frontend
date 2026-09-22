@@ -36,16 +36,24 @@ export interface DirectorProject {
   designer: { initials: string; color: string; name: string };
   daysInPhase: number;
   categories: Record<DetailCategoryId, boolean>;
+  /** awaiting = needs director attention; complete = detail phase done */
   status: "awaiting" | "complete";
+  /** Raw stage status from Nest (e.g. IN_PROGRESS, IN_REVIEW, COMPLETED) */
+  stageStatus?: string | null;
 }
 
 /* ---------- API ---------- */
 
 export interface DetailCategoryStateApi {
-  id: DetailCategoryId | string;
+  /** Row UUID from Nest — not the category slug */
+  id?: string;
+  /** Category slug: electrical | flooring | ceiling | walls | furniture | interior */
+  category_id?: DetailCategoryId | string;
   complete: boolean;
   notes: string;
   file_count?: number;
+  folder_path?: string;
+  project_id?: string;
 }
 
 export interface DetailCategoriesResponse {
@@ -57,6 +65,14 @@ export interface DetailCategoryUpdatePayload {
   notes?: string;
 }
 
+export interface DetailSubmitForReviewResponse {
+  project_id: string;
+  submitted: boolean;
+  stage_id: string;
+  stage_title: string;
+  stage_status: string;
+}
+
 export interface DirectorOverviewDesignerApi {
   id?: string;
   name: string;
@@ -64,18 +80,28 @@ export interface DirectorOverviewDesignerApi {
   color?: string;
 }
 
+/**
+ * Nest `GET /projects/director-overview` project row.
+ * Accepts both the live Nest shape (`project_id`, designer string) and
+ * the older FE-oriented shape (`id`, designer object, client).
+ */
 export interface DirectorOverviewProjectApi {
-  id: string;
+  id?: string;
+  project_id?: string;
   name: string;
-  client: string;
-  designer: DirectorOverviewDesignerApi;
+  code?: string | null;
+  client?: string | null;
+  designer?: DirectorOverviewDesignerApi | string | null;
   days_in_phase: number;
-  categories: Record<string, boolean>;
-  status: "awaiting" | "complete" | string;
+  categories?: Record<string, boolean> | null;
+  status?: "awaiting" | "complete" | string;
+  stage_title?: string | null;
+  stage_status?: string | null;
 }
 
 export interface DirectorOverviewResponse {
   projects: DirectorOverviewProjectApi[];
+  counts?: { awaiting?: number; complete?: number };
 }
 
 const ALLOWED: DetailView[] = ["hub", "boq", "director-overview"];

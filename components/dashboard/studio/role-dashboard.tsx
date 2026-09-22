@@ -26,6 +26,7 @@ export function RoleDashboard({
   fileActivity,
   todaysTasks,
   todaysTasksTitle,
+  todaysTasksFooter,
   showTodaysTasks = true,
   showActions = true,
   isLoading = false,
@@ -40,6 +41,7 @@ export function RoleDashboard({
   fileActivity?: FileActivityItem[];
   todaysTasks?: TodaysTaskItem[];
   todaysTasksTitle?: string;
+  todaysTasksFooter?: string;
   showTodaysTasks?: boolean;
   showActions?: boolean;
   isLoading?: boolean;
@@ -105,7 +107,11 @@ export function RoleDashboard({
 
       {showTodaysTasks ? (
         <div className="mb-6">
-          <TodaysTasksPanel items={todaysTasks} title={todaysTasksTitle} />
+          <TodaysTasksPanel
+            items={todaysTasks}
+            title={todaysTasksTitle}
+            footerLabel={todaysTasksFooter}
+          />
         </div>
       ) : null}
 

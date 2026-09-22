@@ -4,6 +4,11 @@ import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
+import {
+  mapAccessRequest,
+  mapAccessRequestsList,
+  toReviewAccessRequestBody,
+} from "@/lib/access-requests/map-access-request";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { queryKeys } from "@/lib/query/keys";
 import type {
@@ -28,9 +33,21 @@ function toQueryString(params: AccessRequestsQueryParams = {}): string {
 async function fetchAccessRequests(
   params: AccessRequestsQueryParams,
 ): Promise<AccessRequestsListResponse> {
-  return authApiClient<AccessRequestsListResponse>(
-    `/access-requests${toQueryString(params)}`,
-  );
+  const raw = await authApiClient<unknown>(`/access-requests${toQueryString(params)}`);
+  const data = mapAccessRequestsList(raw);
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    data,
+    total: typeof obj.total === "number" ? obj.total : data.length,
+    page: typeof obj.page === "number" ? obj.page : params.page ?? 1,
+    limit: typeof obj.limit === "number" ? obj.limit : params.limit ?? 50,
+    totalPages:
+      typeof obj.totalPages === "number"
+        ? obj.totalPages
+        : typeof obj.total_pages === "number"
+          ? obj.total_pages
+          : Math.max(1, Math.ceil(data.length / (params.limit ?? 50))),
+  };
 }
 
 export function useAccessRequests(
@@ -53,20 +70,24 @@ export function useAccessRequests(
   }, [qc]);
 
   const createMutation = useMutation({
-    mutationFn: (payload: CreateAccessRequestPayload) =>
-      authApiClient<AccessRequest>("/access-requests", {
+    mutationFn: async (payload: CreateAccessRequestPayload) => {
+      const raw = await authApiClient<unknown>("/access-requests", {
         method: "POST",
         body: JSON.stringify(payload),
-      }),
+      });
+      return mapAccessRequest(raw);
+    },
     onSuccess: () => void invalidate(),
   });
 
   const reviewMutation = useMutation({
-    mutationFn: (payload: ReviewAccessRequestPayload) =>
-      authApiClient<AccessRequest>("/access-requests/review", {
+    mutationFn: async (payload: ReviewAccessRequestPayload) => {
+      const raw = await authApiClient<unknown>("/access-requests/review", {
         method: "POST",
-        body: JSON.stringify(payload),
-      }),
+        body: JSON.stringify(toReviewAccessRequestBody(payload)),
+      });
+      return mapAccessRequest(raw);
+    },
     onSuccess: () => void invalidate(),
   });
 

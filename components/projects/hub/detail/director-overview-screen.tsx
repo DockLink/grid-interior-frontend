@@ -5,6 +5,7 @@ import { useState } from "react";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { StatTile } from "@/components/projects/hub/stat-tile";
 import { useDirectorOverview } from "@/hooks/use-detail-categories";
+import { computeDirectorOverviewStats, isAwaitingDirectorReview } from "@/lib/detail/map-detail";
 import { cn } from "@/lib/utils";
 import type { DetailCategoryId, DirectorProject } from "@/types/detail";
 import type { ActiveProjectView } from "@/types/project-hub";
@@ -22,8 +23,17 @@ const CAT_ICONS: Record<DetailCategoryId, string> = {
 
 const STATUS_CFG = {
   awaiting: { label: "Awaiting Review", color: "#D97706", bg: "#FEF3C7" },
+  in_progress: { label: "In Progress", color: "#0891B2", bg: "#E0F2FE" },
   complete: { label: "Complete", color: "#3FA66B", bg: "#DCFCE7" },
 } as const;
+
+function rowStatusKey(proj: DirectorProject): keyof typeof STATUS_CFG {
+  if (isAwaitingDirectorReview(proj)) return "awaiting";
+  if (proj.status === "complete" || (proj.stageStatus ?? "").toUpperCase() === "COMPLETED") {
+    return "complete";
+  }
+  return "in_progress";
+}
 
 const SORT_LABELS = { days: "Days in Phase", name: "Project Name" } as const;
 
@@ -115,7 +125,7 @@ function DirectorProjectRow({
         >
           {statusLabel}
         </span>
-        {proj.status === "awaiting" && (
+        {isAwaitingDirectorReview(proj) && (
           <button
             type="button"
             onMouseEnter={() => setReviewHover(true)}
@@ -139,23 +149,24 @@ export function DirectorOverviewScreen({
   project: ActiveProjectView;
   onBack: () => void;
 }) {
-  const { projects: directorProjects } = useDirectorOverview();
+  const { projects: directorProjects, isLoading, error } = useDirectorOverview();
   const [sort, setSort] = useState<"days" | "name">("days");
   const [statusFilter, setStatusFilter] = useState<"all" | "awaiting" | "complete">("all");
   const [sortOpen, setSortOpen] = useState(false);
   const [backHover, setBackHover] = useState(false);
 
   const filtered = directorProjects
-    .filter((p) => statusFilter === "all" || p.status === statusFilter)
+    .filter((p) => {
+      if (statusFilter === "all") return true;
+      if (statusFilter === "awaiting") return isAwaitingDirectorReview(p);
+      return rowStatusKey(p) === "complete";
+    })
     .sort((a, b) =>
       sort === "days" ? b.daysInPhase - a.daysInPhase : a.name.localeCompare(b.name),
     );
 
-  const totalProjects = directorProjects.length;
-  const awaitingReview = directorProjects.filter((p) => p.status === "awaiting").length;
-  const avgDays = totalProjects
-    ? Math.round(directorProjects.reduce((s, p) => s + p.daysInPhase, 0) / totalProjects)
-    : 0;
+  const { totalProjects, awaitingReview, avgDays } =
+    computeDirectorOverviewStats(directorProjects);
 
   return (
     <div className="px-10 py-8">
@@ -186,6 +197,16 @@ export function DirectorOverviewScreen({
         <StatTile icon="pending_actions" label="Awaiting Director Review" value={String(awaitingReview)} color="#D97706" />
         <StatTile icon="schedule" label="Avg. Days in Phase" value={`${avgDays} days`} color="var(--figma-teal)" />
       </div>
+
+      {error && (
+        <div className="mb-4 rounded-xl px-4 py-3 text-[13px] text-[var(--figma-alert)]" style={{ background: "rgba(220,38,38,0.06)" }}>
+          {error}
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="mb-4 text-[13px] text-[var(--figma-gray500)]">Loading director overview…</div>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex flex-wrap items-center gap-2">
@@ -266,7 +287,7 @@ export function DirectorOverviewScreen({
         </div>
 
         {filtered.map((proj, idx) => {
-          const s = STATUS_CFG[proj.status];
+          const s = STATUS_CFG[rowStatusKey(proj)];
           return (
             <DirectorProjectRow
               key={proj.id}

@@ -5,6 +5,9 @@ import type {
   StatItem,
   TodaysTaskItem,
 } from "@/components/dashboard/studio/demo-data";
+import { stageToPhase } from "@/lib/projects/map-project-hub";
+import { resolveProjectProgress } from "@/lib/projects/project-progress";
+import { todayIsoDate } from "@/lib/suppliers/map-vendor-tasks";
 import type { ProjectTaskView } from "@/lib/tasks/task-board";
 import type { AccessRequest } from "@/types/access-requests";
 import type { AppNotification, FileVersionAppNotification } from "@/types/notifications";
@@ -38,7 +41,13 @@ function fileExt(name: string): string {
 
 export function mapAccessRequestToAttention(req: AccessRequest): AttentionItem {
   const name =
-    [req.requestedBy?.firstName, req.requestedBy?.lastName].filter(Boolean).join(" ").trim() ||
+    [
+      req.requestedBy?.firstName ?? req.requestedBy?.first_name,
+      req.requestedBy?.lastName ?? req.requestedBy?.last_name,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .trim() ||
     req.requestedBy?.email ||
     "Member";
   return {
@@ -48,8 +57,8 @@ export function mapAccessRequestToAttention(req: AccessRequest): AttentionItem {
     requester: name,
     initials: getUserInitials({
       email: req.requestedBy?.email ?? "",
-      first_name: req.requestedBy?.firstName,
-      last_name: req.requestedBy?.lastName,
+      first_name: req.requestedBy?.firstName ?? req.requestedBy?.first_name,
+      last_name: req.requestedBy?.lastName ?? req.requestedBy?.last_name,
     }),
     color: initialsColor(name),
     project: req.project?.name ?? "Project",
@@ -83,7 +92,7 @@ export function mapHoldRequestToAttention(req: TaskableHoldRequest): AttentionIt
 export function mapTaskToAttention(task: ProjectTaskView, projectName: string): AttentionItem {
   const assignee = task.assignees[0];
   const name = assignee?.name ?? "You";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIsoDate();
   const overdue = task.status !== "done" && task.dueDate < today;
   return {
     id: hashStringToNumber(task.id),
@@ -94,7 +103,7 @@ export function mapTaskToAttention(task: ProjectTaskView, projectName: string): 
     color: initialsColor(name),
     project: projectName,
     date: formatShortDate(task.dueDate),
-    detail: overdue ? "Overdue" : undefined,
+    detail: overdue ? "Overdue" : task.dueDate === today ? "Due today" : undefined,
   };
 }
 
@@ -107,33 +116,41 @@ export function mapProjectToOverview(project: Project | ProjectCardView): Projec
         : project.client?.name ?? "Client"
       : "Client";
   const code = "code" in project ? project.code : project.number ?? "";
-  const stage =
+  const rawStage =
     ("currentStage" in project && project.currentStage) ||
     ("current_stage" in project && project.current_stage) ||
-    "Active";
+    null;
+
+  const isInactive = project.status === "INACTIVE" || project.status === "Inactive";
+  const completion = resolveProjectProgress({
+    apiCompletion: "completion" in project ? project.completion : null,
+    currentStage: rawStage,
+    projectStatus: isInactive ? "INACTIVE" : "ACTIVE",
+  });
+
+  let status: ProjectOverviewItem["status"] = "on-track";
+  if (isInactive) status = "inactive";
+  else if (completion >= 100) status = "completed";
 
   return {
     id: hashStringToNumber(project.id),
+    projectId: project.id,
     code: code.slice(0, 12),
     name,
     client,
-    phase: stage,
+    phase: stageToPhase(rawStage),
     nextDeadline: "—",
-    status: project.status === "INACTIVE" || project.status === "Inactive" ? "inactive" : "on-track",
-    progress: "completion" in project ? (project.completion ?? 0) : 0,
+    status,
+    progress: completion,
   };
 }
 
 export function mapTaskToTodaysItem(
   task: ProjectTaskView,
   projectName: string,
+  assignee?: ProjectTaskView["assignees"][number] | null,
 ): TodaysTaskItem {
-  const assignee = task.assignees[0];
-  const statusMap = {
-    todo: "todo" as const,
-    "in-progress": "in-progress" as const,
-    done: "review" as const,
-  };
+  const resolved = assignee ?? task.assignees[0] ?? null;
   const priorityMap = {
     CRITICAL: "high" as const,
     HIGH: "high" as const,
@@ -141,17 +158,21 @@ export function mapTaskToTodaysItem(
     LOW: "low" as const,
   };
 
+  let status: TodaysTaskItem["status"] = "todo";
+  if (task.apiStatus === "IN_REVIEW") status = "review";
+  else if (task.status === "in-progress") status = "in-progress";
+
   return {
-    id: task.id,
+    id: resolved ? `${task.id}:${resolved.userId}` : task.id,
     title: task.title,
     project: projectName,
     projectId: task.raw.projectId,
-    status: statusMap[task.status] ?? "todo",
+    status,
     priority: priorityMap[task.priority] ?? "medium",
     assignee: {
-      name: assignee?.name ?? "Unassigned",
-      initials: assignee?.initials ?? "?",
-      color: initialsColor(assignee?.userId ?? task.id),
+      name: resolved?.name ?? "Unassigned",
+      initials: resolved?.initials ?? "?",
+      color: initialsColor(resolved?.userId ?? task.id),
     },
   };
 }
@@ -165,6 +186,41 @@ export function mapFileNotificationToActivity(n: FileVersionAppNotification): Fi
     uploader: n.requesterName,
     time: formatShortDate(n.createdAt),
   };
+}
+
+export function mapRecentFileToActivity(
+  file: {
+    id: string;
+    fileName: string;
+    projectName: string;
+    created_at: string;
+    uploadedById?: string;
+  },
+  uploaderById?: Record<string, string>,
+): FileActivityItem {
+  const uploader =
+    (file.uploadedById && uploaderById?.[file.uploadedById]) || "Team member";
+  return {
+    id: hashStringToNumber(file.id),
+    name: file.fileName || "Untitled file",
+    ext: fileExt(file.fileName),
+    project: file.projectName || "Project",
+    uploader,
+    time: formatShortDate(file.created_at),
+  };
+}
+
+export function fileActivityFromRecentFiles(
+  files: Array<{
+    id: string;
+    fileName: string;
+    projectName: string;
+    created_at: string;
+    uploadedById?: string;
+  }>,
+  uploaderById?: Record<string, string>,
+): FileActivityItem[] {
+  return files.slice(0, 5).map((f) => mapRecentFileToActivity(f, uploaderById));
 }
 
 export function buildAdminStats(input: {
@@ -322,4 +378,24 @@ export function fileActivityFromNotifications(notifications: AppNotification[]):
     .filter((n): n is FileVersionAppNotification => n.type === "file_version")
     .slice(0, 5)
     .map(mapFileNotificationToActivity);
+}
+
+/** Prefer recently uploaded files; fall back to file-version notifications. */
+export function buildFileActivity(input: {
+  recentFiles: Array<{
+    id: string;
+    fileName: string;
+    projectName: string;
+    created_at: string;
+    uploadedById?: string;
+  }>;
+  notifications: AppNotification[];
+  authDisabled?: boolean;
+  demoData: FileActivityItem[];
+  uploaderById?: Record<string, string>;
+}): FileActivityItem[] {
+  if (input.authDisabled) return input.demoData;
+  const fromRecent = fileActivityFromRecentFiles(input.recentFiles, input.uploaderById);
+  if (fromRecent.length > 0) return fromRecent;
+  return fileActivityFromNotifications(input.notifications);
 }

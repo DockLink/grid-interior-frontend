@@ -4,9 +4,10 @@ import { useCallback } from "react";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
 
-function uploadFieldName(file: File): string {
-  if (file.type.startsWith("image/")) return "image";
-  return "file";
+function uploadFieldName(_file: File): string {
+  // Backend StorageV2Controller FileInterceptor only accepts the field name "image"
+  // (even for non-image floating uploads such as PDFs / audio).
+  return "image";
 }
 
 export function useUploadFile() {

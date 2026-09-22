@@ -1,9 +1,15 @@
 import { distanceKmFromCoords } from "@/lib/maps/distance";
 import { PHASES, type ProjectHealthStatus, type ProjectPhase } from "@/lib/projects/design-tokens";
 import { resolveProjectEndDate } from "@/lib/projects/duration";
+import { buildProjectOverviewActivity } from "@/lib/projects/map-project-activity";
 import { phaseIndex, resolveCurrentPhase } from "@/lib/projects/map-project-hub";
+import { isTaskCompleted, isTaskOverdue } from "@/lib/projects/map-stages";
+import { resolveProjectProgress } from "@/lib/projects/project-progress";
+import { resolveTaskEndDate } from "@/lib/tasks/task-dates";
+import type { ProjectFile } from "@/types/files";
 import type { HubActivityItem } from "@/types/project-hub";
 import type { Project, ProjectMember, ProjectStatus } from "@/types/projects";
+import type { Task } from "@/types/tasks";
 
 export interface ProjectOverviewView {
   id: string;
@@ -15,6 +21,8 @@ export interface ProjectOverviewView {
   status: ProjectHealthStatus;
   progress: number;
   nextDeadline: string;
+  /** Title of the open task that owns nextDeadline, when known. */
+  nextDeadlineLabel: string | null;
   startDate: string;
   endDate: string;
   location: string;
@@ -28,6 +36,9 @@ export interface ProjectOverviewView {
   teamMemberIds: string[];
 }
 
+type OverviewTask = Pick<Task, "status"> &
+  Partial<Pick<Task, "start_date" | "end_date" | "duration" | "durationHours" | "title">>;
+
 function formatShortDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -37,6 +48,56 @@ function formatShortDate(iso: string | null | undefined): string {
 
 function projectStatusToHealth(status: ProjectStatus): ProjectHealthStatus {
   return status === "ACTIVE" ? "In Progress" : "Completed";
+}
+
+function toTaskDateLike(task: OverviewTask) {
+  if (!task.start_date) return null;
+  return {
+    status: task.status,
+    start_date: task.start_date,
+    end_date: task.end_date,
+    duration: task.duration,
+    durationHours: task.durationHours,
+  };
+}
+
+function resolveOverviewHealth(
+  projectStatus: ProjectStatus,
+  tasks: OverviewTask[],
+): ProjectHealthStatus {
+  if (projectStatus !== "ACTIVE") return "Completed";
+  if (tasks.some((t) => {
+    const dated = toTaskDateLike(t);
+    return dated ? isTaskOverdue(dated) : false;
+  })) {
+    return "Overdue";
+  }
+  return "In Progress";
+}
+
+/** Soonest open-task end date (includes overdue — that is the urgent deadline). */
+function resolveNextDeadline(tasks: OverviewTask[]): {
+  date: string;
+  label: string | null;
+} {
+  const open = tasks.filter((t) => !isTaskCompleted(t.status));
+  const dated = open
+    .map((task) => {
+      const like = toTaskDateLike(task);
+      if (!like) return null;
+      return { task, due: resolveTaskEndDate(like) };
+    })
+    .filter((x): x is { task: OverviewTask; due: Date } => Boolean(x))
+    .filter((x) => !Number.isNaN(x.due.getTime()))
+    .sort((a, b) => a.due.getTime() - b.due.getTime());
+
+  const next = dated[0];
+  if (!next) return { date: "—", label: null };
+
+  return {
+    date: formatShortDate(next.due.toISOString()),
+    label: next.task.title?.trim() || null,
+  };
 }
 
 function daysSince(iso: string): number {
@@ -50,14 +111,26 @@ export function mapProjectToOverviewView(
   project: Project,
   options: {
     members?: ProjectMember[];
-    tasks?: { status: string }[];
+    tasks?: OverviewTask[];
+    /** Full task rows when available — used for Recent Activity timestamps/text. */
+    activityTasks?: Task[];
+    recentFiles?: ProjectFile[];
     stages?: { title?: string | null; status?: string | null }[];
+    activity?: HubActivityItem[];
   } = {},
 ): ProjectOverviewView {
   const phase = resolveCurrentPhase(project.current_stage, options.stages);
   const tasks = options.tasks ?? [];
-  const tasksDone = tasks.filter((t) => t.status === "COMPLETED").length;
+  const tasksDone = tasks.filter((t) => isTaskCompleted(t.status)).length;
   const activeMembers = (options.members ?? []).filter((m) => m.status === "ACTIVE");
+  const nextDeadline = resolveNextDeadline(tasks);
+  const activity =
+    options.activity ??
+    buildProjectOverviewActivity({
+      files: options.recentFiles,
+      tasks: options.activityTasks,
+      members: options.members,
+    });
 
   return {
     id: project.id,
@@ -66,9 +139,17 @@ export function mapProjectToOverviewView(
     clientId: project.client?.id ?? null,
     phase,
     phaseIndex: phaseIndex(phase),
-    status: projectStatusToHealth(project.status),
-    progress: tasks.length ? Math.round((tasksDone / tasks.length) * 100) : 0,
-    nextDeadline: formatShortDate(project.updated_at),
+    status: resolveOverviewHealth(project.status, tasks),
+    progress: resolveProjectProgress({
+      apiCompletion: project.completion,
+      currentStage: project.current_stage,
+      projectStatus: project.status,
+      stages: options.stages,
+      tasks,
+      blendTasks: true,
+    }),
+    nextDeadline: nextDeadline.date,
+    nextDeadlineLabel: nextDeadline.label,
     startDate: formatShortDate(project.start_date),
     endDate: formatShortDate(resolveProjectEndDate(project)),
     location: project.location ?? "—",
@@ -81,7 +162,7 @@ export function mapProjectToOverviewView(
     tasksDone,
     daysActive: daysSince(project.start_date),
     description: project.description ?? "",
-    activity: [],
+    activity,
     teamMemberIds: activeMembers.map((m) => m.user_id),
   };
 }

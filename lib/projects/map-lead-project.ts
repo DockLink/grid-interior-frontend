@@ -1,5 +1,6 @@
 import type { LeadProjectView, Project, ProjectWithMembers } from "@/types/projects";
 import { PROJECT_LEAD_ROLE } from "@/types/projects";
+import { resolveProjectProgress } from "@/lib/projects/project-progress";
 
 export function mapToLeadProjectView(
   project: Project | ProjectWithMembers,
@@ -18,7 +19,11 @@ export function mapToLeadProjectView(
     id: project.id,
     name: project.name,
     status,
-    progress: 0,
+    progress: resolveProjectProgress({
+      apiCompletion: project.completion,
+      currentStage: project.current_stage,
+      projectStatus: project.status,
+    }),
     tasks: taskCount,
     isAssigned,
   };

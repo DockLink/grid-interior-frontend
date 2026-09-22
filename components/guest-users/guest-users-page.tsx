@@ -13,10 +13,12 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { useUsers } from "@/hooks/use-users";
 import { isSuperAdminRole } from "@/lib/navigation/sidebar-role";
+import { userMatchesSearch } from "@/lib/user/display";
 import { guestAccessLabel } from "@/lib/user/guest";
 import type { User, UserRole, UserStatus } from "@/types/users";
 
 const PAGE_SIZE = 20;
+const SEARCH_FETCH_LIMIT = 100;
 const GUEST_ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "GUEST", label: "Guest" },
   { value: "CLIENT_FULL_ACCESS", label: "Full view access" },
@@ -55,21 +57,30 @@ export function GuestUsersPage() {
     setPage(1);
   }, [debouncedSearch]);
 
+  const searchQuery = debouncedSearch.trim();
+  const isSearching = searchQuery.length > 0;
+
+  // Same as user management: backend search is email-only (names encrypted).
+  // Filter decrypted name/email client-side until backend name search lands.
   const { users, meta, isLoading, isMutating, error, createUser, setUserStatus, deleteUser } =
     useUsers({
-      page,
-      limit: PAGE_SIZE,
-      search: debouncedSearch,
+      page: isSearching ? 1 : page,
+      limit: isSearching ? SEARCH_FETCH_LIMIT : PAGE_SIZE,
       roles: GUEST_LIST_ROLES,
     });
 
+  const matchedUsers = useMemo(
+    () => users.filter((u) => userMatchesSearch(u, searchQuery)),
+    [users, searchQuery],
+  );
+
   const activeGuests = useMemo(
-    () => users.filter((u) => u.status === "ACTIVE"),
-    [users],
+    () => matchedUsers.filter((u) => u.status === "ACTIVE"),
+    [matchedUsers],
   );
   const inactiveGuests = useMemo(
-    () => users.filter((u) => u.status === "INACTIVE"),
-    [users],
+    () => matchedUsers.filter((u) => u.status === "INACTIVE"),
+    [matchedUsers],
   );
 
   async function confirmDeactivate(userId: string) {
@@ -273,7 +284,10 @@ export function GuestUsersPage() {
             Guest users
           </div>
           <div style={{ fontSize: "13px", color: "var(--ds-secondary-label)", marginTop: "2px" }}>
-            {meta?.total ?? users.length} guest accounts · assign per project from project overview
+            {isSearching
+              ? `${matchedUsers.length} matching guest accounts`
+              : `${meta?.total ?? users.length} guest accounts`}{" "}
+            · assign per project from project overview
           </div>
         </div>
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
@@ -343,7 +357,7 @@ export function GuestUsersPage() {
         >
           Loading guests...
         </div>
-      ) : users.length === 0 ? (
+      ) : matchedUsers.length === 0 ? (
         <div
           style={{
             background: "var(--ds-surface-elevated)",
@@ -354,7 +368,9 @@ export function GuestUsersPage() {
             color: "var(--ds-secondary-label)",
           }}
         >
-          No guest accounts yet. Create one, then assign it from a project&apos;s overview page.
+          {isSearching
+            ? "No guests match your search."
+            : "No guest accounts yet. Create one, then assign it from a project's overview page."}
         </div>
       ) : (
         <>
@@ -370,12 +386,14 @@ export function GuestUsersPage() {
         </>
       )}
 
-      <UserPagination
-        meta={meta}
-        page={page}
-        onPageChange={setPage}
-        disabled={isLoading || isMutating}
-      />
+      {!isSearching && (
+        <UserPagination
+          meta={meta}
+          page={page}
+          onPageChange={setPage}
+          disabled={isLoading || isMutating}
+        />
+      )}
 
       <CreateUserSheet
         open={showCreateSheet}

@@ -13,13 +13,21 @@ import {
 } from "@/components/suppliers/supplier-ui";
 import { VendorTasksTab } from "@/components/suppliers/vendor-tasks-tab";
 import { useSubVendor } from "@/hooks/use-sub-vendor";
+import { useSubVendorHistory } from "@/hooks/use-sub-vendor-history";
+import { useSubVendorPayments } from "@/hooks/use-sub-vendor-payments";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { CATEGORY_CFG } from "@/lib/projects/link-categories";
 import {
   AVAILABILITY_CFG,
+  HISTORY_STATUS_CFG,
   PAYMENT_STATUS_CFG,
 } from "@/lib/suppliers/map-suppliers";
-import type { AvailabilityStatus, SubVendor, SubVendorPayment } from "@/types/suppliers";
+import type {
+  AvailabilityStatus,
+  SubVendor,
+  SubVendorHistory,
+  SubVendorPayment,
+} from "@/types/suppliers";
 import { NAV_ROUTES } from "@/types/navigation";
 import { cn } from "@/lib/utils";
 
@@ -115,16 +123,139 @@ function OverviewTab({ vendor }: { vendor: SubVendor }) {
   );
 }
 
-function HistoryTab({ vendor }: { vendor: SubVendor }) {
+function HistoryRow({
+  entry,
+  isLast,
+  showAmount,
+}: {
+  entry: SubVendorHistory;
+  isLast: boolean;
+  showAmount: boolean;
+}) {
+  const [hov, setHov] = useState(false);
+  const cfg = HISTORY_STATUS_CFG[entry.status];
+
   return (
-    <div className="rounded-2xl border border-[var(--figma-border)] bg-white px-6 py-12 text-center">
-      <MaterialIcon name="history" outlined size={40} className="mx-auto mb-3 block text-[var(--figma-border)]" />
-      <div className="mb-1 text-[14px] font-medium text-[var(--figma-navy)]">No project history yet</div>
-      <div className="mx-auto max-w-sm text-[13px] text-[var(--figma-gray500)]">
-        Detailed project history is not available from the API yet. Overview shows{" "}
-        <strong className="font-semibold text-[var(--figma-navy)]">{vendor.pastProjects}</strong> past
-        project{vendor.pastProjects === 1 ? "" : "s"} as a summary count.
+    <tr
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      className={cn("transition-colors duration-120", !isLast && "border-b border-[var(--figma-border)]")}
+      style={{ background: hov ? "rgba(14,124,134,0.03)" : "#fff" }}
+    >
+      <td className="px-4 py-3 text-[13px] font-medium text-[var(--figma-navy)]">{entry.project}</td>
+      <td className="px-4 py-3 text-[12px] text-[var(--figma-gray500)]">
+        {entry.startDate} – {entry.endDate}
+      </td>
+      <td className="px-4 py-3 text-[13px] text-[var(--figma-gray500)]">{entry.scope}</td>
+      <td className="px-4 py-3">
+        <StatusPill label={entry.status} color={cfg.color} bg={cfg.bg} />
+      </td>
+      {showAmount && (
+        <td className="px-4 py-3 text-[13px] font-semibold text-[var(--figma-navy)]">
+          {entry.amount ?? "—"}
+        </td>
+      )}
+    </tr>
+  );
+}
+
+function HistoryTab({
+  vendor,
+  vendorId,
+  enabled = true,
+}: {
+  vendor: SubVendor;
+  vendorId: string;
+  enabled?: boolean;
+}) {
+  const { history, isLoading, error } = useSubVendorHistory(vendorId, { enabled });
+  const avCfg = AVAILABILITY_CFG[vendor.availability];
+  const showAmount = history.some((entry) => entry.amount != null);
+  const colCount = showAmount ? 5 : 4;
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="rounded-2xl bg-white p-5 neu-card">
+        <div className="mb-3 flex items-center gap-2">
+          <MaterialIcon name="event_available" outlined size={18} className="text-[var(--figma-teal)]" />
+          <h3 className="text-[15px] font-semibold text-[var(--figma-navy)]">Availability</h3>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <AvailabilityDot status={vendor.availability} />
+          <span className="text-[13px] text-[var(--figma-gray500)]">
+            Current status:{" "}
+            <strong className="font-semibold" style={{ color: avCfg.color }}>
+              {avCfg.label}
+            </strong>
+            . Use the status control in the profile header to update it.
+          </span>
+        </div>
       </div>
+
+      {isLoading ? (
+        <div className="rounded-[14px] border border-dashed border-[var(--figma-border)] bg-white px-4 py-8 text-center text-[13px] text-[var(--figma-gray400)]">
+          Loading project history…
+        </div>
+      ) : error ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800">
+          {error}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-[var(--figma-border)] bg-white">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-[13px]">
+              <thead>
+                <tr className="bg-[var(--figma-gray50)]">
+                  {(showAmount
+                    ? ["Project", "Period", "Scope", "Status", "Amount"]
+                    : ["Project", "Period", "Scope", "Status"]
+                  ).map((col) => (
+                    <th
+                      key={col}
+                      className="border-b border-[var(--figma-border)] px-4 py-[11px] text-left text-[12px] font-semibold tracking-wide whitespace-nowrap text-[var(--figma-navy)]"
+                    >
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {history.length === 0 ? (
+                  <tr>
+                    <td colSpan={colCount} className="px-6 py-12 text-center">
+                      <MaterialIcon
+                        name="history"
+                        outlined
+                        size={36}
+                        className="mx-auto mb-2.5 block text-[var(--figma-border)]"
+                      />
+                      <div className="mb-1 text-[14px] font-medium text-[var(--figma-navy)]">
+                        No project history yet
+                      </div>
+                      <div className="mx-auto max-w-sm text-[13px] text-[var(--figma-gray500)]">
+                        Past and current projects for this sub-vendor will appear here. Overview shows{" "}
+                        <strong className="font-semibold text-[var(--figma-navy)]">
+                          {vendor.pastProjects}
+                        </strong>{" "}
+                        past project{vendor.pastProjects === 1 ? "" : "s"} as a summary count.
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  history.map((entry, i) => (
+                    <HistoryRow
+                      key={entry.id}
+                      entry={entry}
+                      showAmount={showAmount}
+                      isLast={i === history.length - 1}
+                    />
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -162,9 +293,33 @@ function PaymentRow({
   );
 }
 
-function PaymentsTab({ vendor }: { vendor: SubVendor }) {
-  const payments: SubVendorPayment[] = [];
+function PaymentsTab({
+  vendor,
+  vendorId,
+  enabled = true,
+}: {
+  vendor: SubVendor;
+  vendorId: string;
+  enabled?: boolean;
+}) {
+  const { payments, isLoading, error } = useSubVendorPayments(vendorId, { enabled });
   const total = payments.reduce((sum, p) => sum + parseAmount(p.amount), 0);
+
+  if (isLoading) {
+    return (
+      <div className="rounded-[14px] border border-dashed border-[var(--figma-border)] bg-white px-4 py-8 text-center text-[13px] text-[var(--figma-gray400)]">
+        Loading payment records…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800">
+        {error}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -221,8 +376,8 @@ function PaymentsTab({ vendor }: { vendor: SubVendor }) {
                       No payment records
                     </div>
                     <div className="mx-auto max-w-sm text-[13px] text-[var(--figma-gray400)]">
-                      Line-item payment history is not available from the API yet. The overview rating (
-                      {vendor.paymentRecord}) is the summary field returned by the backend.
+                      Line-item payments for this sub-vendor will appear here. Overview rating (
+                      {vendor.paymentRecord}) is the summary field from the backend.
                     </div>
                   </td>
                 </tr>
@@ -354,8 +509,12 @@ export function SubVendorProfileScreen({ vendorId }: { vendorId: string }) {
       </div>
 
       {tab === "overview" && <OverviewTab vendor={vendor} />}
-      {tab === "history" && <HistoryTab vendor={vendor} />}
-      {tab === "payments" && <PaymentsTab vendor={vendor} />}
+      {tab === "history" && (
+        <HistoryTab vendor={vendor} vendorId={vendorId} enabled={tab === "history"} />
+      )}
+      {tab === "payments" && (
+        <PaymentsTab vendor={vendor} vendorId={vendorId} enabled={tab === "payments"} />
+      )}
       {tab === "tasks" && <VendorTasksTab partyKind="subvendor" partyId={vendorId} />}
 
       <AddSupplierModal

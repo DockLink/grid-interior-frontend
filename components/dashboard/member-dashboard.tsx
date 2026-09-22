@@ -15,6 +15,7 @@ export function MemberDashboard() {
       projects={data.projects}
       projectsTitle="Assigned Projects"
       todaysTasks={data.todaysTasks}
+      todaysTasksFooter="My tasks · due today"
       fileActivity={data.fileActivity}
       isLoading={data.isLoading}
       showActions={false}

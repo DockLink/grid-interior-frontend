@@ -101,6 +101,7 @@ export function ProjectMembersProvider({
     },
     onSuccess: (result) => {
       qc.setQueryData<ProjectMember[]>(qKey, mapProjectMembersList(result));
+      void qc.invalidateQueries({ queryKey: queryKeys.team.all });
     },
   });
 

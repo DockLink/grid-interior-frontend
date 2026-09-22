@@ -1,13 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { useConsultation } from "@/hooks/use-consultation";
+import { getApiErrorMessage } from "@/lib/api/handle-api-error";
 import type { ConsultInventoryItem } from "@/types/consultation";
 
 import { GradientBtn, PillSwitch, SectionCard, SectionTitle } from "./consultation-ui";
 import { SectionNotes } from "./section-notes";
+
+function isDraftId(id: string) {
+  return id.startsWith("mock-");
+}
 
 function InventoryRow({
   item,
@@ -93,9 +99,16 @@ export function InventoryTab({ projectId }: { projectId: string }) {
   } = useConsultation(projectId);
   const [included, setIncluded] = useState(true);
   const [items, setItems] = useState<ConsultInventoryItem[]>(remoteItems);
+  const [saving, setSaving] = useState(false);
 
+  // Keep unsaved draft rows when remote consultation data refreshes
   useEffect(() => {
-    setItems(remoteItems);
+    setItems((prev) => {
+      const drafts = prev.filter((i) => isDraftId(i.id));
+      if (drafts.length === 0) return remoteItems;
+      const remoteIds = new Set(remoteItems.map((i) => i.id));
+      return [...remoteItems, ...drafts.filter((d) => !remoteIds.has(d.id))];
+    });
   }, [remoteItems]);
 
   const toggleMeasured = (id: string) => {
@@ -103,7 +116,59 @@ export function InventoryTab({ projectId }: { projectId: string }) {
     if (!item) return;
     const next = !item.measured;
     setItems((p) => p.map((it) => (it.id === id ? { ...it, measured: next } : it)));
-    if (!isAuthOff && !id.startsWith("mock-")) void updateInventory(id, { measured: next });
+    if (!isAuthOff && !isDraftId(id)) void updateInventory(id, { measured: next });
+  };
+
+  const handleAddItem = () => {
+    const tempId = `mock-inv-${Date.now()}`;
+    setItems((p) => [
+      ...p,
+      {
+        id: tempId,
+        name: "",
+        spec: "",
+        h: "",
+        w: "",
+        l: "",
+        qty: "1",
+        notes: "",
+        measured: false,
+      },
+    ]);
+  };
+
+  const handleSaveItems = async () => {
+    const pendingItems = items.filter((i) => isDraftId(i.id));
+    if (pendingItems.length === 0) {
+      toast.message("No new items to save");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      for (const item of pendingItems) {
+        const created = await createInventory({
+          name: item.name.trim() || "New item",
+          spec: item.spec,
+          h: item.h,
+          w: item.w,
+          l: item.l,
+          qty: item.qty || "1",
+          notes: item.notes,
+          measured: item.measured,
+        });
+        if (created) {
+          setItems((prev) => prev.map((p) => (p.id === item.id ? created : p)));
+        }
+      }
+      toast.success(
+        pendingItems.length === 1 ? "Item saved" : `${pendingItems.length} items saved`,
+      );
+    } catch (err) {
+      toast.error(getApiErrorMessage(err) || "Failed to save items");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -150,14 +215,18 @@ export function InventoryTab({ projectId }: { projectId: string }) {
                       onToggleMeasured={() => toggleMeasured(item.id)}
                       onDelete={() => {
                         setItems((p) => p.filter((i) => i.id !== item.id));
-                        void deleteInventory(item.id);
+                        if (!isDraftId(item.id)) void deleteInventory(item.id);
                       }}
                       onChange={(field, val) => {
                         setItems((p) =>
                           p.map((i) => (i.id === item.id ? { ...i, [field]: val } : i)),
                         );
-                        if (!isAuthOff && field !== "measured" && !item.id.startsWith("mock-")) {
-                          void updateInventory(item.id, { [field]: val });
+                        if (!isAuthOff && field !== "measured" && !isDraftId(item.id)) {
+                          const payload =
+                            field === "name" && typeof val === "string" && !val.trim()
+                              ? { name: "New item" }
+                              : { [field]: val };
+                          void updateInventory(item.id, payload);
                         }
                       }}
                     />
@@ -166,53 +235,13 @@ export function InventoryTab({ projectId }: { projectId: string }) {
               </table>
             </div>
             <div className="mt-4 flex items-center justify-between">
+              <GradientBtn label="Add Item" icon="add" small onClick={handleAddItem} />
               <GradientBtn
-                label="Add Item"
-                icon="add"
-                small
-                onClick={() => {
-                  const tempId = `mock-inv-${Date.now()}`;
-                  setItems((p) => [
-                    ...p,
-                    {
-                      id: tempId,
-                      name: "",
-                      spec: "",
-                      h: "",
-                      w: "",
-                      l: "",
-                      qty: "1",
-                      notes: "",
-                      measured: false,
-                    },
-                  ]);
-                }}
-              />
-              <GradientBtn
-                label="Save Items"
+                label={saving ? "Saving…" : "Save Items"}
                 icon="save"
                 small
-                onClick={() => {
-                  const pendingItems = items.filter((i) => i.id.startsWith("mock-"));
-                  pendingItems.forEach((item) => {
-                    if (item.name.trim() !== "") {
-                      void createInventory({
-                        name: item.name,
-                        spec: item.spec,
-                        h: item.h,
-                        w: item.w,
-                        l: item.l,
-                        qty: item.qty,
-                        notes: item.notes,
-                        measured: item.measured,
-                      }).then((created) => {
-                        if (created) {
-                          setItems((prev) => prev.map((p) => (p.id === item.id ? created : p)));
-                        }
-                      });
-                    }
-                  });
-                }}
+                disabled={saving}
+                onClick={() => void handleSaveItems()}
               />
             </div>
           </>

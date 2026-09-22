@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useMemo } from "react";
 
 import {
+  AllClearControl,
+  useClearedPanelItems,
+} from "@/components/dashboard/studio/all-clear-control";
+import {
   TODAYS_TASK_STATUS_CONFIG,
   TODAYS_TASKS_DATA,
   type TodaysTaskItem,
@@ -34,13 +38,17 @@ function PriorityDot({ priority }: { priority: TodaysTaskItem["priority"] }) {
 export function TodaysTasksPanel({
   items = TODAYS_TASKS_DATA,
   title = "Today's Tasks",
+  footerLabel = "All users · due today",
 }: {
   items?: TodaysTaskItem[];
   title?: string;
+  footerLabel?: string;
 }) {
+  const { visible, clearAll } = useClearedPanelItems(items, "dashboard-todays-tasks");
+
   const groups = useMemo(() => {
     const map = new Map<string, AssigneeGroup>();
-    for (const task of items) {
+    for (const task of visible) {
       const key = task.assignee.name;
       const existing = map.get(key);
       if (existing) {
@@ -56,9 +64,9 @@ export function TodaysTasksPanel({
       }
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [items]);
+  }, [visible]);
 
-  const total = items.length;
+  const total = visible.length;
   const userCount = groups.length;
 
   return (
@@ -72,15 +80,12 @@ export function TodaysTasksPanel({
               : `${total} task${total !== 1 ? "s" : ""} across ${userCount} user${userCount !== 1 ? "s" : ""}`}
           </p>
         </div>
-        <span
-          className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-          style={{
-            background: total > 0 ? "rgba(217,119,6,0.12)" : "#E7F9EE",
-            color: total > 0 ? "#D97706" : "#2FBE6B",
-          }}
-        >
-          {total > 0 ? "Due today" : "All clear"}
-        </span>
+        <AllClearControl
+          canClear={total > 0}
+          onClear={clearAll}
+          activeLabel={total > 0 ? "Due today" : undefined}
+          activeTone="amber"
+        />
       </div>
 
       {total === 0 ? (
@@ -152,7 +157,7 @@ export function TodaysTasksPanel({
       <div className="flex items-center justify-between border-t border-[#E4E9F0] px-5 py-3">
         <div className="flex items-center gap-1.5 text-[11px] text-[#5B6B85]">
           <ListTodo className="size-3.5" />
-          All users · due today
+          {footerLabel}
         </div>
         <Link
           href={NAV_ROUTES.myTasks}

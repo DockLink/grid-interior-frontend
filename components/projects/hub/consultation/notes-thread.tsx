@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { useConsultation } from "@/hooks/use-consultation";
+import { useUploadFile } from "@/hooks/use-upload-file";
+import { getApiErrorMessage } from "@/lib/api/handle-api-error";
 import { useHubTeam } from "@/lib/projects/hub-team-context";
 import type { ConsultComment } from "@/types/consultation";
 
@@ -18,12 +21,14 @@ export function NotesThread({
 }) {
   const teamMembers = useHubTeam();
   const { notes: remoteNotes, createNote, isAuthOff } = useConsultation(projectId);
+  const { uploadFile } = useUploadFile();
   const [comments, setComments] = useState<ConsultComment[]>(
     section ? remoteNotes.slice(0, 2) : remoteNotes,
   );
   const [draft, setDraft] = useState("");
   const [focused, setFocused] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [isSending, setIsSending] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -35,15 +40,45 @@ export function NotesThread({
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [comments]);
 
-  const send = () => {
-    if (!draft.trim() && !attachment) return;
+  const canSend = Boolean(draft.trim() || attachment) && !isSending;
+
+  const send = async () => {
+    if (!canSend) return;
+
     const text = draft.trim();
-    setDraft("");
-    const attachName = attachment?.name;
-    setAttachment(null);
-    void createNote({ text, attachment_name: attachName }).then((note) => {
+    const file = attachment;
+    if (!text && !file) return;
+
+    setIsSending(true);
+    try {
+      let storageFileId: string | undefined;
+      if (file) {
+        if (!isAuthOff) {
+          const { token } = await uploadFile(file);
+          storageFileId = token;
+        } else {
+          storageFileId = `local-${Date.now()}`;
+        }
+      }
+
+      const note = await createNote({
+        text,
+        ...(file
+          ? {
+              storage_file_id: storageFileId,
+              attachment_name: file.name,
+            }
+          : {}),
+      });
+
+      setDraft("");
+      setAttachment(null);
       if (isAuthOff && note) setComments((p) => [...p, note]);
-    });
+    } catch (err) {
+      toast.error(getApiErrorMessage(err) || "Failed to post note");
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -100,9 +135,20 @@ export function NotesThread({
                 {c.attachmentName && (
                   <div className="mb-2 flex items-center gap-2 rounded-lg border border-[var(--figma-border)] bg-[var(--figma-gray50)] px-3 py-2">
                     <MaterialIcon name="attach_file" size={16} className="text-[var(--figma-gray500)]" />
-                    <span className="text-[12px] font-medium text-[var(--figma-navy)] truncate">
-                      {c.attachmentName}
-                    </span>
+                    {c.attachmentUrl ? (
+                      <a
+                        href={c.attachmentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="truncate text-[12px] font-medium text-[var(--figma-teal)] underline-offset-2 hover:underline"
+                      >
+                        {c.attachmentName}
+                      </a>
+                    ) : (
+                      <span className="truncate text-[12px] font-medium text-[var(--figma-navy)]">
+                        {c.attachmentName}
+                      </span>
+                    )}
                   </div>
                 )}
                 {c.text && <p className="m-0 text-[13px] leading-relaxed text-[var(--figma-gray500)]">{c.text}</p>}
@@ -120,12 +166,14 @@ export function NotesThread({
         {attachment && (
           <div className="flex w-max items-center gap-2 rounded-lg bg-[var(--figma-gray100)] px-3 py-1.5">
             <MaterialIcon name="attach_file" size={14} className="text-[var(--figma-gray500)]" />
-            <span className="text-[12px] font-medium text-[var(--figma-navy)] truncate max-w-[200px]">
+            <span className="max-w-[200px] truncate text-[12px] font-medium text-[var(--figma-navy)]">
               {attachment.name}
             </span>
             <button
+              type="button"
+              disabled={isSending}
               onClick={() => setAttachment(null)}
-              className="ml-1 flex cursor-pointer items-center justify-center rounded-full border-none bg-transparent hover:bg-[var(--figma-gray200)]"
+              className="ml-1 flex cursor-pointer items-center justify-center rounded-full border-none bg-transparent hover:bg-[var(--figma-gray200)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <MaterialIcon name="close" size={14} className="text-[var(--figma-gray600)]" />
             </button>
@@ -140,44 +188,51 @@ export function NotesThread({
           />
           <button
             type="button"
+            disabled={isSending}
             onClick={() => fileRef.current?.click()}
-            className="flex size-[34px] shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-none bg-[var(--figma-gray100)] transition-colors duration-150 hover:bg-[var(--figma-gray200)]"
+            className="flex size-[34px] shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-none bg-[var(--figma-gray100)] transition-colors duration-150 hover:bg-[var(--figma-gray200)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <MaterialIcon name="attach_file" outlined size={18} className="text-[var(--figma-gray500)]" />
           </button>
           <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send();
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void send();
+              }
+            }}
+            disabled={isSending}
+            placeholder={
+              isSending
+                ? "Sending…"
+                : "Add a note or comment… (Enter to send)"
             }
-          }}
-          placeholder="Add a note or comment… (Enter to send)"
-          rows={2}
-          className="box-border flex-1 resize-none rounded-[10px] bg-[var(--figma-gray50)] px-3 py-2 text-[13px] leading-snug text-[var(--figma-navy)] outline-none transition-[border] duration-150"
-          style={{
-            border: focused ? "1.5px solid var(--figma-teal)" : "1.5px solid var(--figma-border)",
-          }}
-        />
+            rows={2}
+            className="box-border flex-1 resize-none rounded-[10px] bg-[var(--figma-gray50)] px-3 py-2 text-[13px] leading-snug text-[var(--figma-navy)] outline-none transition-[border] duration-150 disabled:opacity-60"
+            style={{
+              border: focused ? "1.5px solid var(--figma-teal)" : "1.5px solid var(--figma-border)",
+            }}
+          />
           <button
             type="button"
-            onClick={send}
-            className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-none transition-all duration-200"
+            disabled={!canSend}
+            onClick={() => void send()}
+            className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-none transition-all duration-200 disabled:cursor-not-allowed"
             style={{
-              background: (draft.trim() || attachment)
+              background: canSend
                 ? "linear-gradient(135deg, var(--figma-navy), var(--figma-teal))"
                 : "var(--figma-gray200)",
-              boxShadow: (draft.trim() || attachment) ? "var(--neu-raised)" : "none",
+              boxShadow: canSend ? "var(--neu-raised)" : "none",
             }}
           >
             <MaterialIcon
               name="send"
               size={18}
-              className={(draft.trim() || attachment) ? "text-white" : "text-[var(--figma-gray400)]"}
+              className={canSend ? "text-white" : "text-[var(--figma-gray400)]"}
             />
           </button>
         </div>

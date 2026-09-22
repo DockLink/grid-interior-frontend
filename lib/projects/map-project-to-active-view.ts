@@ -1,13 +1,17 @@
 import { mapProjectToOverviewView } from "@/lib/projects/map-project-overview";
 import type { ActiveProjectView } from "@/types/project-hub";
 import type { Project, ProjectMember } from "@/types/projects";
+import type { Task } from "@/types/tasks";
+
+type OverviewTaskInput = Pick<Task, "status"> &
+  Partial<Pick<Task, "start_date" | "end_date" | "duration" | "durationHours" | "title">>;
 
 /** Maps live Project API data to hub workspace ActiveProjectView. */
 export function mapProjectToActiveView(
   project: Project,
   options: {
     members?: ProjectMember[];
-    tasks?: { status: string }[];
+    tasks?: OverviewTaskInput[];
     stages?: { title?: string | null; status?: string | null }[];
   } = {},
 ): ActiveProjectView {

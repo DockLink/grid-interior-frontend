@@ -17,11 +17,14 @@ import { useAuth } from "@/hooks/use-auth";
 import { useUsers } from "@/hooks/use-users";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { isSuperAdminRole } from "@/lib/navigation/sidebar-role";
+import { userMatchesSearch } from "@/lib/user/display";
 import type { User, UserRole, UserStatus } from "@/types/users";
 
 type FilterType = "ALL" | "ADMINS" | "MEMBERS" | "INACTIVE";
 
 const PAGE_SIZE = 20;
+/** Backend max page size — used while searching so we can filter names client-side. */
+const SEARCH_FETCH_LIMIT = 100;
 
 const FILTER_TABS: { key: FilterType; label: string }[] = [
   { key: "ALL", label: "All users" },
@@ -97,12 +100,16 @@ export function UserManagementPage() {
   }, [activeFilter, isSuperAdmin]);
 
   const apiFilterStatus = activeFilter === "INACTIVE" ? "INACTIVE" : undefined;
+  const searchQuery = debouncedSearch.trim();
+  const isSearching = searchQuery.length > 0;
 
+  // Do not pass `search` to the API yet: backend only matches email via SQL, while
+  // first/last names are encrypted and cannot be SQL-searched. Fetch a larger page
+  // and filter decrypted name/email client-side until the backend supports name search.
   const { users, meta, isLoading, isMutating, error, createUser, setUserRole, setUserStatus, deleteUser } =
     useUsers({
-      page,
-      limit: PAGE_SIZE,
-      search: debouncedSearch,
+      page: isSearching ? 1 : page,
+      limit: isSearching ? SEARCH_FETCH_LIMIT : PAGE_SIZE,
       roles: apiFilterRoles,
       status: apiFilterStatus,
     });
@@ -110,10 +117,10 @@ export function UserManagementPage() {
   // Admins must not see super admin accounts or guest accounts in team management.
   const visibleUsers = useMemo(
     () =>
-      (isSuperAdmin ? users : users.filter((u) => !u.roles.includes("SUPER_ADMIN"))).filter(
-        (u) => !u.roles.includes("GUEST") && !u.roles.includes("CLIENT_FULL_ACCESS"),
-      ),
-    [users, isSuperAdmin],
+      (isSuperAdmin ? users : users.filter((u) => !u.roles.includes("SUPER_ADMIN")))
+        .filter((u) => !u.roles.includes("GUEST") && !u.roles.includes("CLIENT_FULL_ACCESS"))
+        .filter((u) => userMatchesSearch(u, searchQuery)),
+    [users, isSuperAdmin, searchQuery],
   );
 
   const activeUsers = useMemo(
@@ -329,7 +336,7 @@ export function UserManagementPage() {
             User management
           </div>
           <div style={{ fontSize: "13px", color: "var(--ds-secondary-label)", marginTop: "2px" }}>
-            {meta?.total ?? users.length} users
+            {isSearching ? visibleUsers.length : (meta?.total ?? users.length)} users
           </div>
         </div>
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
@@ -496,7 +503,7 @@ export function UserManagementPage() {
         </>
       )}
 
-      {viewMode === "directory" && (
+      {viewMode === "directory" && !isSearching && (
         <UserPagination
           meta={meta}
           page={page}

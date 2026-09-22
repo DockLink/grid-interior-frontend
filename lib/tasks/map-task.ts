@@ -16,7 +16,11 @@ const TASKABLE_TYPES: TaskableType[] = ["MILESTONE", "STAGE", "TASK"];
 const TASKABLE_PRIORITIES: TaskablePriority[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 
 function mapStatus(raw: string | undefined): TaskableStatus {
-  if (raw && (TASKABLE_STATUSES as string[]).includes(raw)) return raw as TaskableStatus;
+  if (!raw) return "TODO";
+  const normalized = raw.trim().toUpperCase().replace(/-/g, "_");
+  if ((TASKABLE_STATUSES as string[]).includes(normalized)) {
+    return normalized as TaskableStatus;
+  }
   return "TODO";
 }
 

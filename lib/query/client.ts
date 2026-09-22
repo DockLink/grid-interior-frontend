@@ -19,7 +19,8 @@ export const queryClient = new QueryClient({
     },
   }),
   mutationCache: new MutationCache({
-    onError: (error) => {
+    onError: (error, _variables, _context, mutation) => {
+      if (mutation.options.meta?.skipGlobalErrorToast) return;
       handleApiError(error, { toast: true, redirectOn401: true });
     },
   }),

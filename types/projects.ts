@@ -44,6 +44,8 @@ export interface Project {
   images: ProjectImage[];
   brief_attachments?: ProjectBriefAttachment[];
   current_stage?: string | null;
+  /** 0–100 overall completion when the API provides it. */
+  completion?: number | null;
 }
 
 export interface ProjectsListMeta {

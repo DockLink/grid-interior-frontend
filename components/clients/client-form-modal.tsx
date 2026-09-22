@@ -29,7 +29,9 @@ export type ClientFormValues = {
 const PREFERRED_CONTACTS: PreferredContact[] = ["Email", "Phone", "WhatsApp"];
 const SOURCES: LeadSource[] = ["Referral", "Instagram", "Website", "Walk-in"];
 const STATUSES: ClientStatus[] = ["Lead", "Active", "Past"];
-const EMAIL_PATTERN = /^[^\sA-Z]+@[^\sA-Z]+\.[^\sA-Z]+$/;
+/** local@domain.tld — no spaces, single @, no consecutive dots */
+const EMAIL_PATTERN =
+  /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i;
 
 type FieldErrors = Partial<Record<"name" | "email", string>>;
 
@@ -47,13 +49,29 @@ function emptyForm(): ClientFormValues {
   };
 }
 
+function isValidEmail(email: string): boolean {
+  if (!EMAIL_PATTERN.test(email)) return false;
+  if (email.includes("..")) return false;
+  const at = email.indexOf("@");
+  if (at <= 0 || at !== email.lastIndexOf("@")) return false;
+  const domain = email.slice(at + 1);
+  if (!domain.includes(".") || domain.startsWith("-") || domain.endsWith("-") || domain.startsWith(".") || domain.endsWith(".")) {
+    return false;
+  }
+  const tld = domain.slice(domain.lastIndexOf(".") + 1);
+  if (tld.length < 2) return false;
+  return true;
+}
+
 function validateForm(values: ClientFormValues): FieldErrors {
   const errors: FieldErrors = {};
   if (!values.name.trim()) {
     errors.name = "Full Name is required";
   }
   const email = values.email.trim();
-  if (email && !EMAIL_PATTERN.test(email)) {
+  if (!email) {
+    errors.email = "Email is required";
+  } else if (!isValidEmail(email)) {
     errors.email = "Enter a valid email address";
   }
   return errors;
@@ -77,7 +95,7 @@ function formToCreatePayload(values: ClientFormValues): CreateClientPayload {
   return {
     name: values.name.trim(),
     company: values.company.trim() || undefined,
-    email: values.email.trim() || undefined,
+    email: values.email.trim().toLowerCase(),
     phone: values.phone.trim() || undefined,
     address: values.address.trim() || undefined,
     preferred_contact: values.preferredContact,
@@ -185,11 +203,11 @@ export function ClientFormModal({
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
           {[
-            { key: "name" as const, label: "Full Name", icon: "person", placeholder: "e.g. Giulia Marchetti" },
-            { key: "company" as const, label: "Company", icon: "business", placeholder: "e.g. Marchetti Holdings" },
-            { key: "email" as const, label: "Email Address", icon: "email", placeholder: "giulia@example.com" },
-            { key: "phone" as const, label: "Phone", icon: "phone", placeholder: "+39 02 1234 5678" },
-            { key: "address" as const, label: "Address", icon: "location_on", placeholder: "Street, city, country" },
+            { key: "name" as const, label: "Full Name", icon: "person", placeholder: "e.g. Giulia Marchetti", required: true },
+            { key: "company" as const, label: "Company", icon: "business", placeholder: "e.g. Marchetti Holdings", required: false },
+            { key: "email" as const, label: "Email Address", icon: "email", placeholder: "giulia@example.com", required: true },
+            { key: "phone" as const, label: "Phone", icon: "phone", placeholder: "+39 02 1234 5678", required: false },
+            { key: "address" as const, label: "Address", icon: "location_on", placeholder: "Street, city, country", required: false },
           ].map((f) => {
             const fieldError =
               f.key === "name" || f.key === "email" ? errors[f.key] : undefined;
@@ -200,6 +218,7 @@ export function ClientFormModal({
                   style={{ color: fieldError ? "var(--figma-alert)" : "var(--figma-navy)" }}
                 >
                   {f.label}
+                  {f.required ? " *" : ""}
                 </label>
                 <div className="relative">
                   <MaterialIcon

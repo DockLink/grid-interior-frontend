@@ -4,6 +4,7 @@ import { useCallback, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { authApiClient } from "@/lib/api/authenticated-client";
+import { handleApiError } from "@/lib/api/handle-api-error";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import {
   mapDetailCategoryStates,
@@ -14,7 +15,7 @@ import {
   getSubmittedDirectorProjects,
   upsertLocalCategoryState,
 } from "@/lib/detail/local-detail-store";
-import { DETAIL_CATEGORIES, DIRECTOR_PROJECTS } from "@/lib/projects/mock-detail";
+import { DETAIL_CATEGORIES } from "@/lib/projects/mock-detail";
 import { queryKeys } from "@/lib/query/keys";
 import { ApiError } from "@/types/api";
 import type {
@@ -29,8 +30,8 @@ import type {
 function isMissingEndpoint(error: unknown): boolean {
   if (!(error instanceof ApiError)) return false;
   if (error.status === 404 || error.status === 501) return true;
-  // `/projects/director-overview` currently collides with `GET /projects/:id`
-  // and may surface as a generic lookup failure until a dedicated route exists.
+  // Legacy: `/projects/director-overview` could collide with `GET /projects/:id`
+  // and surface as a generic lookup failure.
   const msg = error.message.toLowerCase();
   return error.status === 400 && msg.includes("not found");
 }
@@ -40,14 +41,15 @@ function mergeLocalStates(
   projectId: string,
 ) {
   const local = getLocalCategoryStates(projectId);
+  // Prefer live Nest rows; only fill gaps from localStorage (demo / missing API).
   const byId = new Map(remote.map((s) => [s.id, s]));
   for (const state of local) {
-    const existing = byId.get(state.id);
+    if (byId.has(state.id)) continue;
     byId.set(state.id, {
       id: state.id,
       complete: state.complete,
       notes: state.notes,
-      fileCount: existing?.fileCount,
+      fileCount: undefined,
     });
   }
   return Array.from(byId.values());
@@ -135,12 +137,29 @@ export function useDetailCategories(
         if (isMissingEndpoint(err)) {
           return {
             id: categoryId,
+            category_id: categoryId,
+            complete: local.complete,
+            notes: local.notes,
+          } satisfies DetailCategoryStateApi;
+        }
+        // Notes are autosaved while typing — keep local copy and avoid toast spam.
+        // Mark-complete still surfaces errors so the user knows the toggle failed.
+        const notesOnly =
+          payload.notes !== undefined && payload.complete === undefined;
+        if (notesOnly) {
+          return {
+            id: categoryId,
+            category_id: categoryId,
             complete: local.complete,
             notes: local.notes,
           } satisfies DetailCategoryStateApi;
         }
         throw err;
       }
+    },
+    meta: { skipGlobalErrorToast: true },
+    onError: (error) => {
+      handleApiError(error, { toast: true, redirectOn401: true });
     },
     onSuccess: (_data, vars) => {
       qc.setQueryData(
@@ -185,12 +204,14 @@ export function useDetailCategories(
   };
 }
 
+/** Merge localStorage submissions when Nest overview is unavailable (demo / missing API). */
 function mergeDirectorProjects(remote: DirectorProject[]): DirectorProject[] {
   const local = getSubmittedDirectorProjects();
   if (!local.length) return remote;
   const byId = new Map(remote.map((p) => [p.id, p]));
   for (const entry of local) {
-    byId.set(entry.id, entry);
+    // Prefer remote row when both exist (source of truth)
+    if (!byId.has(entry.id)) byId.set(entry.id, entry);
   }
   return Array.from(byId.values());
 }
@@ -209,7 +230,8 @@ export function useDirectorOverview(options: { enabled?: boolean } = {}) {
         const raw = await authApiClient<DirectorOverviewResponse>(
           `/projects/director-overview`,
         );
-        return mergeDirectorProjects(mapDirectorOverviewResponse(raw));
+        // Live Nest response is authoritative — do not overlay stale localStorage.
+        return mapDirectorOverviewResponse(raw);
       } catch (err) {
         if (isMissingEndpoint(err)) {
           return mergeDirectorProjects([]);
@@ -217,7 +239,7 @@ export function useDirectorOverview(options: { enabled?: boolean } = {}) {
         throw err;
       }
     },
-    staleTime: 30_000,
+    staleTime: 15_000,
     enabled,
   });
 

@@ -7,9 +7,9 @@ import { useProjects } from "@/hooks/use-projects";
 import { authApiClient } from "@/lib/api/authenticated-client";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import type { GlobalRecentFile } from "@/lib/files/map-global-files";
+import { mapProjectFilesList } from "@/lib/files/map-project-file-record";
 import { queryKeys } from "@/lib/query/keys";
 import { mapWithConcurrency } from "@/lib/utils";
-import type { ProjectFile } from "@/types/files";
 
 export function useGlobalRecentFiles() {
   const { projects, isLoading: projectsLoading } = useProjects({
@@ -27,12 +27,13 @@ export function useGlobalRecentFiles() {
     queryFn: async (): Promise<GlobalRecentFile[]> => {
       const batches = await mapWithConcurrency(projects, 10, async (project) => {
         try {
-          const res = await authApiClient<{ data: ProjectFile[] }>(
+          const res = await authApiClient<unknown>(
             `/projects/${project.id}/files/recent?limit=5`,
           );
-          return (res.data ?? []).map(
+          return mapProjectFilesList(res).map(
             (file): GlobalRecentFile => ({
               ...file,
+              projectId: file.projectId || project.id,
               projectName: project.name,
             }),
           );

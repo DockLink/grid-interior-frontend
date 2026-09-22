@@ -33,7 +33,12 @@ async function fetchTaskables(
 export function useProjectTaskables(
   projectId: string | null,
   taskableType?: TaskableType,
-  options: { limit?: number; depth?: number } = {}
+  options: {
+    limit?: number;
+    depth?: number;
+    refetchInterval?: number | false;
+    refetchOnMount?: boolean | "always";
+  } = {}
 ) {
   const qc = useQueryClient();
   const qKey = queryKeys.projects.taskables(projectId ?? "", taskableType, options);
@@ -43,6 +48,8 @@ export function useProjectTaskables(
     queryFn: () => fetchTaskables(projectId!, taskableType, options),
     enabled: Boolean(projectId) && !isAuthDisabled(),
     staleTime: 20_000,
+    refetchInterval: options.refetchInterval,
+    refetchOnMount: options.refetchOnMount,
   });
 
   const tasks = data ?? EMPTY_TASKS;
@@ -59,10 +66,13 @@ export function useProjectTaskables(
       return mapTask(created);
     },
     onSuccess: (created) => {
-      // Optimistic insert then background revalidate.
+      // Only insert into this hook's list (TASK vs STAGE vs MILESTONE keys differ).
       qc.setQueryData<Task[]>(qKey, (prev) =>
-        prev ? [...prev, created].sort((a, b) => a.order - b.order) : [created]
+        prev ? [...prev, created].sort((a, b) => a.order - b.order) : [created],
       );
+      void qc.invalidateQueries({
+        queryKey: ["projects", "taskables", projectId ?? ""],
+      });
     },
   });
 
@@ -81,8 +91,12 @@ export function useProjectTaskables(
       return mapTask(updated);
     },
     onSuccess: (updated) => {
-      qc.setQueryData<Task[]>(qKey, (prev) =>
-        prev ? prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)) : [updated]
+      qc.setQueriesData<Task[]>(
+        { queryKey: ["projects", "taskables", projectId ?? ""] },
+        (prev) =>
+          prev
+            ? prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
+            : [updated],
       );
     },
   });
@@ -104,8 +118,12 @@ export function useProjectTaskables(
       return mapTask(updated);
     },
     onSuccess: (updated) => {
-      qc.setQueryData<Task[]>(qKey, (prev) =>
-        prev ? prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)) : [updated]
+      qc.setQueriesData<Task[]>(
+        { queryKey: ["projects", "taskables", projectId ?? ""] },
+        (prev) =>
+          prev
+            ? prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
+            : [updated],
       );
     },
   });
@@ -130,11 +148,15 @@ export function useProjectTaskables(
 
   const patchTaskInCache = useCallback(
     (taskId: string, patch: Partial<Task>) => {
-      qc.setQueryData<Task[]>(qKey, (prev) =>
-        prev ? prev.map((t) => (t.id === taskId ? { ...t, ...patch } : t)) : prev
+      // Patch every taskables cache for this project so overview cards that share
+      // (or partially share) the list update without waiting on a refetch.
+      qc.setQueriesData<Task[]>(
+        { queryKey: ["projects", "taskables", projectId ?? ""] },
+        (prev) =>
+          prev ? prev.map((t) => (t.id === taskId ? { ...t, ...patch } : t)) : prev,
       );
     },
-    [qc, qKey]
+    [qc, projectId],
   );
 
   const setStatusMutation = useMutation({
@@ -146,9 +168,23 @@ export function useProjectTaskables(
       return mapTask(updated);
     },
     onSuccess: (updated) => {
-      qc.setQueryData<Task[]>(qKey, (prev) =>
-        prev ? prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)) : [updated]
+      // Patch every taskables cache for this project (overview / stages editor / hub
+      // use different limit/type keys and would otherwise stay stale).
+      qc.setQueriesData<Task[]>(
+        { queryKey: ["projects", "taskables", projectId ?? ""] },
+        (prev) =>
+          prev
+            ? prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
+            : prev,
       );
+      void qc.invalidateQueries({
+        queryKey: ["projects", "taskables", projectId ?? ""],
+      });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.projects.detail(projectId ?? ""),
+      });
+      // List / studio progress bars derive from project.current_stage + completion.
+      void qc.invalidateQueries({ queryKey: queryKeys.projects.all });
     },
   });
 
@@ -173,9 +209,20 @@ export function useProjectTaskables(
       return mapTask(updated);
     },
     onSuccess: (updated) => {
-      qc.setQueryData<Task[]>(qKey, (prev) =>
-        prev ? prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)) : [updated]
+      qc.setQueriesData<Task[]>(
+        { queryKey: ["projects", "taskables", projectId ?? ""] },
+        (prev) =>
+          prev
+            ? prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
+            : prev,
       );
+      void qc.invalidateQueries({
+        queryKey: ["projects", "taskables", projectId ?? ""],
+      });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.projects.detail(projectId ?? ""),
+      });
+      void qc.invalidateQueries({ queryKey: queryKeys.projects.all });
     },
   });
 

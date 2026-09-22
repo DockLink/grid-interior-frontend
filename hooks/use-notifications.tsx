@@ -17,22 +17,25 @@ import { HoldRequestToast } from "@/components/notifications/hold-request-toast"
 import { useAuth } from "@/hooks/use-auth";
 import type { ProcessHoldRequestPayload } from "@/hooks/use-project-hold-requests";
 import { authApiClient } from "@/lib/api/authenticated-client";
+import {
+  mapAccessRequestsList,
+  toReviewAccessRequestBody,
+} from "@/lib/access-requests/map-access-request";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { toProcessHoldRequestBody, mapHoldRequestsList } from "@/lib/hold-requests/map-hold-request";
 import { accessRequestToNotification } from "@/lib/notifications/access-request-map";
 import { mapAssignedTasksToDeadlineNotifications } from "@/lib/notifications/deadline-map";
 import { fileVersionToNotification } from "@/lib/notifications/file-version-map";
+import { mapFileVersionEventsList } from "@/lib/notifications/map-file-version-event";
 import { shareLinkToNotification } from "@/lib/notifications/share-link-map";
 import { holdRequestToNotification } from "@/lib/notifications/map";
 import { toSidebarRole } from "@/lib/navigation/sidebar-role";
 import { toProjectsQueryString } from "@/lib/projects/query-string";
 import { toTasksQueryString } from "@/lib/tasks/query-string";
 import { NAV_ROUTES, projectTabRoute } from "@/types/navigation";
-import type { AccessRequestsListResponse } from "@/types/access-requests";
 import type { HoldRequestsListResponse } from "@/types/hold-requests";
 import type {
   AppNotification,
-  FileVersionsListResponse,
   ShareLinksListResponse,
 } from "@/types/notifications";
 import type { ProjectsListResponse } from "@/types/projects";
@@ -110,6 +113,9 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   const toastedRef = useRef<Set<string> | null>(null);
   const fetchRef = useRef<() => Promise<void>>(async () => {});
+  // Background polls must not flip isLoading — the dashboard treats that as a
+  // full-page skeleton remount (looks like an automatic refresh).
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
     setReadKeys(readStorageKey ? new Set(readStorage(readStorageKey)) : new Set());
@@ -131,7 +137,13 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
           as_member_role: PROJECT_LEAD_ROLE,
         });
         const res = await authApiClient<ProjectsListResponse>(`/projects${qs}`);
-        setLedProjectIds(new Set(res.data.map((p) => p.id)));
+        const next = new Set(res.data.map((p) => p.id));
+        setLedProjectIds((prev) => {
+          if (prev.size === next.size && [...next].every((id) => prev.has(id))) {
+            return prev;
+          }
+          return next;
+        });
       } catch {
         setLedProjectIds(new Set());
       }
@@ -149,7 +161,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const processAccessRequest = useCallback(async (payload: ReviewAccessRequestPayload) => {
     await authApiClient("/access-requests/review", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(toReviewAccessRequestBody(payload)),
     });
     await fetchRef.current();
   }, []);
@@ -199,7 +211,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   const fetchNotifications = useCallback(async () => {
     if (isAuthDisabled() || !isAuthenticated || !userId) return;
-    setIsLoading(true);
+    const isInitialLoad = !hasLoadedRef.current;
+    if (isInitialLoad) setIsLoading(true);
     try {
       const mapped: AppNotification[] = [];
 
@@ -225,10 +238,10 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         accessQs.set("requested_by_id", userId);
       }
       try {
-        const accessRes = await authApiClient<AccessRequestsListResponse>(
+        const accessRes = await authApiClient<unknown>(
           `/access-requests?${accessQs}`
         );
-        let items = accessRes.data ?? [];
+        let items = mapAccessRequestsList(accessRes);
         if (!isOrgAdmin && ledProjectIds.size > 0) {
           items = items.filter((r) => ledProjectIds.has(r.projectId));
         } else if (!isOrgAdmin && !canReviewAccess) {
@@ -248,10 +261,10 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       // File version events — every team member sees replacement activity for
       // the projects they belong to (admins see all). Non-actionable feed items.
       try {
-        const fileRes = await authApiClient<FileVersionsListResponse>(
-          `/file-notifications`
+        const fileRes = await authApiClient<unknown>(`/file-notifications`);
+        mapped.push(
+          ...mapFileVersionEventsList(fileRes).map(fileVersionToNotification),
         );
-        mapped.push(...(fileRes.data ?? []).map(fileVersionToNotification));
       } catch {
         /* non-critical */
       }
@@ -315,6 +328,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       setNotifications(mapped);
+      hasLoadedRef.current = true;
 
       // Toast newly-arrived actionable items for reviewers.
       if ((canReviewHolds || canReviewAccess) && toastedStorageKey) {
@@ -345,7 +359,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     } catch {
       /* keep last good state */
     } finally {
-      setIsLoading(false);
+      if (isInitialLoad) setIsLoading(false);
     }
   }, [
     isAuthenticated,
@@ -365,11 +379,13 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     toastedRef.current = null;
+    hasLoadedRef.current = false;
   }, [userId]);
 
   useEffect(() => {
     if (isAuthDisabled() || !isAuthenticated || !userId) {
       setNotifications([]);
+      hasLoadedRef.current = false;
       return;
     }
     void fetchNotifications();

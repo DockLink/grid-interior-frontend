@@ -9,6 +9,7 @@ import {
   projectThumbnailUrl,
 } from "@/lib/projects/map-projects";
 import { resolveProjectEndDate } from "@/lib/projects/duration";
+import { resolveProjectProgress } from "@/lib/projects/project-progress";
 import type { Project, ProjectCardView } from "@/types/projects";
 import type {
   ActiveProjectView,
@@ -96,7 +97,11 @@ export function mapProjectCardToActiveView(card: ProjectCardView): ActiveProject
     phase,
     phaseIndex: phaseIndex(phase),
     status: card.status === "Active" ? "In Progress" : "Completed",
-    progress: card.completion ?? 0,
+    progress: resolveProjectProgress({
+      apiCompletion: card.completion,
+      currentStage: card.currentStage,
+      projectStatus: card.status,
+    }),
     nextDeadline: card.updatedAt ?? "—",
     teamIds: [],
     startDate: card.startDate ?? "—",
