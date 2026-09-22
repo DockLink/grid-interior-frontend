@@ -8,6 +8,8 @@ import type {
   ConsultNoteApi,
   ConsultRoom,
   ConsultRoomApi,
+  ConsultSketch,
+  ConsultSketchApi,
   ConsultTask,
   ConsultTaskApi,
   ConsultTaskStatusApi,
@@ -88,6 +90,19 @@ export function mapConsultAudioApi(audio: ConsultAudioApi): ConsultAudioFile {
   };
 }
 
+export function mapConsultSketchApi(
+  sketch: ConsultSketchApi | null | undefined,
+): ConsultSketch | null {
+  if (!sketch?.id) return null;
+  return {
+    id: sketch.id,
+    fileName: sketch.file_name ?? "",
+    uploadedAt: sketch.uploaded_at ?? "",
+    storageFileId: sketch.storage_file_id ?? null,
+    fileUrl: sketch.file_url ?? null,
+  };
+}
+
 export function mapConsultTaskApi(task: ConsultTaskApi): ConsultTask {
   return {
     id: task.id,
@@ -98,11 +113,16 @@ export function mapConsultTaskApi(task: ConsultTaskApi): ConsultTask {
 }
 
 export function mapConsultationAggregate(raw: ConsultationAggregateResponse) {
+  const audioList =
+    raw.audio ??
+    (raw as ConsultationAggregateResponse & { audios?: ConsultAudioApi[] }).audios ??
+    [];
   return {
     rooms: (raw.rooms ?? []).map(mapConsultRoomApi),
     inventory: (raw.inventory ?? []).map(mapConsultInventoryApi),
     notes: (raw.notes ?? []).map(mapConsultNoteApi),
-    audio: (raw.audio ?? []).map(mapConsultAudioApi),
+    audio: audioList.map(mapConsultAudioApi),
     tasks: (raw.tasks ?? []).map(mapConsultTaskApi),
+    sketch: mapConsultSketchApi(raw.sketch),
   };
 }

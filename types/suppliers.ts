@@ -130,6 +130,18 @@ export interface SupplierRate {
   leadTime: string;
 }
 
+export interface SupplierOrderApi {
+  id: string;
+  order_date: string;
+  project_id?: string | null;
+  project_name?: string | null;
+  item: string;
+  quantity?: string | null;
+  delivery_status: DeliveryStatus;
+  payment_status: PaymentStatus;
+  amount: number | string;
+}
+
 export interface SupplierOrder {
   id: string;
   date: string;
@@ -139,6 +151,10 @@ export interface SupplierOrder {
   deliveryStatus: DeliveryStatus;
   paymentStatus: PaymentStatus;
   amount: string;
+}
+
+export interface SupplierOrdersListResponse {
+  data: SupplierOrderApi[];
 }
 
 export interface SubVendorApi {
@@ -169,12 +185,39 @@ export interface SubVendor {
   notes?: string;
 }
 
+export type SubVendorHistoryStatus = "Completed" | "In Progress" | "Cancelled";
+
+export interface SubVendorHistoryApi {
+  id: string;
+  project_id?: string | null;
+  project_name?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  scope?: string | null;
+  status: SubVendorHistoryStatus;
+  amount?: number | string | null;
+}
+
 export interface SubVendorHistory {
   id: string;
-  date: string;
   project: string;
+  startDate: string;
+  endDate: string;
   scope: string;
-  amount: string;
+  status: SubVendorHistoryStatus;
+  amount?: string;
+}
+
+export interface SubVendorHistoryListResponse {
+  data: SubVendorHistoryApi[];
+}
+
+export interface SubVendorPaymentApi {
+  id: string;
+  project_id?: string | null;
+  project_name?: string | null;
+  amount: number | string;
+  payment_date?: string | null;
   status: PaymentStatus;
 }
 
@@ -184,6 +227,10 @@ export interface SubVendorPayment {
   amount: string;
   date: string;
   status: PaymentStatus;
+}
+
+export interface SubVendorPaymentsListResponse {
+  data: SubVendorPaymentApi[];
 }
 
 export interface SuppliersListMeta {

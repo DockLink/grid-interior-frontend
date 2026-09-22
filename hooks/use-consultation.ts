@@ -11,6 +11,7 @@ import {
   mapConsultInventoryApi,
   mapConsultNoteApi,
   mapConsultRoomApi,
+  mapConsultSketchApi,
   mapConsultTaskApi,
   toConsultTaskStatusApi,
 } from "@/lib/consultation/map-consultation";
@@ -34,9 +35,13 @@ import type {
   ConsultRoomApi,
   ConsultRoomCreatePayload,
   ConsultRoomUpdatePayload,
+  ConsultSketchApi,
+  ConsultSketchUpsertPayload,
   ConsultTaskApi,
   ConsultTaskCreatePayload,
   ConsultTaskUpdatePayload,
+  ConsultationCompletePayload,
+  ConsultationCompleteResponse,
 } from "@/types/consultation";
 
 function base(projectId: string) {
@@ -62,6 +67,7 @@ export function useConsultation(
           notes: SAMPLE_COMMENTS,
           audio: SAMPLE_AUDIO,
           tasks: SAMPLE_TASKS,
+          sketch: null,
         };
       }
       const raw = await authApiClient<ConsultationAggregateResponse>(base(projectId));
@@ -76,6 +82,7 @@ export function useConsultation(
   const notes = useMemo(() => data?.notes ?? [], [data]);
   const audio = useMemo(() => data?.audio ?? [], [data]);
   const tasks = useMemo(() => data?.tasks ?? [], [data]);
+  const sketch = data?.sketch ?? null;
 
   const invalidate = useCallback(() => {
     return qc.invalidateQueries({ queryKey: qKey });
@@ -94,12 +101,22 @@ export function useConsultation(
       }
       const raw = await authApiClient<ConsultRoomApi>(`${base(projectId)}/rooms`, {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          // Backend DTO requires MinLength(1) on name
+          name: payload.name.trim() || "New room",
+        }),
       });
       return mapConsultRoomApi(raw);
     },
-    onSuccess: () => {
-      if (!authOff) void invalidate();
+    onSuccess: (created) => {
+      if (authOff || !created) return;
+      qc.setQueryData(qKey, (old: ReturnType<typeof mapConsultationAggregate> | undefined) => {
+        if (!old) return old;
+        if (old.rooms.some((r) => r.id === created.id)) return old;
+        return { ...old, rooms: [...old.rooms, created] };
+      });
+      void invalidate();
     },
   });
 
@@ -152,12 +169,25 @@ export function useConsultation(
       }
       const raw = await authApiClient<ConsultInventoryItemApi>(
         `${base(projectId)}/inventory`,
-        { method: "POST", body: JSON.stringify(payload) },
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...payload,
+            // Backend DTO requires MinLength(1) on name
+            name: payload.name.trim() || "New item",
+          }),
+        },
       );
       return mapConsultInventoryApi(raw);
     },
-    onSuccess: () => {
-      if (!authOff) void invalidate();
+    onSuccess: (created) => {
+      if (authOff || !created) return;
+      qc.setQueryData(qKey, (old: ReturnType<typeof mapConsultationAggregate> | undefined) => {
+        if (!old) return old;
+        if (old.inventory.some((i) => i.id === created.id)) return old;
+        return { ...old, inventory: [...old.inventory, created] };
+      });
+      void invalidate();
     },
   });
 
@@ -201,8 +231,9 @@ export function useConsultation(
           author_user_id: "1",
           text: payload.text,
           created_at: new Date().toISOString(),
+          storage_file_id: payload.storage_file_id ?? null,
           attachment_name: payload.attachment_name ?? null,
-          attachment_url: payload.attachment_url ?? null,
+          attachment_url: null,
         });
       }
       const raw = await authApiClient<ConsultNoteApi>(`${base(projectId)}/notes`, {
@@ -229,14 +260,32 @@ export function useConsultation(
           file_url: payload.file_url ?? null,
         });
       }
+      // Backend DTO (forbidNonWhitelisted): storage_file_id + name required;
+      // duration/date/size optional. storage_file_id must be a project File UUID
+      // from multipart upload (not a floating /storage/upload token).
+      if (!payload.storage_file_id) {
+        throw new Error("Audio upload is missing storage_file_id");
+      }
       const raw = await authApiClient<ConsultAudioApi>(`${base(projectId)}/audio`, {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          storage_file_id: payload.storage_file_id,
+          name: payload.name.trim() || "Audio recording",
+          ...(payload.duration ? { duration: payload.duration } : {}),
+          ...(payload.date ? { date: payload.date } : {}),
+          ...(payload.size ? { size: payload.size } : {}),
+        }),
       });
       return mapConsultAudioApi(raw);
     },
-    onSuccess: () => {
-      if (!authOff) void invalidate();
+    onSuccess: (created) => {
+      if (authOff || !created) return;
+      qc.setQueryData(qKey, (old: ReturnType<typeof mapConsultationAggregate> | undefined) => {
+        if (!old) return old;
+        if (old.audio.some((a) => a.id === created.id)) return old;
+        return { ...old, audio: [created, ...old.audio] };
+      });
+      void invalidate();
     },
   });
 
@@ -262,14 +311,33 @@ export function useConsultation(
           status: payload.status ?? "pending",
         });
       }
+      // Backend DTO expects DONE | IN_PROGRESS | PENDING
+      const statusApi =
+        payload.status === "done"
+          ? "DONE"
+          : payload.status === "in-progress"
+            ? "IN_PROGRESS"
+            : payload.status
+              ? "PENDING"
+              : undefined;
       const raw = await authApiClient<ConsultTaskApi>(`${base(projectId)}/tasks`, {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          title: payload.title,
+          assignee_user_id: payload.assignee_user_id,
+          ...(statusApi ? { status: statusApi } : {}),
+        }),
       });
       return mapConsultTaskApi(raw);
     },
-    onSuccess: () => {
-      if (!authOff) void invalidate();
+    onSuccess: (created) => {
+      if (authOff || !created) return;
+      qc.setQueryData(qKey, (old: ReturnType<typeof mapConsultationAggregate> | undefined) => {
+        if (!old) return old;
+        if (old.tasks.some((t) => t.id === created.id)) return old;
+        return { ...old, tasks: [...old.tasks, created] };
+      });
+      void invalidate();
     },
   });
 
@@ -282,9 +350,22 @@ export function useConsultation(
       payload: ConsultTaskUpdatePayload;
     }) => {
       if (authOff) return null;
+      const body: Record<string, unknown> = {};
+      if (payload.title !== undefined) body.title = payload.title;
+      if (payload.assignee_user_id !== undefined) {
+        body.assignee_user_id = payload.assignee_user_id;
+      }
+      if (payload.status !== undefined) {
+        body.status =
+          payload.status === "done"
+            ? "DONE"
+            : payload.status === "in-progress"
+              ? "IN_PROGRESS"
+              : "PENDING";
+      }
       const raw = await authApiClient<ConsultTaskApi>(
         `${base(projectId)}/tasks/${taskId}`,
-        { method: "PATCH", body: JSON.stringify(payload) },
+        { method: "PATCH", body: JSON.stringify(body) },
       );
       return mapConsultTaskApi(raw);
     },
@@ -305,12 +386,80 @@ export function useConsultation(
     },
   });
 
+  const completeConsultationMutation = useMutation({
+    mutationFn: async (payload: ConsultationCompletePayload = {}) => {
+      if (authOff) {
+        return {
+          stage: { id: "mock-consultation-stage", status: "COMPLETED", title: "Consultation" },
+          next_stage: null,
+          note: null,
+          completed: true,
+        } satisfies ConsultationCompleteResponse;
+      }
+      return authApiClient<ConsultationCompleteResponse>(`${base(projectId)}/complete`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    },
+    onSuccess: () => {
+      if (authOff) return;
+      void invalidate();
+      void qc.invalidateQueries({
+        queryKey: ["projects", "taskables", projectId],
+      });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.projects.detail(projectId),
+      });
+    },
+  });
+
+  const upsertSketchMutation = useMutation({
+    mutationFn: async (payload: ConsultSketchUpsertPayload) => {
+      if (authOff) {
+        return mapConsultSketchApi({
+          id: `mock-sketch-${Date.now()}`,
+          file_name: payload.file_name,
+          uploaded_at: payload.uploaded_at ?? new Date().toISOString(),
+          storage_file_id: payload.storage_file_id,
+          file_url: null,
+        });
+      }
+      const raw = await authApiClient<ConsultSketchApi>(`${base(projectId)}/sketch`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      return mapConsultSketchApi(raw);
+    },
+    onSuccess: (created) => {
+      qc.setQueryData(qKey, (old: ReturnType<typeof mapConsultationAggregate> | undefined) => {
+        if (!old) return old;
+        return { ...old, sketch: created };
+      });
+      if (!authOff) void invalidate();
+    },
+  });
+
+  const deleteSketchMutation = useMutation({
+    mutationFn: async () => {
+      if (authOff) return { deleted: true as const };
+      return authApiClient(`${base(projectId)}/sketch`, { method: "DELETE" });
+    },
+    onSuccess: () => {
+      qc.setQueryData(qKey, (old: ReturnType<typeof mapConsultationAggregate> | undefined) => {
+        if (!old) return old;
+        return { ...old, sketch: null };
+      });
+      if (!authOff) void invalidate();
+    },
+  });
+
   return {
     rooms,
     inventory,
     notes,
     audio,
     tasks,
+    sketch,
     isLoading: enabled && !authOff ? isLoading : false,
     error: error
       ? error instanceof Error
@@ -339,6 +488,11 @@ export function useConsultation(
     updateTask: (taskId: string, payload: ConsultTaskUpdatePayload) =>
       updateTaskMutation.mutateAsync({ taskId, payload }),
     deleteTask: (taskId: string) => deleteTaskMutation.mutateAsync(taskId),
+    completeConsultation: (payload?: ConsultationCompletePayload) =>
+      completeConsultationMutation.mutateAsync(payload ?? {}),
+    upsertSketch: (payload: ConsultSketchUpsertPayload) =>
+      upsertSketchMutation.mutateAsync(payload),
+    deleteSketch: () => deleteSketchMutation.mutateAsync(),
     toTaskStatusApi: toConsultTaskStatusApi,
     isMutating:
       createRoomMutation.isPending ||
@@ -352,6 +506,9 @@ export function useConsultation(
       deleteAudioMutation.isPending ||
       createTaskMutation.isPending ||
       updateTaskMutation.isPending ||
-      deleteTaskMutation.isPending,
+      deleteTaskMutation.isPending ||
+      completeConsultationMutation.isPending ||
+      upsertSketchMutation.isPending ||
+      deleteSketchMutation.isPending,
   };
 }

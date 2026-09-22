@@ -1,38 +1,181 @@
 "use client";
 
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+
+import { GradientButton, OutlineButton } from "@/components/clients/client-ui";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { useInvoices } from "@/hooks/use-invoices";
-import type { Client, Invoice } from "@/types/clients";
+import type { Client, InvoiceStatus } from "@/types/clients";
+
+function formatEuro(amount: number): string {
+  return `€${amount.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function UploadInvoiceModal({
+  isUploading,
+  onClose,
+  onUpload,
+}: {
+  isUploading: boolean;
+  onClose: () => void;
+  onUpload: (payload: { file: File; amount: number; status: InvoiceStatus }) => Promise<unknown>;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [amount, setAmount] = useState("");
+  const [status, setStatus] = useState<InvoiceStatus>("Unpaid");
+
+  const handleSubmit = async () => {
+    if (!file) {
+      toast.error("Please choose an invoice file");
+      return;
+    }
+    const parsed = Number(amount);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      toast.error("Enter a valid amount greater than 0");
+      return;
+    }
+
+    try {
+      await onUpload({ file, amount: parsed, status });
+      toast.success("Invoice uploaded successfully");
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to upload invoice");
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[300] flex items-center justify-center bg-[rgba(27,42,74,0.20)] backdrop-blur-sm"
+      onClick={(e) => e.target === e.currentTarget && !isUploading && onClose()}
+    >
+      <div
+        className="hub-modal-in w-full max-w-[440px] rounded-[20px] bg-white px-8 py-7"
+        style={{ boxShadow: "var(--neu-modal)" }}
+      >
+        <div className="mb-5 flex items-center justify-between">
+          <div>
+            <h2 className="mb-1 text-lg font-semibold text-[var(--figma-navy)]">Upload Invoice</h2>
+            <p className="m-0 text-[13px] text-[var(--figma-gray500)]">
+              Attach the invoice file and set amount &amp; status.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isUploading}
+            className="flex size-8 items-center justify-center rounded-lg border-none bg-[var(--figma-gray100)]"
+          >
+            <MaterialIcon name="close" outlined size={18} className="text-[var(--figma-gray500)]" />
+          </button>
+        </div>
+
+        <div className="mb-3 flex flex-col gap-1.5">
+          <label className="text-[13px] font-medium text-[var(--figma-navy)]">Amount (€)</label>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="0.00"
+            className="rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 py-2.5 text-sm text-[var(--figma-navy)] outline-none neu-inset"
+          />
+        </div>
+
+        <div className="mb-3 flex flex-col gap-1.5">
+          <label className="text-[13px] font-medium text-[var(--figma-navy)]">Status</label>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as InvoiceStatus)}
+            className="rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-3 py-2.5 text-sm text-[var(--figma-navy)] outline-none neu-inset"
+          >
+            <option value="Unpaid">Unpaid</option>
+            <option value="Paid">Paid</option>
+            <option value="Overdue">Overdue</option>
+          </select>
+        </div>
+
+        <div className="mb-5 rounded-xl border border-dashed border-[var(--figma-border)] bg-[var(--figma-gray50)] p-4 text-center">
+          <input
+            ref={inputRef}
+            type="file"
+            className="hidden"
+            accept=".pdf,.png,.jpg,.jpeg"
+            onChange={(e) => {
+              setFile(e.target.files?.[0] ?? null);
+              e.target.value = "";
+            }}
+          />
+          <MaterialIcon name="upload_file" outlined size={28} className="mb-2 text-[var(--figma-teal)]" />
+          <p className="m-0 mb-2 text-[13px] text-[var(--figma-gray500)]">
+            {file ? file.name : "PDF or image (PNG, JPG)"}
+          </p>
+          <GradientButton icon="upload" size="sm" onClick={() => inputRef.current?.click()}>
+            {file ? "Change File" : "Choose File"}
+          </GradientButton>
+        </div>
+
+        <div className="flex gap-2">
+          <OutlineButton onClick={onClose} className="flex-1">
+            Cancel
+          </OutlineButton>
+          <GradientButton
+            icon="check"
+            className="flex-1"
+            disabled={isUploading}
+            onClick={() => void handleSubmit()}
+          >
+            {isUploading ? "Uploading…" : "Upload"}
+          </GradientButton>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function InvoicesTab({ client }: { client: Client }) {
   const { invoices, isLoading, uploadInvoice, isUploading } = useInvoices(client.id);
+  const [showUpload, setShowUpload] = useState(false);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      await uploadInvoice({
-        file,
-        amount: 0,
-        status: "Unpaid",
-      });
-      toast.success("Invoice uploaded successfully");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to upload invoice");
-    } finally {
-      e.target.value = "";
-    }
-  };
+  const summary = useMemo(() => {
+    const total = invoices.reduce((sum, inv) => sum + inv.amount, 0);
+    const received = invoices
+      .filter((inv) => inv.status === "Paid")
+      .reduce((sum, inv) => sum + inv.amount, 0);
+    const outstanding = invoices
+      .filter((inv) => inv.status !== "Paid")
+      .reduce((sum, inv) => sum + inv.amount, 0);
+    return { total, received, outstanding };
+  }, [invoices]);
 
   return (
     <div>
       <div className="mb-5 grid grid-cols-3 gap-3.5">
         {[
-          { label: "Total Invoiced", val: client.totalInvoiced || "—", icon: "receipt_long", color: "var(--figma-navy)" },
-          { label: "Amount Received", val: "—", icon: "check_circle", color: "#3FA66B" },
-          { label: "Outstanding", val: "—", icon: "pending", color: "#D97706" },
+          {
+            label: "Total Invoiced",
+            val: isLoading ? "…" : formatEuro(summary.total),
+            icon: "receipt_long",
+            color: "var(--figma-navy)",
+          },
+          {
+            label: "Amount Received",
+            val: isLoading ? "…" : formatEuro(summary.received),
+            icon: "check_circle",
+            color: "#3FA66B",
+          },
+          {
+            label: "Outstanding",
+            val: isLoading ? "…" : formatEuro(summary.outstanding),
+            icon: "pending",
+            color: "#D97706",
+          },
         ].map((tile) => (
           <div key={tile.label} className="flex items-center gap-3.5 rounded-[14px] bg-white p-5 neu-card">
             <div
@@ -52,13 +195,17 @@ export function InvoicesTab({ client }: { client: Client }) {
       <div className="overflow-hidden rounded-[14px] bg-white neu-card">
         <div className="flex items-center justify-between border-b border-[var(--figma-border)] px-4 py-3.5">
           <span className="text-[13px] font-bold text-[var(--figma-navy)]">Invoice History</span>
-          <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-[var(--figma-navy)] px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90">
+          <button
+            type="button"
+            onClick={() => setShowUpload(true)}
+            disabled={isUploading}
+            className="flex cursor-pointer items-center gap-2 rounded-lg border-none bg-[var(--figma-navy)] px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+          >
             <MaterialIcon name="upload" size={16} />
-            {isUploading ? "Uploading..." : "Upload Invoice"}
-            <input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg" onChange={handleFileUpload} disabled={isUploading} />
-          </label>
+            Upload Invoice
+          </button>
         </div>
-        
+
         {isLoading ? (
           <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
             <p className="m-0 text-sm font-medium text-[var(--figma-gray500)]">Loading invoices...</p>
@@ -82,14 +229,16 @@ export function InvoicesTab({ client }: { client: Client }) {
                   <div>
                     <div className="text-sm font-semibold text-[var(--figma-navy)]">{invoice.fileName}</div>
                     <div className="text-xs text-[var(--figma-gray500)]">
-                      {new Date(invoice.createdAt).toLocaleDateString()}
+                      {invoice.createdAt
+                        ? new Date(invoice.createdAt).toLocaleDateString()
+                        : "—"}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="text-right">
                     <div className="text-sm font-bold text-[var(--figma-navy)]">
-                      €{invoice.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {formatEuro(invoice.amount)}
                     </div>
                     <div className="text-xs font-medium text-gray-500">{invoice.status}</div>
                   </div>
@@ -103,7 +252,11 @@ export function InvoicesTab({ client }: { client: Client }) {
                       <MaterialIcon name="download" size={16} />
                     </a>
                   ) : (
-                    <button className="flex h-8 w-8 items-center justify-center rounded border border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-600">
+                    <button
+                      type="button"
+                      className="flex h-8 w-8 items-center justify-center rounded border border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+                      aria-label="Download unavailable"
+                    >
                       <MaterialIcon name="download" size={16} />
                     </button>
                   )}
@@ -113,6 +266,14 @@ export function InvoicesTab({ client }: { client: Client }) {
           </div>
         )}
       </div>
+
+      {showUpload ? (
+        <UploadInvoiceModal
+          isUploading={isUploading}
+          onClose={() => setShowUpload(false)}
+          onUpload={uploadInvoice}
+        />
+      ) : null}
     </div>
   );
 }

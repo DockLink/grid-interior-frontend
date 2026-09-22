@@ -1,13 +1,23 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { useConsultation } from "@/hooks/use-consultation";
-import { useUploadFile } from "@/hooks/use-upload-file";
+import { authApiClient } from "@/lib/api/authenticated-client";
+import { getApiErrorMessage } from "@/lib/api/handle-api-error";
+import { uploadFileMultipart } from "@/lib/files/multipart-upload";
 import type { ConsultAudioFile } from "@/types/consultation";
+import type { ProjectFile } from "@/types/files";
 
 import { OutlineBtn, SectionCard, SectionTitle } from "./consultation-ui";
+
+/** Provisioned admin folder used for consultation recordings (project File IDs). */
+const CONSULTATION_AUDIO_FOLDER = "4.0 ADMIN/4.4 Meeting Minutes";
+
+const MAX_AUDIO_BYTES = 200 * 1024 * 1024;
+const ALLOWED_AUDIO_EXTS = ["mp3", "m4a", "wav"] as const;
 
 function AudioRow({
   file,
@@ -22,6 +32,17 @@ function AudioRow({
 }) {
   const [hov, setHov] = useState(false);
   const [deleteHover, setDeleteHover] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el || !file.fileUrl) return;
+    if (isPlaying) {
+      void el.play().catch(() => undefined);
+    } else {
+      el.pause();
+    }
+  }, [isPlaying, file.fileUrl]);
 
   return (
     <div
@@ -34,6 +55,15 @@ function AudioRow({
         boxShadow: hov ? "var(--neu-card-hover)" : "var(--neu-card)",
       }}
     >
+      {file.fileUrl ? (
+        <audio
+          ref={audioRef}
+          src={file.fileUrl}
+          preload="none"
+          onEnded={onPlay}
+          className="hidden"
+        />
+      ) : null}
       <div
         className="flex size-10 shrink-0 items-center justify-center rounded-[10px] border"
         style={{
@@ -72,10 +102,14 @@ function AudioRow({
       <button
         type="button"
         onClick={onPlay}
-        className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-none transition-all duration-[180ms]"
+        disabled={!file.fileUrl}
+        title={file.fileUrl ? undefined : "Playback URL not available yet"}
+        className="flex size-9 shrink-0 items-center justify-center rounded-full border-none transition-all duration-[180ms]"
         style={{
           background: isPlaying ? "var(--figma-teal)" : "rgba(14,124,134,0.10)",
           boxShadow: isPlaying ? "var(--neu-raised)" : "none",
+          cursor: file.fileUrl ? "pointer" : "not-allowed",
+          opacity: file.fileUrl ? 1 : 0.5,
         }}
       >
         <MaterialIcon
@@ -102,6 +136,23 @@ function AudioRow({
   );
 }
 
+function formatSizeMb(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isAllowedAudioFile(file: File): boolean {
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return (ALLOWED_AUDIO_EXTS as readonly string[]).includes(ext);
+}
+
+function extractUploadedFileId(uploaded: unknown): string | null {
+  if (!uploaded || typeof uploaded !== "object") return null;
+  const row = uploaded as Partial<ProjectFile> & { file_id?: string };
+  if (typeof row.id === "string" && row.id) return row.id;
+  if (typeof row.file_id === "string" && row.file_id) return row.file_id;
+  return null;
+}
+
 export function AudioTab({ projectId }: { projectId: string }) {
   const {
     audio: remoteAudio,
@@ -109,7 +160,6 @@ export function AudioTab({ projectId }: { projectId: string }) {
     deleteAudio,
     isAuthOff,
   } = useConsultation(projectId);
-  const { uploadFile } = useUploadFile();
   const [audioFiles, setAudioFiles] = useState<ConsultAudioFile[]>(remoteAudio);
   const [playing, setPlaying] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -122,35 +172,53 @@ export function AudioTab({ projectId }: { projectId: string }) {
 
   const togglePlay = (id: string) => setPlaying((p) => (p === id ? null : id));
 
-  const addAudio = (name: string, sizeBytes?: number, storageFileId?: string) => {
-    const size = sizeBytes ? `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB` : "—";
-    void createAudio({
-      name,
-      duration: "00:00",
-      date: "Just now",
-      size,
-      storage_file_id: storageFileId,
-    }).then((created) => {
-      if (isAuthOff && created) setAudioFiles((p) => [...p, created]);
-    });
-  };
-
   const processFile = async (file: File) => {
-    if (file.size > 200 * 1024 * 1024) {
-      alert("File size exceeds 200MB limit.");
+    if (file.size > MAX_AUDIO_BYTES) {
+      toast.error("File size exceeds 200MB limit.");
       return;
     }
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    if (!["mp3", "m4a", "wav"].includes(ext || "")) {
-      alert("Unsupported file type. Please upload MP3, M4A, or WAV.");
+    if (!isAllowedAudioFile(file)) {
+      toast.error("Unsupported file type. Please upload MP3, M4A, or WAV.");
       return;
     }
+
+    setIsUploading(true);
     try {
-      setIsUploading(true);
-      const { token } = await uploadFile(file);
-      addAudio(file.name, file.size, token);
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Failed to upload file");
+      let storageFileId = `local-${Date.now()}`;
+      if (!isAuthOff) {
+        // Ensure project folder tree exists before multipart initiate.
+        await authApiClient(`/projects/${projectId}/folders`, {
+          method: "POST",
+        }).catch(() => undefined);
+
+        const uploaded = await uploadFileMultipart({
+          projectId,
+          folderPath: CONSULTATION_AUDIO_FOLDER,
+          file,
+        });
+        const fileId = extractUploadedFileId(uploaded);
+        if (!fileId) {
+          throw new Error("Upload succeeded but no file id was returned");
+        }
+        storageFileId = fileId;
+      }
+
+      const created = await createAudio({
+        name: file.name,
+        duration: "00:00",
+        date: new Date().toISOString().slice(0, 10),
+        size: formatSizeMb(file.size),
+        storage_file_id: storageFileId,
+      });
+
+      if (created) {
+        setAudioFiles((prev) =>
+          prev.some((f) => f.id === created.id) ? prev : [created, ...prev],
+        );
+      }
+      toast.success("Audio recording uploaded");
+    } catch (err) {
+      toast.error(getApiErrorMessage(err) || "Failed to upload audio recording");
     } finally {
       setIsUploading(false);
     }
@@ -162,6 +230,11 @@ export function AudioTab({ projectId }: { projectId: string }) {
     e.target.value = "";
   };
 
+  const openPicker = () => {
+    if (isUploading) return;
+    fileRef.current?.click();
+  };
+
   return (
     <div>
       <input
@@ -169,13 +242,19 @@ export function AudioTab({ projectId }: { projectId: string }) {
         ref={fileRef}
         onChange={handleFileChange}
         className="hidden"
-        accept=".mp3,.m4a,.wav"
+        accept=".mp3,.m4a,.wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav"
       />
       <SectionCard>
         <div
           role="button"
           tabIndex={0}
-          onClick={() => !isUploading && fileRef.current?.click()}
+          onClick={openPicker}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openPicker();
+            }
+          }}
           onDragEnter={(e) => {
             e.preventDefault();
             if (!isUploading) setDragOver(true);
@@ -238,23 +317,33 @@ export function AudioTab({ projectId }: { projectId: string }) {
               label="Add Audio"
               icon="add"
               small
-              onClick={() => fileRef.current?.click()}
+              onClick={openPicker}
             />
           }
         />
         <div className="flex flex-col gap-2.5">
-          {audioFiles.map((file) => (
-            <AudioRow
-              key={file.id}
-              file={file}
-              isPlaying={playing === file.id}
-              onPlay={() => togglePlay(file.id)}
-              onDelete={() => {
-                setAudioFiles((p) => p.filter((f) => f.id !== file.id));
-                void deleteAudio(file.id);
-              }}
-            />
-          ))}
+          {audioFiles.length === 0 ? (
+            <div className="py-4 text-center text-xs text-[var(--figma-gray400)]">
+              No recordings uploaded yet.
+            </div>
+          ) : (
+            audioFiles.map((file) => (
+              <AudioRow
+                key={file.id}
+                file={file}
+                isPlaying={playing === file.id}
+                onPlay={() => togglePlay(file.id)}
+                onDelete={() => {
+                  setAudioFiles((p) => p.filter((f) => f.id !== file.id));
+                  if (playing === file.id) setPlaying(null);
+                  void deleteAudio(file.id).catch((err) => {
+                    toast.error(getApiErrorMessage(err) || "Failed to delete recording");
+                    setAudioFiles(remoteAudio);
+                  });
+                }}
+              />
+            ))
+          )}
         </div>
       </SectionCard>
     </div>

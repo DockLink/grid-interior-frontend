@@ -43,8 +43,10 @@ function mapTask(raw: unknown): TaskableHoldRequestTask | undefined {
 }
 
 function mapStatus(raw: string | undefined): TaskableHoldRequestStatus {
-  if (raw && (HOLD_STATUSES as string[]).includes(raw)) {
-    return raw as TaskableHoldRequestStatus;
+  if (!raw) return "PENDING";
+  const normalized = raw.trim().toUpperCase();
+  if ((HOLD_STATUSES as string[]).includes(normalized)) {
+    return normalized as TaskableHoldRequestStatus;
   }
   return "PENDING";
 }
@@ -53,6 +55,12 @@ function mapStatus(raw: string | undefined): TaskableHoldRequestStatus {
 export function mapHoldRequest(raw: unknown): TaskableHoldRequest {
   const obj = (raw ?? {}) as Record<string, unknown>;
   const holdHours = pickNumber(obj, "holdHoursGranted", "hold_hours_granted");
+  const task = mapTask(obj.task);
+  const rootProjectId = pickString(obj, "projectId", "project_id");
+  const enrichedTask =
+    task && !task.projectId && rootProjectId
+      ? { ...task, projectId: rootProjectId }
+      : task;
 
   return {
     id: pickString(obj, "id") ?? "",
@@ -80,14 +88,14 @@ export function mapHoldRequest(raw: unknown): TaskableHoldRequest {
     updated_at: pickString(obj, "updated_at", "updatedAt"),
     requestedBy: mapUser(obj.requestedBy ?? obj.requested_by),
     reviewedBy: mapUser(obj.reviewedBy ?? obj.reviewed_by) ?? null,
-    task: mapTask(obj.task),
+    task: enrichedTask,
   };
 }
 
 export function mapHoldRequestsList(raw: unknown): TaskableHoldRequest[] {
+  if (Array.isArray(raw)) return raw.map(mapHoldRequest);
   if (!raw || typeof raw !== "object") return [];
-  const obj = raw as Record<string, unknown>;
-  const data = obj.data;
+  const data = (raw as Record<string, unknown>).data;
   if (!Array.isArray(data)) return [];
   return data.map(mapHoldRequest);
 }

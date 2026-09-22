@@ -20,6 +20,7 @@ import { VendorTasksTab } from "@/components/suppliers/vendor-tasks-tab";
 import { useProjects } from "@/hooks/use-projects";
 import { useSupplier } from "@/hooks/use-supplier";
 import { useSupplierLinkedFromProjectLinks } from "@/hooks/use-supplier-linked-from-project-links";
+import { useSupplierOrders } from "@/hooks/use-supplier-orders";
 import { useVendorTasks } from "@/hooks/use-vendor-tasks";
 import { handleApiError } from "@/lib/api/handle-api-error";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
@@ -278,8 +279,30 @@ function OrderRow({
   );
 }
 
-function OrdersTab() {
-  const orders: SupplierOrder[] = [];
+function OrdersTab({
+  supplierId,
+  enabled = true,
+}: {
+  supplierId: string;
+  enabled?: boolean;
+}) {
+  const { orders, isLoading, error } = useSupplierOrders(supplierId, { enabled });
+
+  if (isLoading) {
+    return (
+      <div className="rounded-[14px] border border-dashed border-[var(--figma-border)] bg-white px-4 py-8 text-center text-[13px] text-[var(--figma-gray400)]">
+        Loading order history…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800">
+        {error}
+      </div>
+    );
+  }
 
   return (
     <div className="overflow-hidden rounded-2xl border border-[var(--figma-border)] bg-white">
@@ -304,8 +327,7 @@ function OrdersTab() {
                   <MaterialIcon name="local_shipping" outlined size={36} className="mx-auto mb-2.5 block text-[var(--figma-border)]" />
                   <div className="mb-1 text-[14px] font-medium text-[var(--figma-navy)]">No order history yet</div>
                   <div className="mx-auto max-w-sm text-[13px] text-[var(--figma-gray500)]">
-                    Order history is not available from the API yet. Delivery and payment records will appear
-                    here when the backend adds them.
+                    Orders placed with this supplier will appear here with delivery and payment status.
                   </div>
                 </td>
               </tr>
@@ -590,7 +612,7 @@ export function SupplierProfileScreen({ supplierId }: { supplierId: string }) {
           onSave={(payload) => updateSupplier(payload).then(() => undefined)}
         />
       )}
-      {tab === "orders" && <OrdersTab />}
+      {tab === "orders" && <OrdersTab supplierId={supplierId} enabled={tab === "orders"} />}
       {tab === "projects" && (
         <ProjectsTab
           projects={linkedProjects}

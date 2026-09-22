@@ -43,7 +43,16 @@ export function useActiveProjectView(projectId: string): {
       .map((t) => ({ title: t.title, status: t.status }));
     return mapProjectToActiveView(apiProject, {
       members,
-      tasks: tasks.map((t) => ({ status: t.status })),
+      tasks: tasks
+        .filter((t) => t.taskableType === "TASK")
+        .map((t) => ({
+          status: t.status,
+          start_date: t.start_date,
+          end_date: t.end_date,
+          duration: t.duration,
+          durationHours: t.durationHours,
+          title: t.title,
+        })),
       stages,
     });
   }, [authDisabled, mockProject, apiProject, members, tasks]);

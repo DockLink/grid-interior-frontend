@@ -1,5 +1,6 @@
 import type { ClientLinkedProject, ClientLinkedProjectStatus } from "@/types/clients";
 import type { Project, ProjectCardView } from "@/types/projects";
+import { resolveProjectProgress } from "@/lib/projects/project-progress";
 
 function formatMonthYear(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -24,17 +25,6 @@ function mapStatus(project: Project): ClientLinkedProjectStatus {
   return project.status === "ACTIVE" ? "active" : "on-track";
 }
 
-function estimateProgress(project: Project): number {
-  const stage = (project.current_stage ?? "").toLowerCase();
-  if (project.status === "INACTIVE") return 100;
-  if (stage.includes("execution")) return 75;
-  if (stage.includes("detail")) return 60;
-  if (stage.includes("3d") || stage.includes("layout")) return 45;
-  if (stage.includes("concept")) return 30;
-  if (stage.includes("consult")) return 15;
-  return 20;
-}
-
 export function mapProjectToClientLinked(project: Project): ClientLinkedProject {
   return {
     id: project.id,
@@ -42,7 +32,11 @@ export function mapProjectToClientLinked(project: Project): ClientLinkedProject 
     code: project.code,
     phase: project.current_stage ?? "—",
     status: mapStatus(project),
-    progress: estimateProgress(project),
+    progress: resolveProjectProgress({
+      apiCompletion: project.completion,
+      currentStage: project.current_stage,
+      projectStatus: project.status,
+    }),
     startDate: formatMonthYear(project.start_date),
     dueDate: formatShortDate(project.updated_at),
     teamInitials: [],
@@ -63,7 +57,11 @@ export function mapProjectCardToClientLinked(card: ProjectCardView): ClientLinke
     code: card.number,
     phase: card.currentStage ?? "—",
     status,
-    progress: card.completion ?? (status === "completed" ? 100 : 30),
+    progress: resolveProjectProgress({
+      apiCompletion: card.completion,
+      currentStage: card.currentStage,
+      projectStatus: card.status,
+    }),
     startDate: card.startDate ?? "—",
     dueDate: card.updatedAt ?? "—",
     teamInitials: [],

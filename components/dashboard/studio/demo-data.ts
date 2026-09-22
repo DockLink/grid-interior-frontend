@@ -24,6 +24,8 @@ export type FileActivityItem = {
 
 export type ProjectOverviewItem = {
   id: number;
+  /** Real project UUID for navigation */
+  projectId: string;
   code: string;
   name: string;
   client: string;
@@ -418,6 +420,7 @@ export const FILE_ACTIVITY_DATA: FileActivityItem[] = [
 export const PROJECTS_OVERVIEW_DATA: ProjectOverviewItem[] = [
   {
     id: 1,
+    projectId: "1",
     code: "GI-024",
     name: "Lumière Penthouse",
     client: "Dumont Family",
@@ -428,6 +431,7 @@ export const PROJECTS_OVERVIEW_DATA: ProjectOverviewItem[] = [
   },
   {
     id: 2,
+    projectId: "2",
     code: "GI-023",
     name: "Noir Boutique Hotel",
     client: "Meridian Group",
@@ -438,6 +442,7 @@ export const PROJECTS_OVERVIEW_DATA: ProjectOverviewItem[] = [
   },
   {
     id: 3,
+    projectId: "3",
     code: "GI-022",
     name: "Verdant Residence",
     client: "Chen & Partners",
@@ -448,6 +453,7 @@ export const PROJECTS_OVERVIEW_DATA: ProjectOverviewItem[] = [
   },
   {
     id: 4,
+    projectId: "4",
     code: "GI-021",
     name: "Atrium Office HQ",
     client: "Nexum Corp",
@@ -458,6 +464,7 @@ export const PROJECTS_OVERVIEW_DATA: ProjectOverviewItem[] = [
   },
   {
     id: 5,
+    projectId: "5",
     code: "GI-020",
     name: "Cascade Spa & Wellness",
     client: "Zenith Hospitality",

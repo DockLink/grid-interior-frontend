@@ -227,6 +227,7 @@ export function ProjectAssignmentsPanel() {
           );
         }),
       );
+      void qc.invalidateQueries({ queryKey: queryKeys.team.all });
       setSaved(true);
       setDirty(false);
       toast.success("Assignments saved");

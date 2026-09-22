@@ -19,6 +19,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useTeam } from "@/hooks/use-team";
 import { studioRoleToUserRole } from "@/lib/team/map-team";
+import {
+  getEmailValidationError,
+  normalizeEmail,
+} from "@/lib/validation/email";
 import type { StudioMember, StudioMemberRole } from "@/lib/team/mock-team";
 
 const ROLE_STYLE: Record<StudioMemberRole, { bg: string; color: string }> = {
@@ -52,13 +56,18 @@ export function TeamPage() {
 
   async function handleInvite() {
     if (!firstName.trim() || !email.trim() || !password.trim()) return;
+    const emailError = getEmailValidationError(email);
+    if (emailError) {
+      toast.error(emailError);
+      return;
+    }
     if (authDisabled) {
       toast.message("Enable auth to invite members against the API.");
       return;
     }
     try {
       await createUser({
-        email: email.trim(),
+        email: normalizeEmail(email),
         first_name: firstName.trim(),
         last_name: lastName.trim() || undefined,
         password,

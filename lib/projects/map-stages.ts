@@ -98,7 +98,11 @@ export function isTaskCompleted(status: TaskableStatus | string): boolean {
   return status === "COMPLETED";
 }
 
-export function isTaskOverdue(task: Task, now = new Date()): boolean {
+export function isTaskOverdue(
+  task: Pick<Task, "status" | "start_date"> &
+    Partial<Pick<Task, "end_date" | "duration" | "durationHours">>,
+  now = new Date(),
+): boolean {
   if (isTaskCompleted(task.status)) return false;
   const due = new Date(resolveTaskEndDateIso(task));
   return due < now;

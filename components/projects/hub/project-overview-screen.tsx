@@ -10,6 +10,7 @@ import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { PhaseStepper } from "@/components/projects/hub/phase-stepper";
 import { StatTile } from "@/components/projects/hub/stat-tile";
 import { useProjectMembers } from "@/hooks/use-project-members";
+import { useProjectRecentFiles } from "@/hooks/use-project-recent-files";
 import { useProjectTaskables } from "@/hooks/use-project-taskables";
 import {
   PHASE_WORKSPACES,
@@ -23,6 +24,7 @@ import {
 } from "@/lib/projects/map-project-hub";
 import { mapProjectToOverviewView } from "@/lib/projects/map-project-overview";
 import { canManageProject, canViewBoqFinancials } from "@/lib/projects/permissions";
+import { PROJECT_BOARD_TASK_OPTIONS } from "@/lib/tasks/project-task-query";
 import { getUserInitials, getUserListPrimaryLabel } from "@/lib/user/display";
 import type { HubActivityItem } from "@/types/project-hub";
 import type { ProjectMember } from "@/types/projects";
@@ -228,12 +230,20 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
   const { tasks: projectTasks, isLoading: tasksLoading } = useProjectTaskables(
     projectId,
     "TASK",
-    { depth: 0, limit: 200 },
+    {
+      ...PROJECT_BOARD_TASK_OPTIONS,
+      refetchInterval: 15_000,
+      refetchOnMount: "always",
+    },
   );
   const { tasks: stageTasks, isLoading: stagesLoading } = useProjectTaskables(
     projectId,
     "STAGE",
-    { limit: 50 },
+    { limit: 50, refetchInterval: 15_000, refetchOnMount: "always" },
+  );
+  const { files: recentFiles, isLoading: recentFilesLoading } = useProjectRecentFiles(
+    projectId,
+    10,
   );
   const [showManageTeam, setShowManageTeam] = useState(false);
   const canManageTeam = canManageProject(effectiveRole, isViewer);
@@ -244,16 +254,18 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
     return mapProjectToOverviewView(project, {
       members,
       tasks: projectTasks,
+      activityTasks: projectTasks,
+      recentFiles,
       stages: stageTasks.map((t) => ({ title: t.title, status: t.status })),
     });
-  }, [project, members, projectTasks, stageTasks]);
+  }, [project, members, projectTasks, stageTasks, recentFiles]);
 
   const activeMembers = useMemo(
     () => members.filter((m) => m.status === "ACTIVE"),
     [members],
   );
 
-  if (isLoading || tasksLoading || stagesLoading) {
+  if (isLoading || tasksLoading || stagesLoading || recentFilesLoading) {
     return (
       <div className="px-10 py-8 text-[var(--figma-gray500)]">Loading project overview…</div>
     );
@@ -320,7 +332,7 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
 
   return (
     <div className="px-10 py-7">
-      <PhaseStepper currentPhaseIndex={overview.phaseIndex} />
+      <PhaseStepper currentPhaseIndex={overview.phaseIndex} progressPct={overview.progress} />
 
       <div className="mb-6 flex flex-wrap gap-4">
         <StatTile
@@ -348,7 +360,15 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
           icon="event"
           label="Next Deadline"
           value={overview.nextDeadline}
-          sub={overview.status === "Overdue" ? "Overdue!" : "Upcoming"}
+          sub={
+            overview.nextDeadline === "—"
+              ? "No open deadlines"
+              : overview.status === "Overdue"
+                ? overview.nextDeadlineLabel
+                  ? `Overdue · ${overview.nextDeadlineLabel}`
+                  : "Overdue!"
+                : overview.nextDeadlineLabel ?? "Upcoming"
+          }
           color={overview.status === "Overdue" ? "#F26D6D" : "#1B2A4A"}
         />
       </div>

@@ -59,6 +59,15 @@ export interface ConsultAudioFile {
   fileUrl?: string | null;
 }
 
+/** Single measurement sketch / floor plan attached to a consultation. */
+export interface ConsultSketch {
+  id: string;
+  fileName: string;
+  uploadedAt: string;
+  storageFileId?: string | null;
+  fileUrl?: string | null;
+}
+
 export interface ConsultComment {
   id: string;
   memberId: string;
@@ -97,7 +106,9 @@ export interface ConsultNoteApi {
   author_user_id: string;
   text: string;
   created_at: string;
+  storage_file_id?: string | null;
   attachment_name?: string | null;
+  /** Signed download URL resolved by the backend from storage_file_id. */
   attachment_url?: string | null;
 }
 
@@ -107,6 +118,14 @@ export interface ConsultAudioApi {
   duration: string;
   date: string;
   size: string;
+  storage_file_id?: string | null;
+  file_url?: string | null;
+}
+
+export interface ConsultSketchApi {
+  id: string;
+  file_name: string;
+  uploaded_at: string;
   storage_file_id?: string | null;
   file_url?: string | null;
 }
@@ -125,6 +144,8 @@ export interface ConsultationAggregateResponse {
   notes: ConsultNoteApi[];
   audio: ConsultAudioApi[];
   tasks: ConsultTaskApi[];
+  /** Present when a measurement sketch has been uploaded; null/omitted when empty. */
+  sketch?: ConsultSketchApi | null;
 }
 
 export interface ConsultRoomCreatePayload {
@@ -155,9 +176,11 @@ export interface ConsultInventoryCreatePayload {
 export type ConsultInventoryUpdatePayload = Partial<ConsultInventoryCreatePayload>;
 
 export interface ConsultNoteCreatePayload {
+  /** Note body. May be empty when an attachment is provided. */
   text: string;
+  /** Floating file UUID from POST /api/storage/upload (same as audio/sketch). */
+  storage_file_id?: string | null;
   attachment_name?: string | null;
-  attachment_url?: string | null;
 }
 
 export interface ConsultAudioCreatePayload {
@@ -165,8 +188,19 @@ export interface ConsultAudioCreatePayload {
   duration?: string;
   date?: string;
   size?: string;
+  /**
+   * Project File UUID from multipart upload
+   * (`POST /projects/:id/files/multipart/*`), NOT a floating `/storage/upload` token.
+   * Backend `assertProjectFile` requires the file to belong to the project.
+   */
   storage_file_id?: string | null;
   file_url?: string | null;
+}
+
+export interface ConsultSketchUpsertPayload {
+  file_name: string;
+  storage_file_id: string;
+  uploaded_at?: string;
 }
 
 export interface ConsultTaskCreatePayload {
@@ -179,6 +213,29 @@ export interface ConsultTaskUpdatePayload {
   title?: string;
   assignee_user_id?: string | null;
   status?: ConsultTaskStatusApi;
+}
+
+export interface ConsultationCompletePayload {
+  notes?: string;
+  date?: string;
+  time?: string;
+  mode?: ModeType;
+  consult_type?: "free" | "paid";
+}
+
+export interface ConsultationCompleteResponse {
+  stage: {
+    id: string;
+    status: string;
+    title?: string;
+  };
+  next_stage?: {
+    id: string;
+    status: string;
+    title?: string;
+  } | null;
+  note?: ConsultNoteApi | null;
+  completed: boolean;
 }
 
 export function consultViewFromParam(view: string | undefined): ConsultView {

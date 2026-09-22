@@ -11,8 +11,9 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
   if (authError) return authError;
 
   const { projectId, audioId } = await context.params;
+  // Backend route is plural: DELETE /projects/:id/consultation/audios/:audioId
   const result = await backendFetch<{ id: string; deleted: boolean }>(
-    `/projects/${projectId}/consultation/audio/${audioId}`,
+    `/projects/${projectId}/consultation/audios/${audioId}`,
     {
       method: "DELETE",
       headers: { Authorization: authorization! },

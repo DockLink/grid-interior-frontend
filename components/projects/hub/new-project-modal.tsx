@@ -326,7 +326,9 @@ export function NewProjectModal({
       onCreate?.();
       onCreated?.(created.id);
       if (redirectOnCreate) {
-        router.push(`/projects/${created.id}`);
+        router.push(
+          isHistorical ? `/projects/historical/${created.id}` : `/projects/${created.id}`
+        );
       } else {
         onClose();
       }

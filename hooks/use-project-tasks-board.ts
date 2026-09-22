@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "@/hooks/use-auth";
 import { useProjectMembers } from "@/hooks/use-project-members";
@@ -10,6 +11,8 @@ import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { withTaskEndDate } from "@/lib/tasks/create-task-payload";
 import { mapMilestoneToView, mapStageToView } from "@/lib/projects/map-stages";
 import { canManageProject } from "@/lib/projects/permissions";
+import { queryKeys } from "@/lib/query/keys";
+import { PROJECT_BOARD_TASK_OPTIONS } from "@/lib/tasks/project-task-query";
 import {
   apiStatusFromBoard,
   boardStatusFromApi,
@@ -54,8 +57,6 @@ function assigneesFromRecords(records: TaskAssigneeRecord[]): TaskAssigneeView[]
     });
 }
 
-const TASK_BOARD_FETCH_OPTIONS = { depth: 1, limit: 200 } as const;
-
 function taskIdsKey(tasks: Task[]): string {
   return tasks
     .map((t) => t.id)
@@ -64,8 +65,16 @@ function taskIdsKey(tasks: Task[]): string {
 }
 
 export function useProjectTasksBoard(projectId: string) {
+  const qc = useQueryClient();
   const { user } = useAuth();
   const { members, effectiveRole, isViewer } = useProjectMembers();
+
+  const invalidateProjectProgress = useCallback(() => {
+    // Overview STAGE/TASK queries use different depth/limit keys than the board.
+    void qc.invalidateQueries({ queryKey: ["projects", "taskables", projectId] });
+    void qc.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+    void qc.invalidateQueries({ queryKey: queryKeys.projects.all });
+  }, [qc, projectId]);
 
   const {
     tasks: stageTasks,
@@ -89,7 +98,7 @@ export function useProjectTasksBoard(projectId: string) {
     createTaskable: createTask,
     patchTaskInCache,
     reopenTaskable,
-  } = useProjectTaskables(projectId, "TASK", TASK_BOARD_FETCH_OPTIONS);
+  } = useProjectTaskables(projectId, "TASK", PROJECT_BOARD_TASK_OPTIONS);
 
   const [assigneeMap, setAssigneeMap] = useState<Record<string, TaskAssigneeView[]>>({});
   const [taskMilestoneMap, setTaskMilestoneMap] = useState<Record<string, string>>({});
@@ -442,6 +451,8 @@ export function useProjectTasksBoard(projectId: string) {
           return next;
         });
         void refetchTasks();
+        // Stage auto-rollup / overview progress may change when tasks complete.
+        invalidateProjectProgress();
       } catch (error) {
         patchTaskInCache(taskId, { status: previousStatus });
         setStatusOverrides((prev) => {
@@ -452,7 +463,7 @@ export function useProjectTasksBoard(projectId: string) {
         throw error;
       }
     },
-    [rawTasks, refetchTasks, patchTaskInCache]
+    [rawTasks, refetchTasks, patchTaskInCache, invalidateProjectProgress]
   );
 
   const markMyCompletion = useCallback(
@@ -462,8 +473,9 @@ export function useProjectTasksBoard(projectId: string) {
         body: JSON.stringify({ completed }),
       });
       await refetchTasks();
+      invalidateProjectProgress();
     },
-    [refetchTasks]
+    [refetchTasks, invalidateProjectProgress]
   );
 
   const reopenTask = useCallback(
@@ -475,9 +487,10 @@ export function useProjectTasksBoard(projectId: string) {
         // Reopen resets assignee completion + ancestor statuses; refresh to sync.
         assigneesKeyRef.current = null;
         await refetchTasks();
+        invalidateProjectProgress();
       }
     },
-    [reopenTaskable, refetchTasks, patchTaskInCache]
+    [reopenTaskable, refetchTasks, patchTaskInCache, invalidateProjectProgress]
   );
 
   const currentUserView = useMemo(() => {

@@ -13,8 +13,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
   const { projectId } = await context.params;
   const body = await req.json();
+  // Backend route is plural: POST /projects/:id/consultation/audios
   const result = await backendFetch<ConsultAudioApi>(
-    `/projects/${projectId}/consultation/audio`,
+    `/projects/${projectId}/consultation/audios`,
     {
       method: "POST",
       headers: { Authorization: authorization! },

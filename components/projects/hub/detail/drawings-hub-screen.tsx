@@ -8,7 +8,6 @@ import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { GradientBtn, OutlineBtn, SectionCard } from "@/components/projects/hub/consultation/consultation-ui";
 import { useDetailCategories } from "@/hooks/use-detail-categories";
 import { useProjectFiles } from "@/hooks/use-project-files";
-import { useProjectTaskables } from "@/hooks/use-project-taskables";
 import { authApiClient } from "@/lib/api/authenticated-client";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import {
@@ -22,10 +21,14 @@ import {
   formatFileSize,
 } from "@/lib/files/map-project-file";
 import { resolveDetailedDrawingsFolder } from "@/lib/files/resolve-folder";
-import { findStageTaskable } from "@/lib/projects/seed-phases";
 import { queryKeys } from "@/lib/query/keys";
 import { cn } from "@/lib/utils";
-import type { DetailCategory, DetailCategoryId, DetailDrawingFile } from "@/types/detail";
+import type {
+  DetailCategory,
+  DetailCategoryId,
+  DetailDrawingFile,
+  DetailSubmitForReviewResponse,
+} from "@/types/detail";
 import type { ActiveProjectView } from "@/types/project-hub";
 import type { ProjectFile } from "@/types/files";
 
@@ -130,6 +133,7 @@ function CategorySection({
   authDisabled,
   onUpdate,
   onNotesChange,
+  onNotesBlur,
   onUploadFiles,
   onDeleteLive,
   onOpenLive,
@@ -140,6 +144,7 @@ function CategorySection({
   authDisabled: boolean;
   onUpdate: (updated: Partial<DetailCategory>) => void;
   onNotesChange: (notes: string) => void;
+  onNotesBlur: () => void;
   onUploadFiles: (files: File[]) => void;
   onDeleteLive: (file: DetailDrawingFile) => void;
   onOpenLive: (file: DetailDrawingFile) => void;
@@ -302,7 +307,10 @@ function CategorySection({
           value={cat.notes}
           onChange={(e) => onNotesChange(e.target.value)}
           onFocus={() => setNotesFocused(true)}
-          onBlur={() => setNotesFocused(false)}
+          onBlur={() => {
+            setNotesFocused(false);
+            onNotesBlur();
+          }}
           rows={2}
           placeholder={`Add notes for ${cat.label} drawings…`}
           className="box-border w-full resize-y rounded-[10px] bg-white px-3 py-[9px] text-xs leading-relaxed text-[var(--figma-navy)] outline-none transition-all duration-150 neu-inset"
@@ -336,11 +344,6 @@ export function DrawingsHubScreen({
     updateCategory: persistCategory,
     isAuthOff,
   } = useDetailCategories(project.id);
-  const { tasks: stageTasks, setTaskableStatus } = useProjectTaskables(
-    authDisabled ? null : project.id,
-    "STAGE",
-    { limit: 100 },
-  );
 
   const detailedRoot = useMemo(
     () => resolveDetailedDrawingsFolder(folderTree),
@@ -354,10 +357,16 @@ export function DrawingsHubScreen({
   const [resolvedPaths, setResolvedPaths] = useState<Partial<Record<DetailCategoryId, string>>>({});
   const [submitting, setSubmitting] = useState(false);
   const notesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notesDirtyRef = useRef<Partial<Record<DetailCategoryId, string>>>({});
   const ensuringFolderRef = useRef<Partial<Record<DetailCategoryId, Promise<string | null>>>>({});
 
   useEffect(() => {
-    setCategories(remoteCategories);
+    setCategories(
+      remoteCategories.map((remote) => {
+        const dirty = notesDirtyRef.current[remote.id];
+        return dirty !== undefined ? { ...remote, notes: dirty } : remote;
+      }),
+    );
   }, [remoteCategories]);
 
   useEffect(() => {
@@ -422,6 +431,49 @@ export function DrawingsHubScreen({
     setCategories((p) => p.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   };
 
+  const flushNotes = (categoryId: DetailCategoryId) => {
+    if (notesTimerRef.current) {
+      clearTimeout(notesTimerRef.current);
+      notesTimerRef.current = null;
+    }
+    const pending = notesDirtyRef.current[categoryId];
+    if (pending === undefined) return;
+    void persistCategory(categoryId, { notes: pending })
+      .then(() => {
+        if (notesDirtyRef.current[categoryId] === pending) {
+          delete notesDirtyRef.current[categoryId];
+        }
+      })
+      .catch(() => {
+        /* local store already updated inside hook */
+      });
+  };
+
+  const handleNotesChange = (notes: string) => {
+    const categoryId = activeId;
+    notesDirtyRef.current[categoryId] = notes;
+    updateCategoryLocal(categoryId, { notes });
+    if (notesTimerRef.current) clearTimeout(notesTimerRef.current);
+    notesTimerRef.current = setTimeout(() => {
+      void persistCategory(categoryId, { notes })
+        .then(() => {
+          if (notesDirtyRef.current[categoryId] === notes) {
+            delete notesDirtyRef.current[categoryId];
+          }
+        })
+        .catch(() => {
+          /* local store already updated inside hook */
+        });
+    }, 600);
+  };
+
+  const setActiveCategory = (id: DetailCategoryId) => {
+    if (id !== activeId) {
+      flushNotes(activeId);
+    }
+    setActiveId(id);
+  };
+
   const persistComplete = (id: DetailCategoryId, complete: boolean) => {
     updateCategoryLocal(id, { complete });
     if (!isAuthOff) {
@@ -431,17 +483,6 @@ export function DrawingsHubScreen({
     } else {
       void persistCategory(id, { complete });
     }
-  };
-
-  const handleNotesChange = (notes: string) => {
-    const categoryId = activeId;
-    updateCategoryLocal(categoryId, { notes });
-    if (notesTimerRef.current) clearTimeout(notesTimerRef.current);
-    notesTimerRef.current = setTimeout(() => {
-      void persistCategory(categoryId, { notes }).catch(() => {
-        /* local store already updated inside hook */
-      });
-    }, 400);
   };
 
   async function ensureCategoryFolder(categoryId: DetailCategoryId): Promise<string | null> {
@@ -580,13 +621,14 @@ export function DrawingsHubScreen({
         categories.map((c) => [c.id, c.complete]),
       ) as Record<DetailCategoryId, boolean>;
 
+      // Always keep a local fallback so demo / missing-API modes stay accurate.
       markProjectSubmittedForReview(project, categoryFlags);
 
       if (!authDisabled) {
-        const stage = findStageTaskable(stageTasks, "Detail Drawings");
-        if (stage && stage.status !== "IN_REVIEW" && stage.status !== "COMPLETED") {
-          await setTaskableStatus(stage.id, "IN_REVIEW");
-        }
+        await authApiClient<DetailSubmitForReviewResponse>(
+          `/projects/${project.id}/detail/submit-for-review`,
+          { method: "POST" },
+        );
       }
 
       await qc.invalidateQueries({ queryKey: queryKeys.detail.directorOverview() });
@@ -624,9 +666,13 @@ export function DrawingsHubScreen({
         </div>
         <div className="flex flex-wrap gap-2">
           {onBoq && (
-            <OutlineBtn label="Estimate Breakdown" icon="receipt_long" onClick={onBoq} small />
+            <span data-allow-phase-nav>
+              <OutlineBtn label="Estimate Breakdown" icon="receipt_long" onClick={onBoq} small />
+            </span>
           )}
-          <OutlineBtn label="Director Overview" icon="supervisor_account" onClick={onDirectorOverview} small />
+          <span data-allow-phase-nav>
+            <OutlineBtn label="Director Overview" icon="supervisor_account" onClick={onDirectorOverview} small />
+          </span>
           <GradientBtn
             label={submitting ? "Submitting…" : "Submit for Review"}
             icon="send"
@@ -655,7 +701,7 @@ export function DrawingsHubScreen({
             <button
               key={cat.id}
               type="button"
-              onClick={() => setActiveId(cat.id)}
+              onClick={() => setActiveCategory(cat.id)}
               className={cn(
                 "flex cursor-pointer items-center gap-[7px] rounded-[22px] border-none py-2 pl-2.5 pr-4 transition-all duration-200",
                 active ? "gi-gradient-cta text-white" : "bg-white neu-inset",
@@ -712,6 +758,7 @@ export function DrawingsHubScreen({
             updateCategoryLocal(activeId, patch);
           }}
           onNotesChange={handleNotesChange}
+          onNotesBlur={() => flushNotes(activeId)}
           onUploadFiles={(files) => void handleUpload(files)}
           onDeleteLive={(file) => void handleDeleteLive(file)}
           onOpenLive={(file) => void handleOpenLive(file)}

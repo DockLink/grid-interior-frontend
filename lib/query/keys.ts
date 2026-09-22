@@ -27,12 +27,16 @@ export const queryKeys = {
     assignees: (id: string) => ["tasks", "assignees", id] as const,
     batchAssignees: (ids: string[]) => ["tasks", "batchAssignees", ...ids.slice().sort()] as const,
     my: (userId: string) => ["tasks", "my", userId] as const,
+    todays: (scope: string, userId: string, ledProjectIds: string[]) =>
+      ["tasks", "todays", scope, userId, ...ledProjectIds.slice().sort()] as const,
   },
   files: {
     all: ["files"] as const,
     tree: (projectId: string) => ["files", "tree", projectId] as const,
     folder: (projectId: string, folderPath: string) =>
       ["files", "folder", projectId, folderPath] as const,
+    recent: (projectId: string, limit?: number) =>
+      ["files", "recent", projectId, limit ?? null] as const,
     recentGlobal: (projectIdsKey: string) => ["files", "recentGlobal", projectIdsKey] as const,
   },
   minutes: {
@@ -45,6 +49,11 @@ export const queryKeys = {
   users: {
     all: ["users"] as const,
     list: (params: object) => ["users", "list", params] as const,
+  },
+  team: {
+    all: ["team"] as const,
+    /** Aggregated project + open-task counts for Team Directory cards. */
+    directoryStats: () => ["team", "directoryStats"] as const,
   },
   holdRequests: {
     all: ["holdRequests"] as const,
@@ -69,11 +78,14 @@ export const queryKeys = {
     list: (params: object) => ["suppliers", "list", params] as const,
     detail: (id: string) => ["suppliers", "detail", id] as const,
     linkedProjects: (id: string) => ["suppliers", "linkedProjects", id] as const,
+    orders: (id: string) => ["suppliers", "orders", id] as const,
   },
   subVendors: {
     all: ["subVendors"] as const,
     list: (params: object) => ["subVendors", "list", params] as const,
     detail: (id: string) => ["subVendors", "detail", id] as const,
+    history: (id: string) => ["subVendors", "history", id] as const,
+    payments: (id: string) => ["subVendors", "payments", id] as const,
   },
   vendorTasks: {
     all: ["vendorTasks"] as const,

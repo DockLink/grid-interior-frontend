@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/auth/password-input";
+import {
+  getEmailValidationError,
+  normalizeEmail,
+} from "@/lib/validation/email";
 import type { CreateUserRequest } from "@/types/users-api";
 import type { UserRole } from "@/types/users";
 
@@ -40,6 +44,7 @@ export function CreateUserSheet({
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>(defaultRole);
   const [error, setError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const canSubmit = useMemo(
     () => firstName.trim() && email.trim() && password.trim(),
@@ -48,22 +53,24 @@ export function CreateUserSheet({
 
   if (!open) return null;
 
+  function validateEmailField(value: string): boolean {
+    const message = getEmailValidationError(value);
+    setEmailError(message);
+    return message === null;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
     setError(null);
 
-    const emailTrimmed = email.trim();
-    if (!/^[a-z0-9]/.test(emailTrimmed)) {
-      setError("Email must not start with a capital letter or special character");
-      return;
-    }
+    if (!validateEmailField(email)) return;
 
     try {
       await onSubmit({
         first_name: firstName.trim(),
         last_name: lastName.trim() || undefined,
-        email: emailTrimmed,
+        email: normalizeEmail(email),
         password,
         role,
       });
@@ -72,6 +79,7 @@ export function CreateUserSheet({
       setEmail("");
       setPassword("");
       setRole(defaultRole);
+      setEmailError(null);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create user");
@@ -135,6 +143,7 @@ export function CreateUserSheet({
         </div>
 
         <form
+          noValidate
           onSubmit={handleSubmit}
           style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}
         >
@@ -165,12 +174,29 @@ export function CreateUserSheet({
             <Label htmlFor="create-email">Email address</Label>
             <Input
               id="create-email"
-              type="email"
+              type="text"
+              inputMode="email"
+              autoComplete="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (emailError) setEmailError(null);
+              }}
+              onBlur={() => {
+                if (email.trim()) validateEmailField(email);
+              }}
               placeholder="name@studio.lk"
+              aria-invalid={Boolean(emailError)}
               className="h-9 bg-[var(--ds-bg)]"
             />
+            {emailError && (
+              <p style={{ fontSize: "12px", color: "var(--ds-destructive)", margin: 0 }}>
+                {emailError}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

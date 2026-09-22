@@ -1,5 +1,6 @@
 import type { Project, ProjectCardView, ProjectImage } from "@/types/projects";
 import { resolveProjectEndDate } from "@/lib/projects/duration";
+import { resolveProjectProgress } from "@/lib/projects/project-progress";
 
 export const FALLBACK_THUMBNAIL =
   "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&q=80";
@@ -68,6 +69,11 @@ export function mapProjectToCard(project: Project): ProjectCardView {
     number: project.code,
     location: project.location,
     currentStage: project.current_stage ?? null,
+    completion: resolveProjectProgress({
+      apiCompletion: project.completion,
+      currentStage: project.current_stage,
+      projectStatus: project.status,
+    }),
     created_at: project.created_at,
     startDate: formatMonthYear(project.start_date),
     endDate: formatMonthYear(endIso),

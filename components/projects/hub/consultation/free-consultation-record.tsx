@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
@@ -9,7 +8,6 @@ import { useConsultation } from "@/hooks/use-consultation";
 import { useProjectTaskables } from "@/hooks/use-project-taskables";
 import { useHubTeam } from "@/lib/projects/hub-team-context";
 import { findStageTaskable } from "@/lib/projects/seed-phases";
-import { queryKeys } from "@/lib/query/keys";
 import type { ConsultTask, ModeType } from "@/types/consultation";
 import type { ActiveProjectView } from "@/types/project-hub";
 
@@ -37,19 +35,17 @@ export function FreeConsultationRecord({
   onConvertToPaid: () => void;
   readOnly?: boolean;
 }) {
-  const qc = useQueryClient();
   const teamMembers = useHubTeam();
   const {
     tasks: remoteTasks,
     createTask,
-    createNote,
+    completeConsultation,
     isAuthOff,
   } = useConsultation(project.id);
   const {
     tasks: stages,
-    setTaskableStatus,
     isLoading: stagesLoading,
-  } = useProjectTaskables(project.id, "STAGE");
+  } = useProjectTaskables(project.id, "STAGE", { limit: 100 });
   const consultationStage = findStageTaskable(stages, "Consultation");
   const stageCompleted = consultationStage?.status === "COMPLETED";
 
@@ -58,6 +54,7 @@ export function FreeConsultationRecord({
   const [dateVal, setDateVal] = useState("");
   const [timeVal, setTimeVal] = useState("");
   const [completing, setCompleting] = useState(false);
+  const [localCompleted, setLocalCompleted] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem(`consultation-date-time-${project.id}`);
@@ -66,7 +63,7 @@ export function FreeConsultationRecord({
         const parsed = JSON.parse(saved);
         if (parsed.d) setDateVal(parsed.d);
         if (parsed.t) setTimeVal(parsed.t);
-      } catch (e) {
+      } catch {
         // ignore
       }
     }
@@ -80,7 +77,6 @@ export function FreeConsultationRecord({
       );
     }
   }, [dateVal, timeVal, project.id]);
-  const [localCompleted, setLocalCompleted] = useState(false);
 
   useEffect(() => {
     setTasks(remoteTasks);
@@ -94,29 +90,20 @@ export function FreeConsultationRecord({
     if (completeDisabled) return;
     setCompleting(true);
     try {
-      const trimmedNotes = notes.trim();
-      if (trimmedNotes) {
-        await createNote({ text: trimmedNotes });
+      const result = await completeConsultation({
+        notes: notes.trim() || undefined,
+        date: dateVal || undefined,
+        time: timeVal || undefined,
+        mode,
+        consult_type: "free",
+      });
+
+      if (!result?.completed && result?.stage?.status !== "COMPLETED") {
+        throw new Error("Consultation stage was not marked COMPLETED");
       }
 
-      if (isAuthOff) {
-        setLocalCompleted(true);
-        toast.success("Consultation marked complete");
-        return;
-      }
-
-      const stage = findStageTaskable(stages, "Consultation");
-      if (!stage) {
-        toast.error("Consultation stage not found. Open Manage stages to add it first.");
-        return;
-      }
-
-      if (stage.status !== "COMPLETED") {
-        await setTaskableStatus(stage.id, "COMPLETED");
-      }
-
-      await qc.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
       setLocalCompleted(true);
+      setNotes("");
       toast.success("Consultation marked complete");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to mark consultation complete");
@@ -177,9 +164,16 @@ export function FreeConsultationRecord({
                     title: "New task",
                     assignee_user_id: teamMembers[0] ? String(teamMembers[0].id) : "1",
                     status: "pending",
-                  }).then((task) => {
-                    if (task) setTasks((p) => [...p, task]);
-                  });
+                  })
+                    .then((task) => {
+                      if (!task) return;
+                      setTasks((p) => (p.some((t) => t.id === task.id) ? p : [...p, task]));
+                    })
+                    .catch((err) => {
+                      toast.error(
+                        err instanceof Error ? err.message : "Failed to add task",
+                      );
+                    });
                 }}
                 className="flex cursor-pointer items-center gap-1.5 border-none bg-transparent text-xs font-semibold text-[var(--figma-teal)]"
               >

@@ -62,6 +62,7 @@ export function useUsers(params: UsersQueryParams = { page: 1, limit: 20 }) {
         prev ? { ...prev, data: prev.data.map((u) => (u.id === updated.id ? updated : u)) } : prev
       );
       void qc.invalidateQueries({ queryKey: queryKeys.users.all });
+      void qc.invalidateQueries({ queryKey: queryKeys.team.all });
     },
     onError: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.users.all });
@@ -116,6 +117,7 @@ export function useUsers(params: UsersQueryParams = { page: 1, limit: 20 }) {
           : prev
       );
       void qc.invalidateQueries({ queryKey: queryKeys.users.all });
+      void qc.invalidateQueries({ queryKey: queryKeys.team.all });
     },
   });
 
@@ -150,6 +152,7 @@ export function useUsers(params: UsersQueryParams = { page: 1, limit: 20 }) {
         };
       });
       void qc.invalidateQueries({ queryKey: queryKeys.users.all });
+      void qc.invalidateQueries({ queryKey: queryKeys.team.all });
     },
   });
 
@@ -165,13 +168,15 @@ export function useUsers(params: UsersQueryParams = { page: 1, limit: 20 }) {
     [createMutation]
   );
 
+  const refetchUsers = useCallback(() => refetch().then(() => undefined), [refetch]);
+
   return {
     users,
     meta,
     isLoading,
     isMutating,
     error: error ? (error instanceof Error ? error.message : "Failed to load users") : null,
-    refetch: () => refetch().then(() => undefined),
+    refetch: refetchUsers,
     createUser,
     updateUser,
     setUserRole,

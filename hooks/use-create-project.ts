@@ -31,6 +31,19 @@ export function useCreateProject() {
         body: JSON.stringify(payload),
       });
 
+      // Historical creates send status: INACTIVE; backend may ignore it and default to ACTIVE.
+      if (payload.status === "INACTIVE" && project.status !== "INACTIVE") {
+        project = await authApiClient<Project>(`/projects/${project.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "INACTIVE" }),
+        });
+        if (project.status !== "INACTIVE") {
+          throw new Error(
+            "Project was created but could not be marked historical (INACTIVE). It may appear under Active projects."
+          );
+        }
+      }
+
       const desiredClientId = options?.clientId ?? payload.client?.id;
       // Safety net: re-link via /links if create still pointed at a different client,
       // then remove the orphan minted during create.

@@ -2,6 +2,10 @@
 
 import { CheckSquare } from "lucide-react";
 
+import {
+  AllClearControl,
+  useClearedPanelItems,
+} from "@/components/dashboard/studio/all-clear-control";
 import type { AttentionItem } from "@/components/dashboard/studio/demo-data";
 import { Button } from "@/components/ui/button";
 
@@ -26,28 +30,27 @@ export function AttentionPanel({
   title?: string;
   onAction?: (item: AttentionItem, action: "approve" | "decline") => void;
 }) {
+  const { visible, clearAll } = useClearedPanelItems(items, "dashboard-attention");
+
   return (
     <div className="overflow-hidden rounded-2xl border border-[#E4E9F0] bg-white shadow-[0px_4px_16px_rgba(11,37,69,0.06)]">
       <div className="flex items-center justify-between border-b border-[#E4E9F0] px-5 py-4">
         <div>
           <h3 className="text-[15px] font-semibold text-[#16233D]">{title}</h3>
           <p className="text-[12px] text-[#5B6B85]">
-            {items.length} pending item{items.length !== 1 ? "s" : ""}
+            {visible.length} pending item{visible.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <span
-          className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-          style={{
-            background: items.length > 0 ? "#FDECEC" : "#E7F9EE",
-            color: items.length > 0 ? "#FF6B6B" : "#2FBE6B",
-          }}
-        >
-          {items.length > 0 ? `${items.length} pending` : "All clear"}
-        </span>
+        <AllClearControl
+          canClear={visible.length > 0}
+          onClear={clearAll}
+          activeLabel={visible.length > 0 ? `${visible.length} pending` : undefined}
+          activeTone="rose"
+        />
       </div>
 
       <div className="divide-y divide-[#E4E9F0]">
-        {items.length === 0 ? (
+        {visible.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-14 text-center">
             <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-[rgba(11,37,69,0.06)]">
               <CheckSquare className="size-6 text-[#0B2545]" />
@@ -60,7 +63,7 @@ export function AttentionPanel({
             </div>
           </div>
         ) : (
-          items.map((item) => {
+          visible.map((item) => {
             const colors = typeColors(item.type);
             return (
               <div key={item.id} className="flex items-center gap-4 px-5 py-3.5">
