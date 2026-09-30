@@ -30,6 +30,7 @@ export function mapProjectMembersToHubTeam(members: ProjectMember[]): HubTeamMem
         : "Team Member";
       return {
         id: index + 1,
+        userId: m.user_id || user?.id || "",
         name,
         role: m.role ?? "Member",
         initials: getUserInitials({ ...normalized, email: user?.email ?? "" }),

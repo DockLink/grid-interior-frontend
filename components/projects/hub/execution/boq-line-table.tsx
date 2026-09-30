@@ -1094,7 +1094,7 @@ export function BoqLineTable({
             Edit line prices after client conversations — totals, budgets, and variance update live
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <OutlineBtn
             label="Export BOQ"
             icon="download"

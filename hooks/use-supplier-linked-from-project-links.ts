@@ -22,10 +22,11 @@ export function useSupplierLinkedFromProjectLinks(
     options.enabled !== false && Boolean(supplierId) && projects.length > 0 && !isAuthDisabled();
   const projectIdsKey = projects.map((p) => p.id).slice().sort().join(",");
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: [...queryKeys.suppliers.linkedProjects(supplierId), projectIdsKey],
     enabled,
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnMount: "always",
     queryFn: async () => {
       const results = await mapWithConcurrency(projects, LINK_FETCH_CONCURRENCY, async (project) => {
         const raw = await authApiClient<ProjectLinksApi>(`/projects/${project.id}/links`);
@@ -51,6 +52,7 @@ export function useSupplierLinkedFromProjectLinks(
   return {
     linkedFromProjectLinks: data ?? [],
     isLoading: enabled && isLoading,
+    isFetching: enabled && isFetching,
     error: error ? (error instanceof Error ? error.message : "Failed to load linked projects") : null,
     refetch: () => refetch().then(() => undefined),
   };

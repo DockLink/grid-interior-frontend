@@ -1,20 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { GradientBtn, OutlineBtn } from "@/components/projects/hub/consultation/consultation-ui";
 import { UploadDropzone } from "@/components/projects/hub/shared/upload-dropzone";
 import { WorkspaceBreadcrumb } from "@/components/projects/hub/shared/workspace-breadcrumb";
 import { useConcept } from "@/hooks/use-concept";
-import type { ConceptCard } from "@/types/concept";
+import { useProjectFiles } from "@/hooks/use-project-files";
+import { formatFileSize } from "@/lib/files/format";
+import { resolveConceptsFolder } from "@/lib/files/resolve-folder";
+import type { ConceptCard, ConceptFileType } from "@/types/concept";
 import { MAX_CONCEPTS_PER_AREA } from "@/types/concept";
+import type { ProjectFile } from "@/types/files";
 
-const SAMPLE_THUMBS = [
-  "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=400&h=280&fit=crop&auto=format",
-  "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&h=280&fit=crop&auto=format",
-  "https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=280&fit=crop&auto=format",
-];
+const CONCEPT_ACCEPT = ".jpg,.jpeg,.pdf,image/jpeg,application/pdf";
+
+function extractUploadedFileId(uploaded: unknown): string | null {
+  if (!uploaded || typeof uploaded !== "object") return null;
+  const row = uploaded as Partial<ProjectFile> & { file_id?: string };
+  if (typeof row.id === "string" && row.id) return row.id;
+  if (typeof row.file_id === "string" && row.file_id) return row.file_id;
+  return null;
+}
+
+function conceptFileTypeFromFile(file: File): ConceptFileType | null {
+  const name = file.name.toLowerCase();
+  const mime = file.type.toLowerCase();
+  if (name.endsWith(".pdf") || mime === "application/pdf") return "pdf";
+  if (
+    name.endsWith(".jpg") ||
+    name.endsWith(".jpeg") ||
+    mime === "image/jpeg"
+  ) {
+    return "jpg";
+  }
+  return null;
+}
 
 function ConceptCardItem({
   concept,
@@ -131,7 +153,13 @@ export function ConceptListScreen({
     cards,
     createCard,
     confirmCard,
+    isAuthOff,
   } = useConcept(projectId);
+  const { folderTree, uploadFile, getDownloadUrl } = useProjectFiles(projectId);
+  const conceptsFolder = useMemo(
+    () => resolveConceptsFolder(folderTree),
+    [folderTree],
+  );
   const area = areas.find((a) => a.id === areaId) ?? areas[0] ?? {
     id: areaId,
     name: "Area",
@@ -141,6 +169,7 @@ export function ConceptListScreen({
   const remoteConcepts = cards.filter((c) => c.areaId === areaId);
   const [concepts, setConcepts] = useState(remoteConcepts);
   const [showUpload, setShowUpload] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -175,30 +204,69 @@ export function ConceptListScreen({
     })();
   };
 
-  const handleUpload = () => {
-    if (atCap) return;
+  const handleUpload = async (files: File[]) => {
+    const file = files[0];
+    if (!file || atCap || isUploading) return;
+
+    const fileType = conceptFileTypeFromFile(file);
+    if (!fileType) {
+      setActionError("Only JPG and PDF files are supported.");
+      return;
+    }
+
     const nextIndex = concepts.length + 1;
-    const isPdf = nextIndex % 3 === 0;
-    const payload = {
+    const thumbUrl =
+      fileType === "jpg" ? URL.createObjectURL(file) : "";
+    const payloadBase = {
       name: `Concept ${nextIndex}`,
-      file_name: isPdf
-        ? `Concept_${area.name.replace(/\s+/g, "_")}_${nextIndex}.pdf`
-        : `Concept_${area.name.replace(/\s+/g, "_")}_${nextIndex}.jpg`,
-      file_type: (isPdf ? "pdf" : "jpg") as "pdf" | "jpg",
-      file_size: isPdf ? "2.8 MB" : "1.6 MB",
-      thumb_url: isPdf ? "" : SAMPLE_THUMBS[(nextIndex - 1) % SAMPLE_THUMBS.length],
+      file_name: file.name,
+      file_type: fileType,
+      file_size: formatFileSize(file.size),
+      thumb_url: thumbUrl,
     };
+
     setActionError(null);
-    void createCard(areaId, payload)
-      .then((created) => {
-        if (created) setConcepts((prev) => [...prev, created]);
-      })
-      .catch((err: unknown) => {
-        setActionError(
-          err instanceof Error ? err.message : "Failed to add concept",
-        );
+    setIsUploading(true);
+    try {
+      let fileId: string | null = null;
+      let resolvedThumb = thumbUrl;
+
+      if (!isAuthOff) {
+        const folderPath = conceptsFolder?.path;
+        if (!folderPath) {
+          throw new Error(
+            "Concepts folder not found. Provision project folders first.",
+          );
+        }
+        const uploaded = await uploadFile(folderPath, file);
+        fileId = extractUploadedFileId(uploaded);
+        if (!fileId) {
+          throw new Error("Upload succeeded but no file id was returned");
+        }
+        if (fileType === "jpg") {
+          try {
+            resolvedThumb = await getDownloadUrl(fileId);
+          } catch {
+            // Keep object URL preview if download URL is unavailable.
+          }
+        }
+      }
+
+      const created = await createCard(areaId, {
+        ...payloadBase,
+        thumb_url: resolvedThumb || null,
+        file_id: fileId,
       });
-    setShowUpload(false);
+      if (created) setConcepts((prev) => [...prev, created]);
+      setShowUpload(false);
+    } catch (err: unknown) {
+      if (thumbUrl) URL.revokeObjectURL(thumbUrl);
+      setActionError(
+        err instanceof Error ? err.message : "Failed to add concept",
+      );
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -235,15 +303,19 @@ export function ConceptListScreen({
             <button
               type="button"
               onClick={() => setShowUpload(false)}
-              className="cursor-pointer border-none bg-transparent p-1 text-[var(--figma-gray400)]"
+              disabled={isUploading}
+              className="cursor-pointer border-none bg-transparent p-1 text-[var(--figma-gray400)] disabled:opacity-50"
             >
               <MaterialIcon name="close" size={18} />
             </button>
           </div>
           <UploadDropzone
-            label="Upload concept file"
+            label={isUploading ? "Uploading…" : "Upload concept file"}
             hint="Drag & drop or click to browse · JPG, PDF"
-            onUpload={handleUpload}
+            accept={CONCEPT_ACCEPT}
+            multiple={false}
+            disabled={isUploading}
+            onFiles={(files) => void handleUpload(files)}
             className="mb-0"
           />
         </div>

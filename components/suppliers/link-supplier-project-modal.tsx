@@ -42,8 +42,9 @@ export function LinkSupplierProjectModal({
 
   const handleLink = async () => {
     if (!selectedId) return;
+    const selected = projects.find((p) => p.id === selectedId);
     try {
-      await linkProject(selectedId, role);
+      await linkProject(selectedId, role, selected);
       toast.success("Project linked to supplier");
       onLinked?.();
       onClose();

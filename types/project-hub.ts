@@ -2,6 +2,8 @@ import type { ProjectHealthStatus, ProjectPhase } from "@/lib/projects/design-to
 
 export interface HubTeamMember {
   id: number;
+  /** Real user UUID (or mock id) for API payloads such as assignee_user_id. */
+  userId: string;
   name: string;
   role: string;
   initials: string;

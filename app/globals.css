@@ -282,7 +282,7 @@
     100dvh - var(--ds-header-height) - 44px - clamp(220px, 30vw, 380px) - 48px
   );
   overflow: hidden;
-  border-top: 0.5px solid rgba(90, 60, 30, 0.12);
+  border-top: 0.5px solid var(--figma-border);
 }
 
 @layer base {

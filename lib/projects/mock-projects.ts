@@ -10,12 +10,12 @@ import type {
 export const DEFAULT_DEMO_PROJECT_ID = "mock-1";
 
 export const TEAM_MEMBERS: HubTeamMember[] = [
-  { id: 1, name: "Priya Nair", role: "Project Coordinator", initials: "PN", color: "#0E7C86" },
-  { id: 2, name: "Ashan Perera", role: "3D Designer", initials: "AP", color: "#7C3AED" },
-  { id: 3, name: "Dilani Silva", role: "Interior Designer", initials: "DS", color: "#D97706" },
-  { id: 4, name: "Roshan Fernando", role: "Site Supervisor", initials: "RF", color: "#1B2A4A" },
-  { id: 5, name: "Chamari Gunasena", role: "Draftsperson", initials: "CG", color: "#BE185D" },
-  { id: 6, name: "Nuwan Jayaweera", role: "Quantity Surveyor", initials: "NJ", color: "#0284C7" },
+  { id: 1, userId: "1", name: "Priya Nair", role: "Project Coordinator", initials: "PN", color: "#0E7C86" },
+  { id: 2, userId: "2", name: "Ashan Perera", role: "3D Designer", initials: "AP", color: "#7C3AED" },
+  { id: 3, userId: "3", name: "Dilani Silva", role: "Interior Designer", initials: "DS", color: "#D97706" },
+  { id: 4, userId: "4", name: "Roshan Fernando", role: "Site Supervisor", initials: "RF", color: "#1B2A4A" },
+  { id: 5, userId: "5", name: "Chamari Gunasena", role: "Draftsperson", initials: "CG", color: "#BE185D" },
+  { id: 6, userId: "6", name: "Nuwan Jayaweera", role: "Quantity Surveyor", initials: "NJ", color: "#0284C7" },
 ];
 
 const ACTIVE_RAW: Omit<ActiveProjectView, "id">[] = [
