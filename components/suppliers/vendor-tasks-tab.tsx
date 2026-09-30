@@ -618,7 +618,7 @@ function TasksToolbar({
           </div>
         )}
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
         <ToolbarButton icon="download" label="CSV" onClick={onCsv} />
         <ToolbarButton icon="print" label="Print" onClick={onPrint} />
         <GradientButton onClick={onAdd} disabled={addDisabled} className="px-3.5 py-2 text-[12px]">

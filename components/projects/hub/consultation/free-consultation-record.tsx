@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { useConsultation } from "@/hooks/use-consultation";
 import { useProjectTaskables } from "@/hooks/use-project-taskables";
+import { getApiErrorMessage } from "@/lib/api/handle-api-error";
 import { useHubTeam } from "@/lib/projects/hub-team-context";
 import { findStageTaskable } from "@/lib/projects/seed-phases";
 import type { ConsultTask, ModeType } from "@/types/consultation";
@@ -160,9 +161,10 @@ export function FreeConsultationRecord({
               <button
                 type="button"
                 onClick={() => {
+                  const assigneeUserId = teamMembers.find((m) => m.userId)?.userId;
                   void createTask({
                     title: "New task",
-                    assignee_user_id: teamMembers[0] ? String(teamMembers[0].id) : "1",
+                    ...(assigneeUserId ? { assignee_user_id: assigneeUserId } : {}),
                     status: "pending",
                   })
                     .then((task) => {
@@ -170,9 +172,7 @@ export function FreeConsultationRecord({
                       setTasks((p) => (p.some((t) => t.id === task.id) ? p : [...p, task]));
                     })
                     .catch((err) => {
-                      toast.error(
-                        err instanceof Error ? err.message : "Failed to add task",
-                      );
+                      toast.error(getApiErrorMessage(err) || "Failed to add task");
                     });
                 }}
                 className="flex cursor-pointer items-center gap-1.5 border-none bg-transparent text-xs font-semibold text-[var(--figma-teal)]"
@@ -185,7 +185,7 @@ export function FreeConsultationRecord({
         />
         <div className="flex flex-col">
           {tasks.map((task, idx) => {
-            const m = teamMembers.find((t) => String(t.id) === String(task.assigneeId));
+            const m = teamMembers.find((t) => t.userId && t.userId === String(task.assigneeId));
             return (
               <div
                 key={task.id}

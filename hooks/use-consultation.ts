@@ -307,7 +307,7 @@ export function useConsultation(
         return mapConsultTaskApi({
           id: `mock-task-${Date.now()}`,
           title: payload.title,
-          assignee_user_id: payload.assignee_user_id ?? "1",
+          assignee_user_id: payload.assignee_user_id ?? null,
           status: payload.status ?? "pending",
         });
       }
@@ -324,7 +324,9 @@ export function useConsultation(
         method: "POST",
         body: JSON.stringify({
           title: payload.title,
-          assignee_user_id: payload.assignee_user_id,
+          ...(payload.assignee_user_id
+            ? { assignee_user_id: payload.assignee_user_id }
+            : {}),
           ...(statusApi ? { status: statusApi } : {}),
         }),
       });

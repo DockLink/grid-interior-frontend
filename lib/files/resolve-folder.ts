@@ -6,6 +6,7 @@ export const FOLDER_LABELS = {
   spacePlans: "Space Plans",
   detailedDrawings: "Detailed Drawings",
   designs: "DESIGNS",
+  concepts: "Concepts",
   threed: "3Ds",
   gallery: "Site Photos",
   galleryAlt: "Gallery",
@@ -96,6 +97,16 @@ export function resolveThreedFolder(
     tree,
     [FOLDER_LABELS.designs],
     [FOLDER_LABELS.threed],
+  );
+}
+
+export function resolveConceptsFolder(
+  tree: ProjectFolderTree | null | undefined,
+): ProjectFolderNode | null {
+  return findChildFolderByLabels(
+    tree,
+    [FOLDER_LABELS.designs],
+    [FOLDER_LABELS.concepts],
   );
 }
 

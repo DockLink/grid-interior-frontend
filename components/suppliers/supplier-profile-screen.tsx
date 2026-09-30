@@ -456,10 +456,13 @@ export function SupplierProfileScreen({ supplierId }: { supplierId: string }) {
   } = useSupplier(supplierId);
   const { tasks: vendorTasks } = useVendorTasks({ party_id: supplierId, party_kind: "supplier" });
   const { projects } = useProjects({ page: 1, limit: 100 });
-  const { linkedFromProjectLinks, isLoading: projectLinksLoading } =
-    useSupplierLinkedFromProjectLinks(supplierId, projects, {
-      enabled: !authDisabled && tab === "projects",
-    });
+  const {
+    linkedFromProjectLinks,
+    isLoading: projectLinksLoading,
+    refetch: refetchLinkedProjects,
+  } = useSupplierLinkedFromProjectLinks(supplierId, projects, {
+    enabled: !authDisabled && tab === "projects",
+  });
 
   const linkedFromTasks = useMemo(() => {
     const byId = new Map(projects.map((p) => [p.id, p]));
@@ -629,6 +632,9 @@ export function SupplierProfileScreen({ supplierId }: { supplierId: string }) {
           role={supplier.category}
           linkedProjectIds={linkedProjects.map((p) => p.projectId)}
           onClose={() => setLinkOpen(false)}
+          onLinked={() => {
+            void refetchLinkedProjects();
+          }}
         />
       )}
 

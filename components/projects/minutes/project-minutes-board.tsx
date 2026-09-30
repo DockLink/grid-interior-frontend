@@ -326,7 +326,7 @@ export function ProjectMinutesBoard({ projectId }: { projectId: string }) {
           <div
             style={{
               padding: "16px 16px 12px",
-              borderBottom: "1px solid rgba(90,60,30,0.10)",
+              borderBottom: "1px solid var(--figma-border)",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -338,20 +338,19 @@ export function ProjectMinutesBoard({ projectId }: { projectId: string }) {
             </span>
             {canManage && (
               <button
+                type="button"
                 onClick={openCreate}
+                className="gi-gradient-cta"
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: "4px",
-                  background: "var(--ds-accent)",
-                  border: "none",
-                  borderRadius: "6px",
-                  height: "26px",
-                  padding: "0 10px",
+                  borderRadius: "20px",
+                  height: "28px",
+                  padding: "0 12px",
                   fontSize: "12px",
-                  color: "white",
                   cursor: "pointer",
-                  fontWeight: 500,
+                  fontWeight: 600,
                 }}
               >
                 <Plus size={13} />
@@ -365,7 +364,7 @@ export function ProjectMinutesBoard({ projectId }: { projectId: string }) {
               <div style={{ padding: "16px", fontSize: "13px", color: "var(--ds-secondary-label)" }}>Loading…</div>
             )}
             {!isLoading && error && (
-              <div style={{ padding: "16px", fontSize: "13px", color: "#C0392B" }}>{error}</div>
+              <div style={{ padding: "16px", fontSize: "13px", color: "var(--figma-alert)" }}>{error}</div>
             )}
             {!isLoading && !error && minutes.length === 0 && (
               <div style={{ padding: "16px", fontSize: "13px", color: "var(--ds-secondary-label)" }}>
@@ -384,10 +383,10 @@ export function ProjectMinutesBoard({ projectId }: { projectId: string }) {
                   style={{
                     width: "100%",
                     height: "60px",
-                    background: active ? "var(--ds-bg)" : "transparent",
+                    background: active ? "var(--figma-gray50)" : "transparent",
                     border: "none",
-                    borderLeft: active ? "3px solid var(--ds-accent)" : "3px solid transparent",
-                    borderBottom: "1px solid rgba(90,60,30,0.08)",
+                    borderLeft: active ? "3px solid var(--figma-teal)" : "3px solid transparent",
+                    borderBottom: "1px solid var(--figma-border)",
                     cursor: "pointer",
                     padding: "0 14px 0 13px",
                     textAlign: "left",
@@ -417,7 +416,7 @@ export function ProjectMinutesBoard({ projectId }: { projectId: string }) {
         </div>
 
         {/* RIGHT PANEL */}
-        <div style={{ flex: 1, background: "#EDE3D4", overflowY: "auto", position: "relative" }}>
+        <div style={{ flex: 1, background: "#fff", overflowY: "auto", position: "relative" }}>
           {mode === "detail" && selected && (
             <DetailView
               minute={selected}
@@ -429,10 +428,26 @@ export function ProjectMinutesBoard({ projectId }: { projectId: string }) {
             />
           )}
           {mode === "detail" && !selected && !isLoading && (
-            <div style={{ padding: "40px 32px", fontSize: "14px", color: "var(--ds-secondary-label)" }}>
-              {canManage
-                ? "Select a meeting minute, or create a new one."
-                : "No meeting minutes have been published yet."}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: "280px",
+                padding: "40px 32px",
+                textAlign: "center",
+                gap: "8px",
+              }}
+            >
+              <div style={{ fontSize: "15px", fontWeight: 500, color: "var(--figma-navy)" }}>
+                No minute selected
+              </div>
+              <div style={{ fontSize: "13px", color: "var(--figma-gray500)", maxWidth: "320px" }}>
+                {canManage
+                  ? "Select a meeting from the list, or click New to create one."
+                  : "No meeting minutes have been published yet."}
+              </div>
             </div>
           )}
           {(mode === "create" || mode === "edit") && (
@@ -511,7 +526,7 @@ function DetailView({
               onClick={onEdit}
               style={{
                 background: "var(--ds-bg)",
-                border: "1px solid rgba(90,60,30,0.18)",
+                border: "1px solid var(--figma-border)",
                 borderRadius: "6px",
                 height: "28px",
                 padding: "0 12px",
@@ -527,14 +542,14 @@ function DetailView({
               title="Delete meeting minute"
               style={{
                 background: "var(--ds-bg)",
-                border: "1px solid rgba(90,60,30,0.18)",
+                border: "1px solid var(--figma-border)",
                 borderRadius: "6px",
                 height: "28px",
                 width: "28px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#C0392B",
+                color: "var(--figma-alert)",
                 cursor: "pointer",
               }}
             >
@@ -567,14 +582,14 @@ function DetailView({
                   width: "40px",
                   height: "40px",
                   borderRadius: "50%",
-                  background: "rgba(212,169,106,0.15)",
+                  background: "rgba(14,124,134,0.08)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   flexShrink: 0,
                 }}
               >
-                <Mic size={20} color="var(--ds-accent)" />
+                <Mic size={20} color="var(--figma-teal)" />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
@@ -628,14 +643,14 @@ function DetailView({
                     width: "36px",
                     height: "36px",
                     borderRadius: "8px",
-                    background: "rgba(212,169,106,0.15)",
+                    background: "rgba(14,124,134,0.08)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     flexShrink: 0,
                   }}
                 >
-                  <FileText size={18} color="var(--ds-accent)" />
+                  <FileText size={18} color="var(--figma-teal)" />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div
@@ -664,7 +679,7 @@ function DetailView({
         <div
           style={{
             fontSize: "14px",
-            color: "#3A2E24",
+            color: "var(--figma-navy)",
             lineHeight: 1.75,
             whiteSpace: "pre-wrap",
             marginBottom: "28px",
@@ -692,7 +707,7 @@ function DetailView({
                     gap: "10px",
                     background: "var(--ds-surface-elevated)",
                     borderRadius: "8px",
-                    border: "1px solid rgba(90,60,30,0.10)",
+                    border: "1px solid var(--figma-border)",
                     padding: "10px 14px",
                     opacity: updating ? 0.6 : 1,
                   }}
@@ -704,8 +719,8 @@ function DetailView({
                       width: "18px",
                       height: "18px",
                       borderRadius: "50%",
-                      border: `2px solid ${done ? "var(--ds-accent)" : "rgba(90,60,30,0.25)"}`,
-                      background: done ? "var(--ds-accent)" : "transparent",
+                      border: `2px solid ${done ? "var(--figma-teal)" : "var(--figma-border)"}`,
+                      background: done ? "var(--figma-teal)" : "transparent",
                       cursor: canManage && !updating ? "pointer" : "default",
                       display: "flex",
                       alignItems: "center",
@@ -816,8 +831,8 @@ function AttendeesSelect({
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "4px",
-                background: "#F5E6D0",
-                color: "var(--ds-secondary-label)",
+                background: "var(--figma-gray100)",
+                color: "var(--figma-navy)",
                 borderRadius: "6px",
                 padding: "2px 6px",
                 fontSize: "12px",
@@ -826,7 +841,7 @@ function AttendeesSelect({
               {name}
               <XIcon
                 size={11}
-                style={{ cursor: "pointer" }}
+                style={{ cursor: "pointer", color: "var(--figma-gray400)" }}
                 onClick={(e) => {
                   e.stopPropagation();
                   onChange(value.filter((n) => n !== name));
@@ -849,9 +864,9 @@ function AttendeesSelect({
               right: 0,
               zIndex: 41,
               background: "var(--ds-surface-elevated)",
-              border: "1px solid rgba(90,60,30,0.18)",
-              borderRadius: "8px",
-              boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+              border: "1px solid var(--figma-border)",
+              borderRadius: "10px",
+              boxShadow: "var(--neu-dropdown)",
               maxHeight: "220px",
               overflowY: "auto",
               padding: "4px",
@@ -874,7 +889,7 @@ function AttendeesSelect({
                       alignItems: "center",
                       gap: "8px",
                       width: "100%",
-                      background: checked ? "var(--ds-bg)" : "transparent",
+                      background: checked ? "var(--figma-gray50)" : "transparent",
                       border: "none",
                       borderRadius: "6px",
                       padding: "8px 10px",
@@ -889,8 +904,8 @@ function AttendeesSelect({
                         width: "16px",
                         height: "16px",
                         borderRadius: "4px",
-                        border: `2px solid ${checked ? "var(--ds-accent)" : "rgba(90,60,30,0.25)"}`,
-                        background: checked ? "var(--ds-accent)" : "transparent",
+                        border: `2px solid ${checked ? "var(--figma-teal)" : "var(--figma-border)"}`,
+                        background: checked ? "var(--figma-teal)" : "transparent",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -969,15 +984,29 @@ function EditorView({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const inputBase: React.CSSProperties = {
-    background: "var(--ds-surface-elevated)",
-    border: "1px solid rgba(90,60,30,0.18)",
-    borderRadius: "8px",
+    background: "#fff",
+    border: "1.5px solid var(--figma-border)",
+    borderRadius: "10px",
     padding: "8px 12px",
     fontSize: "13px",
-    color: "var(--ds-label)",
+    color: "var(--figma-navy)",
     outline: "none",
     width: "100%",
     boxSizing: "border-box",
+    boxShadow: "var(--neu-inset)",
+  };
+  const uploadZoneBase: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    width: "100%",
+    background: "var(--figma-gray50)",
+    border: "2px dashed var(--figma-border)",
+    borderRadius: "14px",
+    fontSize: "13px",
+    color: "var(--figma-gray500)",
+    boxShadow: "var(--neu-inset)",
   };
 
   return (
@@ -987,13 +1016,20 @@ function EditorView({
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
           placeholder="Meeting title"
+          className="hub-input-focus"
           style={{ ...inputBase, fontSize: "18px", padding: "9px 12px", marginBottom: "12px" }}
         />
 
         <div style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: "12px", marginBottom: "14px" }}>
           <div>
             <label style={labelStyle}>Date</label>
-            <input type="date" value={date} onChange={(e) => onDateChange(e.target.value)} style={inputBase} />
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => onDateChange(e.target.value)}
+              className="hub-input-focus"
+              style={inputBase}
+            />
           </div>
           <div>
             <label style={labelStyle}>Attendees</label>
@@ -1025,24 +1061,17 @@ function EditorView({
                 style={{ display: "none" }}
               />
               <button
+                type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingAudio}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "8px",
-                  width: "100%",
-                  height: "60px",
-                  background: "var(--ds-surface-elevated)",
-                  border: "2px dashed rgba(90,60,30,0.25)",
-                  borderRadius: "12px",
+                  ...uploadZoneBase,
+                  height: "72px",
                   cursor: uploadingAudio ? "default" : "pointer",
-                  fontSize: "13px",
-                  color: "var(--ds-secondary-label)",
+                  opacity: uploadingAudio ? 0.7 : 1,
                 }}
               >
-                <Upload size={18} />
+                <Upload size={18} color="var(--figma-teal)" />
                 {uploadingAudio ? "Uploading…" : "Click to upload audio file (MP3, M4A, WAV, etc.)"}
               </button>
             </>
@@ -1061,14 +1090,14 @@ function EditorView({
                     width: "36px",
                     height: "36px",
                     borderRadius: "50%",
-                    background: "rgba(212,169,106,0.15)",
+                    background: "rgba(14,124,134,0.08)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     flexShrink: 0,
                   }}
                 >
-                  <Mic size={18} color="var(--ds-accent)" />
+                  <Mic size={18} color="var(--figma-teal)" />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div
@@ -1093,7 +1122,7 @@ function EditorView({
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: "#C4B19A",
+                    color: "var(--figma-gray400)",
                     display: "flex",
                     alignItems: "center",
                     padding: "4px",
@@ -1128,14 +1157,14 @@ function EditorView({
                         width: "36px",
                         height: "36px",
                         borderRadius: "8px",
-                        background: "rgba(212,169,106,0.15)",
+                        background: "rgba(14,124,134,0.08)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         flexShrink: 0,
                       }}
                     >
-                      <FileText size={18} color="var(--ds-accent)" />
+                      <FileText size={18} color="var(--figma-teal)" />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div
@@ -1160,7 +1189,7 @@ function EditorView({
                         background: "none",
                         border: "none",
                         cursor: "pointer",
-                        color: "#C4B19A",
+                        color: "var(--figma-gray400)",
                         display: "flex",
                         alignItems: "center",
                         padding: "4px",
@@ -1187,24 +1216,17 @@ function EditorView({
             style={{ display: "none" }}
           />
           <button
+            type="button"
             onClick={() => pdfInputRef.current?.click()}
             disabled={uploadingPdf}
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "8px",
-              width: "100%",
-              height: "52px",
-              background: "var(--ds-surface-elevated)",
-              border: "2px dashed rgba(90,60,30,0.25)",
-              borderRadius: "12px",
+              ...uploadZoneBase,
+              height: "64px",
               cursor: uploadingPdf ? "default" : "pointer",
-              fontSize: "13px",
-              color: "var(--ds-secondary-label)",
+              opacity: uploadingPdf ? 0.7 : 1,
             }}
           >
-            <Upload size={18} />
+            <Upload size={18} color="var(--figma-teal)" />
             {uploadingPdf ? "Uploading…" : "Click to upload PDF or Word (add multiple if needed)"}
           </button>
         </div>
@@ -1215,24 +1237,26 @@ function EditorView({
           onChange={(e) => onBodyChange(e.target.value)}
           placeholder="Write meeting notes here or leave blank if using audio only…"
           rows={5}
+          className="hub-input-focus"
           style={{ ...inputBase, resize: "vertical", lineHeight: 1.6, marginBottom: "14px" }}
         />
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
           <span style={{ fontSize: "14px", fontWeight: 500, color: "var(--ds-label)" }}>Action items</span>
           <button
+            type="button"
             onClick={onAddAction}
             style={{
               display: "flex",
               alignItems: "center",
               gap: "4px",
-              background: "none",
-              border: "1px solid rgba(90,60,30,0.18)",
-              borderRadius: "6px",
-              height: "26px",
+              background: "#fff",
+              border: "1.5px solid var(--figma-border)",
+              borderRadius: "8px",
+              height: "28px",
               padding: "0 10px",
               fontSize: "12px",
-              color: "var(--ds-secondary-label)",
+              color: "var(--figma-gray500)",
               cursor: "pointer",
             }}
           >
@@ -1249,10 +1273,11 @@ function EditorView({
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                background: "var(--ds-surface-elevated)",
-                borderRadius: "8px",
-                border: "1px solid rgba(90,60,30,0.10)",
+                background: "#fff",
+                borderRadius: "10px",
+                border: "1.5px solid var(--figma-border)",
                 padding: "8px 12px",
+                boxShadow: "var(--neu-inset)",
               }}
             >
               <div
@@ -1260,7 +1285,7 @@ function EditorView({
                   width: "14px",
                   height: "14px",
                   borderRadius: "50%",
-                  border: "2px solid rgba(90,60,30,0.20)",
+                  border: "2px solid var(--figma-border)",
                   flexShrink: 0,
                 }}
               />
@@ -1277,12 +1302,13 @@ function EditorView({
                 style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: "12px", color: "var(--ds-secondary-label)" }}
               />
               <button
+                type="button"
                 onClick={() => onRemoveAction(action.id)}
                 style={{
                   background: "none",
                   border: "none",
                   cursor: "pointer",
-                  color: "#C4B19A",
+                  color: "var(--figma-gray400)",
                   display: "flex",
                   alignItems: "center",
                   padding: 0,
@@ -1303,8 +1329,8 @@ function EditorView({
 
       <div
         style={{
-          borderTop: "1px solid var(--ds-separator)",
-          background: "#EDE3D4",
+          borderTop: "1px solid var(--figma-border)",
+          background: "#fff",
           padding: "12px 32px",
           display: "flex",
           gap: "8px",
@@ -1313,34 +1339,34 @@ function EditorView({
         }}
       >
         <button
+          type="button"
           onClick={onCancel}
           disabled={isSaving}
           style={{
-            background: "var(--ds-bg)",
-            border: "1px solid rgba(90,60,30,0.18)",
-            borderRadius: "8px",
-            height: "32px",
+            background: "#fff",
+            border: "1.5px solid var(--figma-border)",
+            borderRadius: "10px",
+            height: "34px",
             padding: "0 16px",
             fontSize: "13px",
-            color: "var(--ds-secondary-label)",
+            color: "var(--figma-gray500)",
             cursor: "pointer",
           }}
         >
           Cancel
         </button>
         <button
+          type="button"
           onClick={onPublish}
           disabled={isSaving}
+          className="gi-gradient-cta"
           style={{
-            background: "var(--ds-accent)",
-            border: "none",
-            borderRadius: "8px",
-            height: "32px",
+            borderRadius: "10px",
+            height: "34px",
             padding: "0 20px",
             fontSize: "13px",
-            color: "white",
             cursor: isSaving ? "default" : "pointer",
-            fontWeight: 500,
+            fontWeight: 600,
             opacity: isSaving ? 0.7 : 1,
           }}
         >

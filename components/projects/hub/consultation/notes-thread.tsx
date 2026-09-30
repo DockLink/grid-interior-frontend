@@ -88,9 +88,10 @@ export function NotesThread({
   };
 
   const findMember = (memberId: string) =>
-    teamMembers.find((t) => String(t.id) === String(memberId)) ??
+    teamMembers.find((t) => t.userId && t.userId === String(memberId)) ??
     teamMembers[0] ?? {
       id: 0,
+      userId: "",
       name: "Team",
       role: "Member",
       initials: "TM",
