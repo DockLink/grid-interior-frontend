@@ -10,13 +10,16 @@ export function SectionCard({
   children,
   className,
   style,
+  id,
 }: {
   children: ReactNode;
   className?: string;
   style?: CSSProperties;
+  id?: string;
 }) {
   return (
     <div
+      id={id}
       className={cn("mb-5 rounded-2xl bg-white px-6 py-[22px]", className)}
       style={{ boxShadow: "var(--neu-card)", ...style }}
     >

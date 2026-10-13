@@ -38,6 +38,9 @@ const ROLE_PILL: Record<UserRole, { bg: string; color: string; label: string }> 
   ADMIN: { bg: "#F5E6D0", color: "#D4A96A", label: "Admin" },
   TEAM_LEAD: { bg: "#DBEAFE", color: "#1E3A8A", label: "Team Lead" },
   MEMBER: { bg: "#F5EFE6", color: "#6B5744", label: "Member" },
+  DESIGNER: { bg: "#F5EFE6", color: "#6B5744", label: "Designer" },
+  PROJECT_COORDINATOR: { bg: "#DBEAFE", color: "#1E3A8A", label: "Project Coordinator" },
+  SOCIAL_MEDIA_ADMIN: { bg: "#F5E6D0", color: "#D4A96A", label: "Social Media Admin" },
   GUEST: { bg: "#F5EFE6", color: "#6B5744", label: "Guest" },
   CLIENT_FULL_ACCESS: { bg: "#E8F0FE", color: "#1E4A7A", label: "Full view access" },
 };

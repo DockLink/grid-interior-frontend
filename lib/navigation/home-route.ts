@@ -12,6 +12,7 @@ const HOME_ROUTE_LABELS: Record<HomeRoutePreference, string> = {
   [NAV_ROUTES.projects]: "Projects",
   [NAV_ROUTES.myTasks]: "My Tasks",
   [NAV_ROUTES.notifications]: "Notifications",
+  "/suppliers": "Suppliers",
 };
 
 export function getHomeRouteLabel(route: HomeRoutePreference): string {

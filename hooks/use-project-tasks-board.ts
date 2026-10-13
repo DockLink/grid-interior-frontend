@@ -125,6 +125,7 @@ export function useProjectTasksBoard(projectId: string) {
   }, [projectId]);
 
   const stageIdsKey = useMemo(() => taskIdsKey(stageTasks), [stageTasks]);
+  const milestoneIdsKey = useMemo(() => taskIdsKey(milestoneTasks), [milestoneTasks]);
   const rawTaskIdsKey = useMemo(() => taskIdsKey(rawTasks), [rawTasks]);
 
   const stages = useMemo(() => stageTasks.map((s) => mapStageToView(s)), [stageTasks]);
@@ -163,10 +164,12 @@ export function useProjectTasksBoard(projectId: string) {
   const canManage = canManageProject(effectiveRole, isViewer);
   const isAdmin = effectiveRole === "admin";
 
+  const hierarchyComboKey = `${stageIdsKey}|${milestoneIdsKey}`;
+
   useEffect(() => {
     if (isAuthDisabled()) return;
-    if (hierarchyKeyRef.current === stageIdsKey) return;
-    hierarchyKeyRef.current = stageIdsKey;
+    if (hierarchyKeyRef.current === hierarchyComboKey) return;
+    hierarchyKeyRef.current = hierarchyComboKey;
 
     if (!stageIdsKey) {
       setMilestoneParents({});
@@ -225,7 +228,7 @@ export function useProjectTasksBoard(projectId: string) {
     return () => {
       cancelled = true;
     };
-  }, [stageIdsKey, stageTasks]);
+  }, [stageIdsKey, stageTasks, hierarchyComboKey]);
 
   useEffect(() => {
     if (isAuthDisabled()) return;

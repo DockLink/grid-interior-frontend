@@ -5,6 +5,8 @@ export interface VendorTaskApi {
   id: string;
   party_kind: VendorPartyKind;
   party_id: string;
+  party_name?: string;
+  party_category?: string;
   project_id: string;
   title: string;
   description?: string | null;
@@ -17,6 +19,8 @@ export interface VendorTask {
   id: string;
   partyKind: VendorPartyKind;
   partyId: string;
+  partyName?: string;
+  partyCategory?: string;
   projectId: string;
   title: string;
   description?: string;

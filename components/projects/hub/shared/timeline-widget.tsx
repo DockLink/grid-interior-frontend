@@ -13,7 +13,13 @@ import { SectionCard, SectionTitle } from "./workspace-ui";
 function addWorkingDays(iso: string, days: number): string {
   const base = new Date(`${iso.slice(0, 10)}T00:00:00`);
   if (Number.isNaN(base.getTime())) return iso;
-  base.setDate(base.getDate() + Math.max(0, Math.round(days)));
+  let remaining = Math.max(0, Math.round(days));
+  while (remaining > 0) {
+    base.setDate(base.getDate() + 1);
+    if (base.getDay() !== 0 && base.getDay() !== 6) {
+      remaining--;
+    }
+  }
   return base.toISOString().slice(0, 10);
 }
 
@@ -85,7 +91,7 @@ export function TimelineWidget({
 
   const calcDeadline = () => {
     const d = parseInt(days, 10) || 0;
-    return formatLabel(addWorkingDays(liveStartIso, Math.round(d * 1.4)));
+    return formatLabel(addWorkingDays(liveStartIso, d));
   };
 
   const badgeStyle =

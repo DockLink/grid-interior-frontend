@@ -303,6 +303,7 @@ export function ThreeDVisualizationsScreen({
             <button
               type="button"
               className="cursor-pointer border-none bg-transparent p-0 text-xs text-[var(--figma-teal)] underline"
+              onClick={() => setFinalUploaded(false)}
             >
               Replace files
             </button>

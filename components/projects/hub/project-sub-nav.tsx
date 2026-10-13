@@ -18,6 +18,7 @@ const FIGMA_TABS: { key: ProjectTab; label: string; icon: string }[] = [
   { key: "client-view", label: "Client View", icon: "person_outline" },
   { key: "materials", label: "Materials", icon: "inventory_2" },
   { key: "links", label: "Suppliers & Clients", icon: "handshake" },
+  { key: "gallery", label: "Image Gallery", icon: "photo_library" },
 ];
 
 function tabFromPathname(pathname: string, projectId: string): ProjectTab {

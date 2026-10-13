@@ -23,7 +23,15 @@ function asFileType(type: string | null | undefined): ConceptFileType {
   return type === "pdf" ? "pdf" : "jpg";
 }
 
+function firstString(...values: Array<string | null | undefined>): string {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return "";
+}
+
 export function mapConceptCardApi(raw: ConceptCardApi, areaId?: string): ConceptCard {
+  const fileId = firstString(raw.file_id, raw.fileId);
   return {
     id: raw.id,
     name: raw.name ?? "",
@@ -31,7 +39,8 @@ export function mapConceptCardApi(raw: ConceptCardApi, areaId?: string): Concept
     fileName: raw.file_name ?? "",
     fileType: asFileType(raw.file_type),
     fileSize: raw.file_size ?? "",
-    thumb: raw.thumb_url ?? "",
+    thumb: firstString(raw.thumb_url, raw.thumbUrl),
+    fileId: fileId || undefined,
     confirmStatus: asConfirm(raw.confirm_status ?? "pending"),
   };
 }

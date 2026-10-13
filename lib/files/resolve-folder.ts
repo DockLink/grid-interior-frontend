@@ -117,6 +117,9 @@ export function resolveGalleryFolder(
     FOLDER_LABELS.gallery,
     FOLDER_LABELS.galleryAlt,
     FOLDER_LABELS.photos,
+    "Image Gallery",
+    "Images",
+    "Site Pictures",
   ]);
 }
 

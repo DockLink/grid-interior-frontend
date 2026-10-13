@@ -630,15 +630,20 @@ function TasksToolbar({
   );
 }
 
-function useTaskResolvers() {
+function useTaskResolvers(projects?: { id: string; name: string }[]) {
   const qc = useQueryClient();
+  const byId = useMemo(() => {
+    if (!projects) return null;
+    return new Map(projects.map((p) => [p.id, p.name]));
+  }, [projects]);
   return useMemo(
     () => ({
       partyName: (task: VendorTask) =>
         getVendorPartyNameFromCache(qc, task.partyKind, task.partyId),
-      projectName: (task: VendorTask) => getProjectNameFromCache(qc, task.projectId),
+      projectName: (task: VendorTask) =>
+        byId?.get(task.projectId) ?? getProjectNameFromCache(qc, task.projectId),
     }),
-    [qc],
+    [qc, byId],
   );
 }
 
@@ -702,7 +707,8 @@ export function VendorTasksTab({
 }) {
   const authDisabled = isAuthDisabled();
   const qc = useQueryClient();
-  const resolvers = useTaskResolvers();
+  const { projects } = useProjects({ page: 1, limit: 100 });
+  const resolvers = useTaskResolvers(projects);
   const {
     tasks: mine,
     isLoading,
@@ -714,7 +720,7 @@ export function VendorTasksTab({
     isUpdating,
     isDeleting,
   } = useVendorTasks({ party_id: partyId, party_kind: partyKind });
-  const { projects } = useProjects({ page: 1, limit: 100 });
+
 
   const projectOptions = useMemo(
     () => projects.map((p) => ({ projectId: p.id, name: p.name })),
@@ -867,9 +873,9 @@ export function VendorTasksTab({
 export function ProjectVendorTasksSection({ projectId }: { projectId: string }) {
   const authDisabled = isAuthDisabled();
   const qc = useQueryClient();
-  const resolvers = useTaskResolvers();
   const { project } = useProjectContext();
   const projectName = project?.name ?? "Project";
+  const resolvers = useTaskResolvers([{ id: projectId, name: projectName }]);
   const { links, isLoading: linksLoading, error: linksError } = useProjectLinks(projectId);
   const {
     tasks,

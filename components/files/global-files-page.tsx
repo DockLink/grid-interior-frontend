@@ -206,7 +206,6 @@ function FileTypeChip({ type }: { type: DocFile["type"] }) {
 // ── NAV TABS ──────────────────────────────────────────────────────────────────
 const TABS = [
   { id: "files" as DocsView, label: "Files", icon: "folder_open" },
-  { id: "gallery" as DocsView, label: "Photo Gallery", icon: "photo_library" },
   { id: "minutes-list" as DocsView, label: "Meeting Minutes", icon: "article" },
   { id: "search" as DocsView, label: "Search", icon: "search" },
 ];
@@ -1621,9 +1620,7 @@ export function DocumentsWorkspace() {
             isLive={!authDisabled}
           />
         )}
-        {view === "gallery" && (
-          <PhotoGallery projectFilter={projectFilter} projectNames={projectNames} />
-        )}
+
         {showEditor && (
           <MeetingEntry
             key={isCreating ? "create" : selectedMeeting?.id}

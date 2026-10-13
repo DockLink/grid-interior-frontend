@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { GradientBtn, OutlineBtn } from "@/components/projects/hub/consultation/consultation-ui";
@@ -8,8 +9,11 @@ import { UploadDropzone } from "@/components/projects/hub/shared/upload-dropzone
 import { WorkspaceBreadcrumb } from "@/components/projects/hub/shared/workspace-breadcrumb";
 import { useConcept } from "@/hooks/use-concept";
 import { useProjectFiles } from "@/hooks/use-project-files";
+import { authApiClient } from "@/lib/api/authenticated-client";
 import { formatFileSize } from "@/lib/files/format";
+import { mapProjectFilesList } from "@/lib/files/map-project-file-record";
 import { resolveConceptsFolder } from "@/lib/files/resolve-folder";
+import { queryKeys } from "@/lib/query/keys";
 import type { ConceptCard, ConceptFileType } from "@/types/concept";
 import { MAX_CONCEPTS_PER_AREA } from "@/types/concept";
 import type { ProjectFile } from "@/types/files";
@@ -22,6 +26,18 @@ function extractUploadedFileId(uploaded: unknown): string | null {
   if (typeof row.id === "string" && row.id) return row.id;
   if (typeof row.file_id === "string" && row.file_id) return row.file_id;
   return null;
+}
+
+function isHttpUrl(url: string): boolean {
+  return url.startsWith("https://") || url.startsWith("http://");
+}
+
+function resolveCardFileId(card: ConceptCard, files: ProjectFile[]): string | null {
+  if (card.fileId) return card.fileId;
+  const name = card.fileName.trim().toLowerCase();
+  if (!name) return null;
+  const match = files.find((file) => file.fileName.trim().toLowerCase() === name);
+  return match?.id ?? null;
 }
 
 function conceptFileTypeFromFile(file: File): ConceptFileType | null {
@@ -40,10 +56,14 @@ function conceptFileTypeFromFile(file: File): ConceptFileType | null {
 
 function ConceptCardItem({
   concept,
+  previewUrl,
   onFinalize,
+  onPreviewError,
 }: {
   concept: ConceptCard;
+  previewUrl?: string;
   onFinalize: () => void;
+  onPreviewError: (failedSrc: string) => void;
 }) {
   const [hov, setHov] = useState(false);
   const isFinalized = concept.confirmStatus === "confirmed";
@@ -64,13 +84,14 @@ function ConceptCardItem({
       }}
     >
       <div className="relative h-40 overflow-hidden bg-[var(--figma-gray100)]">
-        {concept.fileType === "jpg" && concept.thumb ? (
+        {concept.fileType === "jpg" && previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={concept.thumb}
+            src={previewUrl}
             alt={concept.name}
             className="size-full object-cover transition-transform duration-[350ms]"
             style={{ transform: hov ? "scale(1.05)" : "scale(1)" }}
+            onError={() => onPreviewError(previewUrl)}
           />
         ) : (
           <div className="flex size-full flex-col items-center justify-center gap-2">
@@ -171,10 +192,104 @@ export function ConceptListScreen({
   const [showUpload, setShowUpload] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+  const retriedPreviewIds = useRef(new Set<string>());
+  const remoteKey = remoteConcepts
+    .map((card) => `${card.id}:${card.confirmStatus}:${card.fileId ?? ""}:${card.thumb}`)
+    .join("|");
+  const [syncedRemoteKey, setSyncedRemoteKey] = useState(remoteKey);
+
+  if (syncedRemoteKey !== remoteKey) {
+    setSyncedRemoteKey(remoteKey);
+    setConcepts(remoteConcepts);
+  }
+
+  const conceptsFolderPath = conceptsFolder?.path ?? null;
+  const needsFolderLookup = concepts.some(
+    (card) => card.fileType === "jpg" && !card.fileId && Boolean(card.fileName.trim()),
+  );
+  const { data: conceptFiles = [] } = useQuery({
+    queryKey: queryKeys.files.folder(projectId, conceptsFolderPath ?? ""),
+    queryFn: async () => {
+      if (!conceptsFolderPath) return [];
+      const qs = new URLSearchParams({ folderPath: conceptsFolderPath });
+      const res = await authApiClient<unknown>(
+        `/projects/${projectId}/files?${qs}`,
+      );
+      return mapProjectFilesList(res);
+    },
+    enabled: Boolean(conceptsFolderPath) && !isAuthOff && needsFolderLookup,
+    staleTime: 20_000,
+  });
+
+  const previewTargetsKey = useMemo(() => {
+    return concepts
+      .filter((card) => card.fileType === "jpg")
+      .map((card) => `${card.id}:${resolveCardFileId(card, conceptFiles) ?? ""}`)
+      .join("|");
+  }, [concepts, conceptFiles]);
 
   useEffect(() => {
-    setConcepts(remoteConcepts);
-  }, [remoteConcepts]);
+    if (isAuthOff || !previewTargetsKey) return;
+    let cancelled = false;
+    const missing = previewTargetsKey
+      .split("|")
+      .map((part) => {
+        const splitAt = part.indexOf(":");
+        return {
+          id: part.slice(0, splitAt),
+          fileId: part.slice(splitAt + 1),
+        };
+      })
+      .filter((target) => target.fileId && !previewUrls[target.id]);
+    if (missing.length === 0) return;
+
+    void (async () => {
+      const entries = await Promise.all(
+        missing.map(async (target) => {
+          try {
+            const url = await getDownloadUrl(target.fileId);
+            return [target.id, url] as const;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      if (cancelled) return;
+      setPreviewUrls((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        for (const entry of entries) {
+          if (entry && !next[entry[0]]) {
+            next[entry[0]] = entry[1];
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [previewTargetsKey, previewUrls, getDownloadUrl, isAuthOff]);
+
+  const handlePreviewError = useCallback(
+    (card: ConceptCard, failedSrc: string) => {
+      const fresh = previewUrls[card.id];
+      if (!fresh || failedSrc !== fresh || isAuthOff) return;
+      if (retriedPreviewIds.current.has(card.id)) return;
+      const fileId = resolveCardFileId(card, conceptFiles);
+      if (!fileId) return;
+      retriedPreviewIds.current.add(card.id);
+      void getDownloadUrl(fileId)
+        .then((url) => {
+          setPreviewUrls((prev) => ({ ...prev, [card.id]: url }));
+        })
+        .catch(() => undefined);
+    },
+    [previewUrls, conceptFiles, getDownloadUrl, isAuthOff],
+  );
 
   const atCap = concepts.length >= MAX_CONCEPTS_PER_AREA;
 
@@ -222,7 +337,6 @@ export function ConceptListScreen({
       file_name: file.name,
       file_type: fileType,
       file_size: formatFileSize(file.size),
-      thumb_url: thumbUrl,
     };
 
     setActionError(null);
@@ -254,10 +368,19 @@ export function ConceptListScreen({
 
       const created = await createCard(areaId, {
         ...payloadBase,
-        thumb_url: resolvedThumb || null,
+        thumb_url: isHttpUrl(resolvedThumb) ? resolvedThumb : null,
         file_id: fileId,
       });
-      if (created) setConcepts((prev) => [...prev, created]);
+      if (created) {
+        setConcepts((prev) => [
+          ...prev,
+          { ...created, fileId: created.fileId ?? fileId ?? undefined },
+        ]);
+        if (resolvedThumb) {
+          setPreviewUrls((prev) => ({ ...prev, [created.id]: resolvedThumb }));
+        }
+      }
+      if (thumbUrl && thumbUrl !== resolvedThumb) URL.revokeObjectURL(thumbUrl);
       setShowUpload(false);
     } catch (err: unknown) {
       if (thumbUrl) URL.revokeObjectURL(thumbUrl);
@@ -334,9 +457,21 @@ export function ConceptListScreen({
         </div>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
-          {concepts.map((c) => (
-            <ConceptCardItem key={c.id} concept={c} onFinalize={() => handleFinalize(c.id)} />
-          ))}
+          {concepts.map((c) => {
+            const freshPreview = previewUrls[c.id];
+            const previewUrl =
+              freshPreview ||
+              (c.fileType === "jpg" && isHttpUrl(c.thumb) ? c.thumb : undefined);
+            return (
+              <ConceptCardItem
+                key={c.id}
+                concept={c}
+                previewUrl={previewUrl}
+                onFinalize={() => handleFinalize(c.id)}
+                onPreviewError={(failedSrc) => handlePreviewError(c, failedSrc)}
+              />
+            );
+          })}
         </div>
       )}
     </div>

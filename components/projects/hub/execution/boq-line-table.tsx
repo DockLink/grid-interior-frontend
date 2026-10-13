@@ -89,8 +89,7 @@ function MoneyInput({
       onChange={(e) => {
         const next = e.target.value;
         setDraft(next);
-        const n = Number(next.replace(/,/g, "").trim());
-        if (next.trim() !== "" && Number.isFinite(n) && n >= 0) onChange(n);
+        onChange(parseMoneyInput(next));
       }}
       onBlur={() => {
         setFocused(false);
@@ -456,11 +455,15 @@ function CategoryBlock({
   suppliers,
   handlers,
   busyItemId,
+  showCommercial,
+  projectId,
 }: {
   cat: BoqCategory;
   suppliers: Supplier[];
-  handlers: CategoryHandlers;
+  handlers: CategoryHandlers & { getLatestItem: (itemId: string) => BoqLineItem | null };
   busyItemId: string | null;
+  showCommercial: boolean;
+  projectId: string;
 }) {
   const [open, setOpen] = useState(
     cat.code === "A" || cat.code === "C" || cat.code === "H",
@@ -474,8 +477,18 @@ function CategoryBlock({
     await handlers.onItemCommit(row);
   };
 
+  useEffect(() => {
+    const handleOpen = (e: CustomEvent<string>) => {
+      if (e.detail === cat.id) {
+        setOpen(true);
+      }
+    };
+    window.addEventListener("open-category", handleOpen as EventListener);
+    return () => window.removeEventListener("open-category", handleOpen as EventListener);
+  }, [cat.id]);
+
   return (
-    <SectionCard className="overflow-hidden px-0 py-0">
+    <SectionCard id={`category-${cat.id}`} className="overflow-hidden px-0 py-0">
       <div className="flex w-full items-center gap-3 px-5 py-4">
         <button
           type="button"
@@ -555,6 +568,7 @@ function CategoryBlock({
         <div className="border-t border-[var(--figma-border)] px-4 pb-5 pt-3 sm:px-5">
           <TimelineWidget
             phase={cat.label}
+            projectId={projectId}
             initialDays={String(cat.durationDays)}
             badgeVariant="teal"
             onDaysChange={(days) => {
@@ -564,7 +578,12 @@ function CategoryBlock({
           />
 
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[1280px] border-collapse text-left text-[12px]">
+            <table
+              className={cn(
+                "w-full border-collapse text-left text-[12px]",
+                showCommercial ? "min-w-[1280px]" : "min-w-[800px]"
+              )}
+            >
               <thead>
                 <tr className="text-[10px] font-semibold uppercase tracking-wide text-[var(--figma-gray400)]">
                   {[
@@ -576,11 +595,15 @@ function CategoryBlock({
                     "Qty",
                     "Rate",
                     "Total",
-                    "Supplier quotes (max 3)",
-                    "Firm price",
-                    "Negotiation",
-                    "Payment",
-                    "Contract",
+                    ...(showCommercial
+                      ? [
+                          "Supplier quotes (max 3)",
+                          "Firm price",
+                          "Negotiation",
+                          "Payment",
+                          "Contract",
+                        ]
+                      : []),
                     "",
                   ].map((h, i) => (
                     <th key={`${h}-${i}`} className="whitespace-nowrap px-2 pb-2 font-semibold">
@@ -713,94 +736,102 @@ function CategoryBlock({
                       <td className="px-2 py-3 font-bold text-[var(--figma-navy)]">
                         {formatLKR(lineItemTotal(row))}
                       </td>
-                      <td className="px-2 py-3">
-                        <QuoteCells
-                          item={row}
-                          editing={editing}
-                          suppliers={suppliers}
-                          onSelect={(supplierId) =>
-                            handlers.onCommercial(row.id, { selectedSupplierId: supplierId })
-                          }
-                          onQuotePrice={(supplierId, price) => {
-                            const quotes = row.quotes.map((q) =>
-                              q.supplierId === supplierId ? { ...q, price } : q,
-                            );
-                            handlers.onLocalItemPatch(row.id, { quotes });
-                          }}
-                          onAddQuote={(supplierId) => {
-                            const supplier = suppliers.find((s) => s.id === supplierId);
-                            if (!supplier || row.quotes.length >= 3) return;
-                            const quotes = [
-                              ...row.quotes,
-                              {
-                                supplierId: supplier.id,
-                                supplierName: supplier.name,
-                                price: row.rate,
-                              },
-                            ];
-                            handlers.onLocalItemPatch(row.id, { quotes });
-                            void handlers.onQuotesChange(row.id, quotes);
-                          }}
-                        />
-                      </td>
-                      <td className="px-2 py-3 font-semibold text-[var(--figma-teal)]">
-                        {editing ? (
-                          <MoneyInput
-                            value={row.designFirmPrice}
-                            ariaLabel={`${row.item} firm price`}
-                            onChange={(designFirmPrice) =>
-                              handlers.onLocalItemPatch(row.id, { designFirmPrice })
-                            }
-                          />
-                        ) : (
-                          formatLKR(row.designFirmPrice)
-                        )}
-                      </td>
-                      <td className="px-2 py-3">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handlers.onCommercial(row.id, {
-                              negotiationStatus: cycleNeg(row.negotiationStatus),
-                            })
-                          }
-                          className="cursor-pointer rounded-lg border-none px-2 py-1 text-[10px] font-semibold"
-                          style={{ color: neg.color, background: neg.bg }}
-                        >
-                          {neg.label}
-                        </button>
-                      </td>
-                      <td className="px-2 py-3">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handlers.onCommercial(row.id, {
-                              paymentStatus: cyclePay(row.paymentStatus),
-                            })
-                          }
-                          className="cursor-pointer rounded-lg border-none px-2 py-1 text-[10px] font-semibold"
-                          style={{ color: pay.color, background: pay.bg }}
-                        >
-                          {pay.label}
-                        </button>
-                      </td>
-                      <td className="px-2 py-3">
-                        <ContractCell
-                          item={row}
-                          busy={busy}
-                          onUpload={(file) => void handlers.onContractUpload(row.id, file)}
-                          onClear={() => void handlers.onContractClear(row.id)}
-                        />
-                      </td>
+                      {showCommercial && (
+                        <>
+                          <td className="px-2 py-3">
+                            <QuoteCells
+                              item={row}
+                              editing={editing}
+                              suppliers={suppliers}
+                              onSelect={(supplierId) =>
+                                handlers.onCommercial(row.id, { selectedSupplierId: supplierId })
+                              }
+                              onQuotePrice={(supplierId, price) => {
+                                const quotes = row.quotes.map((q) =>
+                                  q.supplierId === supplierId ? { ...q, price } : q,
+                                );
+                                handlers.onLocalItemPatch(row.id, { quotes });
+                              }}
+                              onAddQuote={(supplierId) => {
+                                const supplier = suppliers.find((s) => s.id === supplierId);
+                                if (!supplier || row.quotes.length >= 3) return;
+                                const quotes = [
+                                  ...row.quotes,
+                                  {
+                                    supplierId: supplier.id,
+                                    supplierName: supplier.name,
+                                    price: row.rate,
+                                  },
+                                ];
+                                handlers.onLocalItemPatch(row.id, { quotes });
+                                void handlers.onQuotesChange(row.id, quotes);
+                              }}
+                            />
+                          </td>
+                          <td className="px-2 py-3 font-semibold text-[var(--figma-teal)]">
+                            {editing ? (
+                              <MoneyInput
+                                value={row.designFirmPrice}
+                                ariaLabel={`${row.item} firm price`}
+                                onChange={(designFirmPrice) =>
+                                  handlers.onLocalItemPatch(row.id, { designFirmPrice })
+                                }
+                              />
+                            ) : (
+                              formatLKR(row.designFirmPrice)
+                            )}
+                          </td>
+                          <td className="px-2 py-3">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handlers.onCommercial(row.id, {
+                                  negotiationStatus: cycleNeg(row.negotiationStatus),
+                                })
+                              }
+                              className="cursor-pointer rounded-lg border-none px-2 py-1 text-[10px] font-semibold"
+                              style={{ color: neg.color, background: neg.bg }}
+                            >
+                              {neg.label}
+                            </button>
+                          </td>
+                          <td className="px-2 py-3">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handlers.onCommercial(row.id, {
+                                  paymentStatus: cyclePay(row.paymentStatus),
+                                })
+                              }
+                              className="cursor-pointer rounded-lg border-none px-2 py-1 text-[10px] font-semibold"
+                              style={{ color: pay.color, background: pay.bg }}
+                            >
+                              {pay.label}
+                            </button>
+                          </td>
+                          <td className="px-2 py-3">
+                            <ContractCell
+                              item={row}
+                              busy={busy}
+                              onUpload={(file) => void handlers.onContractUpload(row.id, file)}
+                              onClear={() => void handlers.onContractClear(row.id)}
+                            />
+                          </td>
+                        </>
+                      )}
                       <td className="px-2 py-3">
                         <div className="flex flex-col gap-1">
                           <button
                             type="button"
-                            onClick={() => {
+                            onPointerDown={(e) => {
                               if (editing) {
-                                const current = cat.items.find((it) => it.id === row.id) ?? row;
+                                e.preventDefault();
+                                const current = handlers.getLatestItem(row.id) ?? row;
                                 void finishEdit(current);
-                              } else {
+                              }
+                            }}
+                            onClick={() => {
+                              if (!editing) {
                                 setEditingId(row.id);
                               }
                             }}
@@ -880,6 +911,7 @@ export function BoqLineTable({
   const [synced, setSynced] = useState(false);
   const [addCategoryId, setAddCategoryId] = useState("");
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
+  const [showCommercial, setShowCommercial] = useState(false);
 
   useEffect(() => {
     if (remoteCats.length > 0 || !isLoading) {
@@ -895,6 +927,9 @@ export function BoqLineTable({
   const grand = useMemo(() => cats.reduce((s, c) => s + categorySubtotal(c), 0), [cats]);
   const budget = useMemo(() => cats.reduce((s, c) => s + c.budget, 0), [cats]);
   const variance = grand - budget;
+
+  const latestCatsRef = useRef(cats);
+  latestCatsRef.current = cats;
 
   const patchLocalCat = (categoryId: string, updater: (cat: BoqCategory) => BoqCategory) => {
     setCats((prev) => prev.map((c) => (c.id === categoryId ? updater(c) : c)));
@@ -954,6 +989,14 @@ export function BoqLineTable({
         }));
       }
       toast.success(`Line item added to ${target.code}. ${target.label}`);
+      
+      setTimeout(() => {
+        const el = document.getElementById(`category-${target.id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          window.dispatchEvent(new CustomEvent("open-category", { detail: target.id }));
+        }
+      }, 100);
     } catch (err) {
       handleApiError(err, { toast: true });
     }
@@ -1096,6 +1139,11 @@ export function BoqLineTable({
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <OutlineBtn
+            label={showCommercial ? "Hide Commercial" : "Show Commercial"}
+            icon={showCommercial ? "visibility_off" : "visibility"}
+            onClick={() => setShowCommercial(!showCommercial)}
+          />
+          <OutlineBtn
             label="Export BOQ"
             icon="download"
             onClick={() => {
@@ -1144,9 +1192,18 @@ export function BoqLineTable({
           <CategoryBlock
             key={cat.id}
             cat={cat}
+            projectId={project.id}
             suppliers={suppliers}
             busyItemId={busyItemId}
+            showCommercial={showCommercial}
             handlers={{
+              getLatestItem: (itemId: string) => {
+                for (const c of latestCatsRef.current) {
+                  const it = c.items.find(x => x.id === itemId);
+                  if (it) return it;
+                }
+                return null;
+              },
               onBudgetChange: (nextBudget) =>
                 patchLocalCat(cat.id, (c) => ({ ...c, budget: nextBudget })),
               onBudgetCommit: (nextBudget) =>

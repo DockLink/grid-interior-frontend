@@ -128,6 +128,7 @@ function DirectorProjectRow({
         {isAwaitingDirectorReview(proj) && (
           <button
             type="button"
+            onClick={() => window.open(`/projects/${proj.id}`, "_blank")}
             onMouseEnter={() => setReviewHover(true)}
             onMouseLeave={() => setReviewHover(false)}
             className="flex cursor-pointer items-center gap-[3px] border-none bg-transparent p-0 text-[11px] font-semibold text-[var(--figma-teal)]"
@@ -210,7 +211,7 @@ export function DirectorOverviewScreen({
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
+          <div className="relative z-50">
             <button
               type="button"
               onClick={() => setSortOpen((v) => !v)}

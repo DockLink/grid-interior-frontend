@@ -183,8 +183,8 @@ export function ProjectsOverview({
               <span className="max-w-[140px] truncate">{filterLabel}</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[220px]">
-              <DropdownMenuLabel>Status</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={statusFilter} onValueChange={setStatusFilter}>
+                <DropdownMenuLabel>Status</DropdownMenuLabel>
                 {STATUS_FILTER_OPTIONS.map((opt) => (
                   <DropdownMenuRadioItem key={opt.value} value={opt.value}>
                     {opt.label}
@@ -194,8 +194,8 @@ export function ProjectsOverview({
 
               <DropdownMenuSeparator />
 
-              <DropdownMenuLabel>Phase</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={phaseFilter} onValueChange={setPhaseFilter}>
+                <DropdownMenuLabel>Phase</DropdownMenuLabel>
                 {phaseOptions.map((opt) => (
                   <DropdownMenuRadioItem key={opt.value} value={opt.value}>
                     {opt.label}

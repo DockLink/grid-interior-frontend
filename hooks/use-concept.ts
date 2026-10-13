@@ -127,6 +127,7 @@ export function useConcept(
           {
             id: `mock-card-${Date.now()}`,
             name: payload.name,
+            file_id: payload.file_id ?? null,
             file_name: payload.file_name ?? "",
             file_type: payload.file_type ?? "jpg",
             file_size: payload.file_size ?? "",
