@@ -141,16 +141,35 @@ export function mapTimelineWorkspace(
     earliestStage?.endDate ?? "",
   );
 
-  const projectStartIso = toDateOnly(
-    project?.start_date ??
-      earliestStage?.startDate ??
-      now.toISOString().slice(0, 10),
-  );
-  const resolvedEnd =
-    (project ? resolveProjectEndDate(project) : null) ??
-    (latestStageEnd || null);
+  const candidateStarts = [
+    project?.start_date,
+    earliestStage?.startDate,
+    ...milestoneTasks.map((m) => m.start_date),
+  ].filter((d): d is string => !!d);
+
+  const earliestStart = candidateStarts.length
+    ? candidateStarts.reduce((min, d) => (parseDay(d) < parseDay(min) ? d : min))
+    : now.toISOString().slice(0, 10);
+
+  const projectStartIso = toDateOnly(earliestStart);
+
+  const latestMilestoneEnd = milestoneTasks.reduce((max, m) => {
+    const d = m.end_date || m.start_date;
+    return d && parseDay(d) > parseDay(max) ? d : max;
+  }, "");
+
+  const candidateEnds = [
+    project ? resolveProjectEndDate(project) : null,
+    latestStageEnd,
+    latestMilestoneEnd,
+  ].filter((d): d is string => !!d);
+
+  const latestEnd = candidateEnds.length
+    ? candidateEnds.reduce((max, d) => (parseDay(d) > parseDay(max) ? d : max))
+    : null;
+
   const projectEndIso = toDateOnly(
-    resolvedEnd ??
+    latestEnd ??
       (() => {
         const d = new Date(`${projectStartIso}T00:00:00`);
         d.setFullYear(d.getFullYear() + 1);

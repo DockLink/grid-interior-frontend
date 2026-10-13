@@ -134,3 +134,10 @@ export function rawLinksIncludeSupplier(
 ): boolean {
   return supplierLinkRowsFromRaw(raw).some((row) => row.supplier_id === supplierId);
 }
+
+export function rawLinksIncludeSubVendor(
+  raw: ProjectLinksApi | Record<string, unknown> | null | undefined,
+  subVendorId: string,
+): boolean {
+  return subVendorLinkRowsFromRaw(raw).some((row) => row.sub_vendor_id === subVendorId);
+}

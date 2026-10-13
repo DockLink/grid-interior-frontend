@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { cn } from "@/lib/utils";
@@ -182,6 +183,7 @@ export function ClientConfirmationWidget({
           <button
             type="button"
             className="cursor-pointer border-none bg-transparent p-0 text-xs text-[var(--figma-teal)] underline"
+            onClick={() => toast("Confirmation Details", { description: feedback || "No feedback provided." })}
           >
             View Confirmation Details
           </button>

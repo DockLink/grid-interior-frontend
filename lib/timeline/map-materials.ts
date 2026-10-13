@@ -10,6 +10,13 @@ const STATUS_MAP: Record<VendorTaskStatus, MaterialItem["status"]> = {
 };
 
 function resolveParty(task: VendorTask, links: ProjectLinks): { name: string; category: string } {
+  if (task.partyName) {
+    return {
+      name: task.partyName,
+      category: task.partyCategory ?? "Uncategorized",
+    };
+  }
+
   if (task.partyKind === "supplier") {
     const supplier = links.suppliers.find((s) => s.id === task.partyId);
     return {

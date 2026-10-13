@@ -2,9 +2,12 @@ import type { UserRole } from "./users";
 
 /** Higher index = higher privilege — used for primaryRole */
 export const ROLE_PRIORITY: UserRole[] = [
-  "GUEST",
   "CLIENT_FULL_ACCESS",
+  "GUEST",
   "MEMBER",
+  "SOCIAL_MEDIA_ADMIN",
+  "DESIGNER",
+  "PROJECT_COORDINATOR",
   "TEAM_LEAD",
   "ADMIN",
   "SUPER_ADMIN",
@@ -16,6 +19,9 @@ export const ROLE_DEFAULT_ROUTE: Record<UserRole, string> = {
   ADMIN: "/dashboard/admin",
   TEAM_LEAD: "/dashboard/lead",
   MEMBER: "/dashboard/member",
-  GUEST: "/projects",
-  CLIENT_FULL_ACCESS: "/projects",
+  PROJECT_COORDINATOR: "/projects",
+  DESIGNER: "/projects",
+  SOCIAL_MEDIA_ADMIN: "/suppliers",
+  GUEST: "/dashboard/guest",
+  CLIENT_FULL_ACCESS: "/dashboard/guest",
 };

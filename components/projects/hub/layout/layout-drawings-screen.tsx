@@ -126,7 +126,8 @@ function TeamRow() {
       <SectionTitle icon="group" title="Team Assignment" />
       <div className="flex flex-wrap items-center gap-2">
         {assigned.map((id) => {
-          const member = teamMembers.find((m) => m.id === id)!;
+          const member = teamMembers.find((m) => m.id === id);
+          if (!member) return null;
           return (
             <div
               key={id}

@@ -317,19 +317,24 @@ function GanttChart() {
       year: "numeric",
     });
     const clientViewUrl = `${window.location.origin}/projects/${projectId}/client-view`;
-    void navigator.clipboard?.writeText(clientViewUrl).then(
-      () => {
-        setFridaySent(stamp);
-        setCopied(true);
-        toast.success(
-          "Copied client timeline link. Portal token email send requires backend support.",
-        );
-        setTimeout(() => setCopied(false), 2000);
-      },
-      () => {
-        toast.error("Could not copy link to clipboard");
-      },
-    );
+    
+    if (navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(clientViewUrl).then(
+        () => {
+          setFridaySent(stamp);
+          setCopied(true);
+          toast.success(
+            "Copied client timeline link. Portal token email send requires backend support.",
+          );
+          setTimeout(() => setCopied(false), 2000);
+        },
+        () => {
+          toast.error("Could not copy link to clipboard");
+        },
+      );
+    } else {
+      toast.error("Clipboard API not available. Cannot copy link.");
+    }
   };
 
   // Compute week labels from live project start
@@ -1479,9 +1484,25 @@ function ClientView() {
             icon="share"
             small
             onClick={() => {
-              void navigator.clipboard?.writeText(
-                `${window.location.origin}/portal/marchetti-villa`,
-              );
+              if (!projectId) {
+                toast.error("Project id missing — cannot copy client timeline link.");
+                return;
+              }
+              const url = `${window.location.origin}/portal/${projectId}`;
+              if (navigator.clipboard?.writeText) {
+                void navigator.clipboard.writeText(url).then(
+                  () => {
+                    toast.success(
+                      "Copied client timeline link. Portal token email send requires backend support.",
+                    );
+                  },
+                  () => {
+                    toast.error("Could not copy link to clipboard");
+                  },
+                );
+              } else {
+                toast.error("Clipboard API not available. Cannot copy link.");
+              }
             }}
           />
         </div>

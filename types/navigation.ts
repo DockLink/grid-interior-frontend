@@ -108,6 +108,7 @@ export type ProjectTab =
   | "client-view"
   | "materials"
   | "links"
+  | "gallery"
   | "hold-requests";
 
 export const PROJECT_TABS: { key: ProjectTab; label: string; adminOnly?: boolean }[] = [
@@ -120,6 +121,7 @@ export const PROJECT_TABS: { key: ProjectTab; label: string; adminOnly?: boolean
   { key: "client-view", label: "Client View" },
   { key: "materials", label: "Materials" },
   { key: "links", label: "Suppliers & Clients" },
+  { key: "gallery", label: "Image Gallery" },
   { key: "hold-requests", label: "Hold Requests", adminOnly: true },
 ];
 

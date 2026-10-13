@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
@@ -10,13 +10,19 @@ import {
   AvailabilityDot,
   CategoryBadge,
   StatusPill,
+  GradientButton,
 } from "@/components/suppliers/supplier-ui";
 import { VendorTasksTab } from "@/components/suppliers/vendor-tasks-tab";
+import { LinkSubVendorProjectModal } from "@/components/suppliers/link-sub-vendor-project-modal";
 import { useSubVendor } from "@/hooks/use-sub-vendor";
 import { useSubVendorHistory } from "@/hooks/use-sub-vendor-history";
 import { useSubVendorPayments } from "@/hooks/use-sub-vendor-payments";
+import { useProjects } from "@/hooks/use-projects";
+import { useVendorTasks } from "@/hooks/use-vendor-tasks";
+import { useSubVendorLinkedFromProjectLinks } from "@/hooks/use-sub-vendor-linked-from-project-links";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { CATEGORY_CFG } from "@/lib/projects/link-categories";
+import { stageToPhase } from "@/lib/projects/map-project-hub";
 import {
   AVAILABILITY_CFG,
   HISTORY_STATUS_CFG,
@@ -28,17 +34,24 @@ import type {
   SubVendorHistory,
   SubVendorPayment,
 } from "@/types/suppliers";
-import { NAV_ROUTES } from "@/types/navigation";
+import type { SubVendorLinkedProject } from "@/types/project-links";
+import { NAV_ROUTES, projectRoute } from "@/types/navigation";
 import { cn } from "@/lib/utils";
 
-type Tab = "overview" | "history" | "payments" | "tasks";
+type Tab = "overview" | "history" | "payments" | "projects" | "tasks";
 
 const TABS = [
   { id: "overview" as Tab, label: "Overview", icon: "person" },
   { id: "history" as Tab, label: "Availability & History", icon: "history" },
   { id: "payments" as Tab, label: "Payment Records", icon: "receipt_long" },
+  { id: "projects" as Tab, label: "Linked Projects", icon: "folder_open" },
   { id: "tasks" as Tab, label: "Tasks & Deadlines", icon: "task_alt" },
 ];
+
+const PROJECT_STATUS_CFG: Record<string, { label: string; color: string; bg: string }> = {
+  "on-track": { label: "On Track", color: "var(--figma-success)", bg: "rgba(63,166,107,0.10)" },
+  "at-risk": { label: "At Risk", color: "#F5A623", bg: "rgba(245,166,35,0.10)" },
+};
 
 function OverviewTab({ vendor }: { vendor: SubVendor }) {
   const specColor = CATEGORY_CFG[vendor.specialty]?.color ?? "var(--figma-teal)";
@@ -399,11 +412,127 @@ function PaymentsTab({
   );
 }
 
+function ProjectsTab({
+  projects,
+  isLoading,
+  onLinkClick,
+}: {
+  projects: SubVendorLinkedProject[];
+  isLoading?: boolean;
+  onLinkClick: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex justify-end">
+        <GradientButton onClick={onLinkClick} className="px-4 py-2 text-[13px]">
+          <MaterialIcon name="link" outlined size={16} />
+          Link Project
+        </GradientButton>
+      </div>
+      {isLoading ? (
+        <div className="rounded-[14px] border border-dashed border-[var(--figma-border)] bg-white px-4 py-8 text-center text-[13px] text-[var(--figma-gray400)]">
+          Loading linked projects…
+        </div>
+      ) : projects.length === 0 ? (
+        <div className="rounded-[14px] border border-dashed border-[var(--figma-border)] bg-white px-4 py-8 text-center text-[13px] text-[var(--figma-gray400)]">
+          No projects linked to this sub-vendor yet. Use Link Project to attach an existing project.
+        </div>
+      ) : (
+        projects.map((p) => {
+          const s = PROJECT_STATUS_CFG[p.status]!;
+          return <LinkedProjectCard key={p.projectId} project={p} statusCfg={s} />;
+        })
+      )}
+    </div>
+  );
+}
+
+function LinkedProjectCard({
+  project: p,
+  statusCfg: s,
+}: {
+  project: SubVendorLinkedProject;
+  statusCfg: { label: string; color: string; bg: string };
+}) {
+  const [hov, setHov] = useState(false);
+
+  return (
+    <Link
+      href={projectRoute(p.projectId)}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      className={cn(
+        "flex cursor-pointer items-center gap-4 rounded-[14px] bg-white p-4 no-underline transition-all duration-200 neu-card",
+        hov && "neu-card-hover -translate-y-px",
+      )}
+    >
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] gi-gradient-cta">
+        <MaterialIcon name="folder_open" outlined size={20} className="text-white" />
+      </div>
+      <div className="flex-1">
+        <div className="text-[14px] font-semibold text-[var(--figma-navy)]">{p.name}</div>
+        <div className="mt-0.5 text-[12px] text-[var(--figma-gray500)]">
+          {p.phase} · {p.scope}
+        </div>
+      </div>
+      <StatusPill label={s.label} color={s.color} bg={s.bg} />
+      <MaterialIcon name="chevron_right" outlined size={18} className="text-[var(--figma-gray400)]" />
+    </Link>
+  );
+}
+
 export function SubVendorProfileScreen({ vendorId }: { vendorId: string }) {
   const authDisabled = isAuthDisabled();
   const [tab, setTab] = useState<Tab>("overview");
   const [editOpen, setEditOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
   const { subVendor: vendor, isLoading, error, updateSubVendor, isUpdating } = useSubVendor(vendorId);
+
+  const { tasks: vendorTasks } = useVendorTasks({ party_id: vendorId, party_kind: "subvendor" });
+  const { projects } = useProjects({ page: 1, limit: 100 });
+  const {
+    linkedFromProjectLinks,
+    isLoading: projectLinksLoading,
+    refetch: refetchLinkedProjects,
+  } = useSubVendorLinkedFromProjectLinks(vendorId, projects, {
+    enabled: !authDisabled && tab === "projects",
+  });
+
+  const linkedFromTasks = useMemo(() => {
+    const byId = new Map(projects.map((p) => [p.id, p]));
+    const seen = new Set<string>();
+    return vendorTasks
+      .filter((task) => {
+        if (seen.has(task.projectId)) return false;
+        seen.add(task.projectId);
+        return true;
+      })
+      .map((task) => {
+        const project = byId.get(task.projectId);
+        const status: SubVendorLinkedProject["status"] =
+          project?.status === "Inactive" ? "at-risk" : "on-track";
+        return {
+          projectId: task.projectId,
+          name: project?.name ?? "Project",
+          phase: stageToPhase(project?.currentStage),
+          status,
+          scope: "Sub-vendor",
+        } satisfies SubVendorLinkedProject;
+      });
+  }, [vendorTasks, projects]);
+
+  const linkedProjects = useMemo(() => {
+    const byId = new Map<string, SubVendorLinkedProject>();
+    for (const project of linkedFromTasks) byId.set(project.projectId, project);
+    for (const project of linkedFromProjectLinks) {
+      const existing = byId.get(project.projectId);
+      byId.set(
+        project.projectId,
+        existing ? { ...existing, scope: project.scope || existing.scope } : project,
+      );
+    }
+    return [...byId.values()];
+  }, [linkedFromTasks, linkedFromProjectLinks]);
 
   if (authDisabled) {
     return (
@@ -515,7 +644,27 @@ export function SubVendorProfileScreen({ vendorId }: { vendorId: string }) {
       {tab === "payments" && (
         <PaymentsTab vendor={vendor} vendorId={vendorId} enabled={tab === "payments"} />
       )}
+      {tab === "projects" && (
+        <ProjectsTab
+          projects={linkedProjects}
+          isLoading={projectLinksLoading}
+          onLinkClick={() => setLinkOpen(true)}
+        />
+      )}
       {tab === "tasks" && <VendorTasksTab partyKind="subvendor" partyId={vendorId} />}
+
+      {linkOpen && (
+        <LinkSubVendorProjectModal
+          subVendorId={vendor.id}
+          subVendorName={vendor.name}
+          scope={vendor.specialty}
+          linkedProjectIds={linkedProjects.map((p) => p.projectId)}
+          onClose={() => setLinkOpen(false)}
+          onLinked={() => {
+            void refetchLinkedProjects();
+          }}
+        />
+      )}
 
       <AddSupplierModal
         open={editOpen}

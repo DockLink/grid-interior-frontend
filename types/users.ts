@@ -3,6 +3,9 @@ export const USER_ROLES = [
   "ADMIN",
   "TEAM_LEAD",
   "MEMBER",
+  "DESIGNER",
+  "PROJECT_COORDINATOR",
+  "SOCIAL_MEDIA_ADMIN",
   "GUEST",
   "CLIENT_FULL_ACCESS",
 ] as const;
@@ -25,6 +28,7 @@ export const ALLOWED_HOME_ROUTES = [
   "/projects",
   "/my-tasks",
   "/notifications",
+  "/suppliers",
 ] as const;
 
 export type HomeRoutePreference = (typeof ALLOWED_HOME_ROUTES)[number];
@@ -68,6 +72,7 @@ export interface User {
   roles: UserRole[];
   status: UserStatus;
   preferences?: UserPreferences;
+  assignedProjects?: { projectId: string }[];
   createdAt?: string;
   updatedAt?: string;
 }

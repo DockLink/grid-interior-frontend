@@ -32,12 +32,14 @@ export function FileUploadDialog({
   folderLabel,
   isVersioned,
   onUpload,
+  accept,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   folderPath: string;
   folderLabel: string;
   isVersioned: boolean;
+  accept?: string;
   onUpload: (
     folderPath: string,
     file: File,
@@ -176,6 +178,7 @@ export function FileUploadDialog({
                 ref={inputRef}
                 type="file"
                 multiple
+                accept={accept}
                 className="hidden"
                 onChange={(e) => addFiles(e.target.files)}
               />

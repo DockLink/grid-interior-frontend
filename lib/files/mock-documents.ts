@@ -46,7 +46,7 @@ export const GALLERY_CATEGORY_META: Record<
 };
 
 export interface GalleryPhoto {
-  id: number;
+  id: number | string;
   url: string;
   category: GalleryPhotoCategory;
   uploaderName: string;

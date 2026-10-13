@@ -30,6 +30,8 @@ export function mapVendorTaskApiToView(raw: VendorTaskApi | Record<string, unkno
       "supplier",
     partyId:
       pickString(raw as Record<string, unknown>, "party_id", "partyId") ?? "",
+    partyName: pickString(raw as Record<string, unknown>, "party_name", "partyName"),
+    partyCategory: pickString(raw as Record<string, unknown>, "party_category", "partyCategory"),
     projectId:
       pickString(raw as Record<string, unknown>, "project_id", "projectId") ?? "",
     title: pickString(raw as Record<string, unknown>, "title") ?? "",

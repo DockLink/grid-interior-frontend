@@ -86,6 +86,7 @@ export const queryKeys = {
     detail: (id: string) => ["subVendors", "detail", id] as const,
     history: (id: string) => ["subVendors", "history", id] as const,
     payments: (id: string) => ["subVendors", "payments", id] as const,
+    linkedProjects: (id: string) => ["subVendors", "linkedProjects", id] as const,
   },
   vendorTasks: {
     all: ["vendorTasks"] as const,

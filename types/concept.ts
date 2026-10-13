@@ -21,6 +21,8 @@ export interface ConceptCard {
   fileType: ConceptFileType;
   fileSize: string;
   thumb: string;
+  /** Project file id used to refresh a signed preview URL. */
+  fileId?: string;
   confirmStatus: ConfirmStatus;
 }
 
@@ -44,10 +46,12 @@ export interface ConceptCardApi {
   name: string;
   area_id?: string;
   file_id?: string | null;
+  fileId?: string | null;
   file_name?: string | null;
   file_type?: string | null;
   file_size?: string | null;
   thumb_url?: string | null;
+  thumbUrl?: string | null;
   confirm_status: ConfirmStatus | string;
 }
 
