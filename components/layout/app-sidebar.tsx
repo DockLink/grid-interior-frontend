@@ -3,8 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  CheckSquare,
-  FileText,
   FolderOpen,
   Home,
   Layers,
@@ -12,19 +10,14 @@ import {
   Settings,
   Shield,
   Store,
-  Timeline,
   Users,
   type LucideIcon,
 } from "lucide-react";
 
 import { LOGIN_T } from "@/components/auth/login-tokens";
 import { useAuth } from "@/hooks/use-auth";
-import { useLastProjectId } from "@/hooks/use-last-project-id";
 import { useUserPreferences } from "@/components/providers/user-preferences-provider";
-import {
-  isProjectNavActive,
-  resolveProjectNavHref,
-} from "@/lib/navigation/last-project";
+import { isProjectNavActive } from "@/lib/navigation/last-project";
 import { toSidebarRole, type SidebarRole } from "@/lib/navigation/sidebar-role";
 import { resolveHomeRoute } from "@/lib/navigation/home-route";
 import { NAV_ROUTES } from "@/types/navigation";
@@ -55,11 +48,7 @@ function isRouteActive(pathname: string, routes: string | string[]) {
   return list.some((r) => pathname === r || pathname.startsWith(`${r}/`));
 }
 
-function buildFigmaNav(
-  role: SidebarRole,
-  homePage: string,
-  lastProjectId: string | null,
-): NavItem[] {
+function buildFigmaNav(role: SidebarRole, homePage: string): NavItem[] {
   const items: NavItem[] = [
     {
       id: "dashboard",
@@ -99,38 +88,6 @@ function buildFigmaNav(
       pathname === NAV_ROUTES.projects ||
       pathname.startsWith(`${NAV_ROUTES.projects}/`) ||
       isProjectNavActive(pathname, "overview"),
-  });
-
-  if (role !== "guest") {
-    items.push({
-      id: "tasks",
-      title: "Tasks",
-      href: NAV_ROUTES.myTasks,
-      icon: CheckSquare,
-      isActive: (pathname) => isRouteActive(pathname, NAV_ROUTES.myTasks),
-    });
-  }
-
-  if (role === "admin" || role === "superadmin") {
-    items.push({
-      id: "documents",
-      title: "Documents & Minutes",
-      href: NAV_ROUTES.files,
-      icon: FileText,
-      isActive: (pathname) => isRouteActive(pathname, NAV_ROUTES.files),
-    });
-  }
-
-  items.push({
-    id: "timeline",
-    title: "Timeline & Reports",
-    href: resolveProjectNavHref("timeline", lastProjectId),
-    icon: Timeline,
-    isActive: (pathname) =>
-      isProjectNavActive(pathname, "timeline") ||
-      isProjectNavActive(pathname, "milestones") ||
-      isProjectNavActive(pathname, "client-view") ||
-      isProjectNavActive(pathname, "materials"),
   });
 
   if (role === "admin" || role === "superadmin") {
@@ -205,13 +162,12 @@ export function AppSidebar({
   const router = useRouter();
   const { user, primaryRole, logout } = useAuth();
   const { preferences } = useUserPreferences();
-  const lastProjectId = useLastProjectId();
 
   if (!user || !primaryRole) return null;
 
   const sidebarRole = toSidebarRole(primaryRole);
   const homePage = resolveHomeRoute(primaryRole, preferences);
-  const navItems = buildFigmaNav(sidebarRole, homePage, lastProjectId);
+  const navItems = buildFigmaNav(sidebarRole, homePage);
 
   const secondary: NavItem[] = [
     {

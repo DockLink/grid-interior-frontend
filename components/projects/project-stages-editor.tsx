@@ -5,12 +5,13 @@ import { Check, Layers, Pencil, Plus, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { useProjectTaskables } from "@/hooks/use-project-taskables";
+import { calendarDateFromApi } from "@/lib/projects/calendar-date";
 import { mapStageToView } from "@/lib/projects/map-stages";
 import { resolveTaskEndDateIso } from "@/lib/tasks/task-dates";
 import type { CreateTaskRequest, Task } from "@/types/tasks";
 
 function toDateInput(iso: string): string {
-  return iso.slice(0, 10);
+  return calendarDateFromApi(iso);
 }
 
 export function ProjectStagesEditor({
@@ -109,7 +110,7 @@ export function ProjectStagesEditor({
       toast.error("Stage name, start and end dates are required");
       return;
     }
-    if (new Date(editEnd) < new Date(editStart)) {
+    if (editEnd < editStart) {
       toast.error("End date must be on or after the start date");
       return;
     }
@@ -122,11 +123,7 @@ export function ProjectStagesEditor({
       const currentStart = toDateInput(stage.start_date);
       const currentEnd = toDateInput(resolveTaskEndDateIso(stage));
       if (editStart !== currentStart || editEnd !== currentEnd) {
-        await updateTaskableDates(
-          stageId,
-          new Date(`${editStart}T00:00:00`).toISOString(),
-          new Date(`${editEnd}T23:59:59`).toISOString(),
-        );
+        await updateTaskableDates(stageId, editStart, editEnd);
       }
       await notifyUpdated();
       cancelEdit();
@@ -140,7 +137,7 @@ export function ProjectStagesEditor({
 
   async function handleCreateStage() {
     if (!newStageName.trim() || !newStageStart || !newStageEnd) return;
-    if (new Date(newStageEnd) < new Date(newStageStart)) {
+    if (newStageEnd < newStageStart) {
       toast.error("End date must be on or after the start date");
       return;
     }
@@ -149,8 +146,8 @@ export function ProjectStagesEditor({
       const payload: CreateTaskRequest & { end_date: string } = {
         project_id: projectId,
         title: newStageName.trim(),
-        start_date: new Date(newStageStart).toISOString(),
-        end_date: new Date(newStageEnd + "T23:59:59").toISOString(),
+        start_date: newStageStart,
+        end_date: newStageEnd,
         taskable_type: "STAGE",
         order: stages.length,
       };
@@ -264,8 +261,9 @@ export function ProjectStagesEditor({
                           {stage.name}
                         </div>
                         <div className="text-[11.5px] text-[var(--figma-gray500)]">
-                          {new Date(stage.startDate).toLocaleDateString()} –{" "}
-                          {new Date(stage.endDate).toLocaleDateString()}
+                          {stage.scheduled
+                            ? `${new Date(stage.startDate).toLocaleDateString()} – ${new Date(stage.endDate).toLocaleDateString()}`
+                            : "No dates"}
                         </div>
                       </div>
                     </div>

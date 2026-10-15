@@ -8,6 +8,7 @@ import { GradientBtn, OutlineBtn } from "@/components/projects/hub/consultation/
 import { UploadDropzone } from "@/components/projects/hub/shared/upload-dropzone";
 import { WorkspaceBreadcrumb } from "@/components/projects/hub/shared/workspace-breadcrumb";
 import { useConcept } from "@/hooks/use-concept";
+import { isConceptPhaseReady } from "@/lib/concept/concept-phase-ready";
 import { useProjectFiles } from "@/hooks/use-project-files";
 import { authApiClient } from "@/lib/api/authenticated-client";
 import { formatFileSize } from "@/lib/files/format";
@@ -174,6 +175,7 @@ export function ConceptListScreen({
     cards,
     createCard,
     confirmCard,
+    completeConcept,
     isAuthOff,
   } = useConcept(projectId);
   const { folderTree, uploadFile, getDownloadUrl } = useProjectFiles(projectId);
@@ -295,12 +297,11 @@ export function ConceptListScreen({
 
   const handleFinalize = (id: string) => {
     const previous = concepts;
-    setConcepts((prev) =>
-      prev.map((c) => ({
-        ...c,
-        confirmStatus: c.id === id ? "confirmed" : "pending",
-      })),
-    );
+    const nextConcepts = previous.map((c) => ({
+      ...c,
+      confirmStatus: (c.id === id ? "confirmed" : "pending") as ConceptCard["confirmStatus"],
+    }));
+    setConcepts(nextConcepts);
     setActionError(null);
     void (async () => {
       try {
@@ -314,6 +315,18 @@ export function ConceptListScreen({
         setConcepts(previous);
         setActionError(
           err instanceof Error ? err.message : "Failed to finalize concept",
+        );
+        return;
+      }
+
+      const otherCards = cards.filter((card) => card.areaId !== areaId);
+      if (!isConceptPhaseReady(areas, [...otherCards, ...nextConcepts])) return;
+
+      try {
+        await completeConcept();
+      } catch (err: unknown) {
+        setActionError(
+          err instanceof Error ? err.message : "Failed to complete Concept Design",
         );
       }
     })();

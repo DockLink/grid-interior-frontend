@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation";
 import { DemoCaption } from "@/components/demo/demo-caption";
 import { PhaseLockedContent } from "@/components/projects/hub/shared/workspace-ui";
 import { useActiveProjectView } from "@/hooks/use-active-project-view";
+import { usePhaseEditAccess } from "@/hooks/use-phase-edit-access";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { HubTeamProvider } from "@/lib/projects/hub-team-context";
-import { isPhaseEditable } from "@/lib/projects/map-project-hub";
 import type { ThreeDView } from "@/types/threed";
 
 import { ThreeDConfirmationScreen } from "./threed-confirmation-screen";
@@ -26,6 +26,7 @@ export function ThreeDWorkspace({
   const router = useRouter();
   const authDisabled = isAuthDisabled();
   const { project, teamMembers, isLoading, error } = useActiveProjectView(projectId);
+  const phaseAccess = usePhaseEditAccess(projectId, project?.phase, "3D Design");
 
   const [view, setView] = useState<ThreeDView>(initialView);
 
@@ -62,13 +63,13 @@ export function ThreeDWorkspace({
     );
   }
 
-  const readOnly = !isPhaseEditable(project.phase, "3D Design");
+  const readOnly = phaseAccess.readOnly;
 
   return (
     <HubTeamProvider members={teamMembers}>
       <div>
         {authDisabled && <DemoCaption className="mb-4 px-10 pt-6" />}
-        <PhaseLockedContent locked={readOnly}>
+        <PhaseLockedContent locked={readOnly} amendment={phaseAccess.amendment}>
           {view === "visualizations" && (
             <ThreeDVisualizationsScreen project={project} onBack={handleBack} />
           )}

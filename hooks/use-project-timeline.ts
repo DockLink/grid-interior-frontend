@@ -17,7 +17,6 @@ import {
 } from "@/lib/timeline/mock-timeline";
 import {
   mapTimelineWorkspace,
-  weeksToIsoRange,
   type TimelineLead,
   type TimelineWorkspaceView,
 } from "@/lib/timeline/map-timeline-workspace";
@@ -78,16 +77,11 @@ export function useProjectTimeline(projectId: string) {
   }, [refetchStages, refetchMilestones]);
 
   const updateStageDates = useCallback(
-    async (stageId: string, startWeek: number, durationWeeks: number) => {
-      const { startDateIso, endDateIso } = weeksToIsoRange(
-        view.projectStartIso,
-        startWeek,
-        durationWeeks,
-      );
+    async (stageId: string, startDateIso: string, endDateIso: string) => {
       await updateTaskableDates(stageId, startDateIso, endDateIso);
       await refetch();
     },
-    [view.projectStartIso, updateTaskableDates, refetch],
+    [updateTaskableDates, refetch],
   );
 
   const isLoading =

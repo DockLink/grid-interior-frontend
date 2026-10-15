@@ -1,6 +1,8 @@
+import { calendarDateFromApi, parseCalendarDate, toCalendarDateIso } from "@/lib/projects/calendar-date";
+
 /** Add ISO 8601 duration to a date (supports P{n}D, P{n}W, P{n}M simplified). */
 export function addIsoDuration(startDate: string, duration: string): Date {
-  const start = new Date(startDate);
+  const start = parseCalendarDate(startDate);
   if (Number.isNaN(start.getTime())) return start;
 
   const days = duration.match(/P(\d+)D/);
@@ -23,11 +25,11 @@ export function resolveProjectEndDate(project: {
   duration?: string | null;
 }): string | null {
   if (project.end_date) {
-    const d = new Date(project.end_date);
-    if (!Number.isNaN(d.getTime())) return project.end_date.slice(0, 10);
+    const day = calendarDateFromApi(project.end_date);
+    if (day) return day;
   }
   if (project.start_date && project.duration) {
-    return addIsoDuration(project.start_date, project.duration).toISOString().slice(0, 10);
+    return toCalendarDateIso(addIsoDuration(project.start_date, project.duration));
   }
   return null;
 }

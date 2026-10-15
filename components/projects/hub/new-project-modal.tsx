@@ -19,7 +19,14 @@ import {
   type ProjectMainType,
   type ProjectPhase,
 } from "@/lib/projects/design-tokens";
-import { buildSeededPhaseStages } from "@/lib/projects/seed-phases";
+import { parseCalendarDate, toCalendarDateIso } from "@/lib/projects/calendar-date";
+import {
+  emptyPhaseRanges,
+  latestPhaseEnd,
+  stagesFromUserRanges,
+  validatePhaseSchedule,
+  type PhaseDateRange,
+} from "@/lib/projects/seed-phases";
 import { queryKeys } from "@/lib/query/keys";
 import { getUserInitials, getUserListPrimaryLabel } from "@/lib/user/display";
 import type { CreateProjectRequest } from "@/types/projects";
@@ -193,13 +200,7 @@ export function NewProjectModal({
     () => users.filter((u) => u.status === "ACTIVE"),
     [users],
   );
-  const defaultDates = useMemo(() => {
-    const today = new Date();
-    const start = today.toISOString().slice(0, 10);
-    const end = new Date(today);
-    end.setFullYear(end.getFullYear() + 1);
-    return { start, end: end.toISOString().slice(0, 10) };
-  }, []);
+  const defaultStart = useMemo(() => toCalendarDateIso(new Date()), []);
 
   const [step, setStep] = useState<Step>(1);
   const [projectName, setProjectName] = useState("");
@@ -208,14 +209,20 @@ export function NewProjectModal({
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [mainType, setMainType] = useState<ProjectMainType | "">("");
   const [subType, setSubType] = useState("");
-  const [startDate, setStartDate] = useState(defaultDates.start);
-  const [endDate, setEndDate] = useState(defaultDates.end);
+  const [startDate, setStartDate] = useState(defaultStart);
+  const [phaseDates, setPhaseDates] = useState<Record<ProjectPhase, PhaseDateRange>>(() =>
+    emptyPhaseRanges(),
+  );
+  const projectEndDate = latestPhaseEnd(phaseDates);
   const [selectedPhase, setSelectedPhase] = useState<ProjectPhase | null>(null);
   const [address, setAddress] = useState("");
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<string[]>([]);
+  const [teamSearch, setTeamSearch] = useState("");
+  const [showTeamDropdown, setShowTeamDropdown] = useState(false);
+  const [teamFocused, setTeamFocused] = useState(false);
   const [coordinator, setCoordinator] = useState<string>("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -223,6 +230,12 @@ export function NewProjectModal({
 
   const filteredClients = clients
     .filter((c) => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
+    .slice(0, 6);
+
+  const teamQuery = teamSearch.trim().toLowerCase();
+  const filteredTeamMembers = studioMembers
+    .filter((m) => !selectedTeam.includes(m.id))
+    .filter((m) => getUserListPrimaryLabel(m).toLowerCase().includes(teamQuery))
     .slice(0, 6);
 
   const selectedClientRecord = selectedClient
@@ -237,10 +250,6 @@ export function NewProjectModal({
     if (!mainType) e.mainType = "Please select a main type";
     if (!subType) e.subType = "Please select a sub type";
     if (!startDate) e.startDate = "Start date is required";
-    if (!endDate) e.endDate = "End date is required";
-    if (startDate && endDate && endDate <= startDate) {
-      e.endDate = "End date must be after start date";
-    }
     return e;
   };
 
@@ -252,9 +261,16 @@ export function NewProjectModal({
         return;
       }
     }
-    if (step === 2 && !selectedPhase) {
-      setErrors({ phase: "Please select a starting phase" });
-      return;
+    if (step === 2) {
+      if (!selectedPhase) {
+        setErrors({ phase: "Please select a starting phase" });
+        return;
+      }
+      const scheduleError = validatePhaseSchedule(phaseDates);
+      if (scheduleError) {
+        setErrors({ phaseDates: scheduleError });
+        return;
+      }
     }
     if (step === 3) {
       if (latitude == null || longitude == null || distanceKm == null) {
@@ -298,12 +314,23 @@ export function NewProjectModal({
       return;
     }
 
+    const startPhase = selectedPhase ?? "Consultation";
+    const scheduleError = validatePhaseSchedule(phaseDates);
+    if (!selectedPhase || scheduleError) {
+      setStep(2);
+      setErrors({
+        ...(selectedPhase ? {} : { phase: "Please select a starting phase" }),
+        ...(scheduleError ? { phaseDates: scheduleError } : {}),
+      });
+      return;
+    }
+
     const payload: CreateProjectRequest = {
       name: projectName.trim(),
       main_type: mainType || undefined,
       sub_type: subType || undefined,
       start_date: startDate,
-      end_date: endDate,
+      ...(projectEndDate ? { end_date: projectEndDate } : {}),
       location: address.trim() || undefined,
       latitude: latitude ?? undefined,
       longitude: longitude ?? undefined,
@@ -313,12 +340,11 @@ export function NewProjectModal({
 
     setSaving(true);
     try {
-      const startPhase = selectedPhase ?? "Consultation";
       const created = await createProject(payload, {
         clientId: selectedClient,
         memberUserIds: selectedTeam.length ? selectedTeam : undefined,
         projectLeadUserId: coordinator || null,
-        stages: buildSeededPhaseStages(startDate, endDate, undefined, startPhase),
+        stages: stagesFromUserRanges(phaseDates, startPhase),
       });
 
       await qc.invalidateQueries({ queryKey: queryKeys.projects.all });
@@ -349,7 +375,7 @@ export function NewProjectModal({
       style={{ background: "rgba(27,42,74,0.20)" }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="hub-modal-in w-full max-w-[600px] rounded-[20px] bg-white px-10 py-9" style={{ boxShadow: "var(--neu-modal)" }}>
+      <div className="hub-modal-in w-full max-w-[720px] rounded-[20px] bg-white px-10 py-9" style={{ boxShadow: "var(--neu-modal)" }}>
         <div className="mb-7 flex items-start justify-between">
           <div>
             <h2 className="m-0 mb-1 text-xl font-bold text-[var(--figma-navy)]">New Project</h2>
@@ -573,55 +599,29 @@ export function NewProjectModal({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <label
-                  className="text-[13px] font-medium"
-                  style={{ color: errors.startDate ? "var(--figma-alert)" : "var(--figma-navy)" }}
-                >
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => {
-                    setStartDate(e.target.value);
-                    setErrors((p) => ({ ...p, startDate: "", endDate: "" }));
-                  }}
-                  className="rounded-xl border-[1.5px] bg-white px-3.5 py-2.5 font-[inherit] text-[13px] text-[var(--figma-navy)] outline-none"
-                  style={{
-                    borderColor: errors.startDate ? "var(--figma-alert)" : "var(--figma-border)",
-                    boxShadow: "var(--neu-inset)",
-                  }}
-                />
-                {errors.startDate && (
-                  <div className="text-[11px] text-[var(--figma-alert)]">{errors.startDate}</div>
-                )}
-              </div>
-              <div className="flex flex-col gap-1">
-                <label
-                  className="text-[13px] font-medium"
-                  style={{ color: errors.endDate ? "var(--figma-alert)" : "var(--figma-navy)" }}
-                >
-                  End Date
-                </label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => {
-                    setEndDate(e.target.value);
-                    setErrors((p) => ({ ...p, endDate: "" }));
-                  }}
-                  className="rounded-xl border-[1.5px] bg-white px-3.5 py-2.5 font-[inherit] text-[13px] text-[var(--figma-navy)] outline-none"
-                  style={{
-                    borderColor: errors.endDate ? "var(--figma-alert)" : "var(--figma-border)",
-                    boxShadow: "var(--neu-inset)",
-                  }}
-                />
-                {errors.endDate && (
-                  <div className="text-[11px] text-[var(--figma-alert)]">{errors.endDate}</div>
-                )}
-              </div>
+            <div className="flex flex-col gap-1">
+              <label
+                className="text-[13px] font-medium"
+                style={{ color: errors.startDate ? "var(--figma-alert)" : "var(--figma-navy)" }}
+              >
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setErrors((p) => ({ ...p, startDate: "" }));
+                }}
+                className="rounded-xl border-[1.5px] bg-white px-3.5 py-2.5 font-[inherit] text-[13px] text-[var(--figma-navy)] outline-none"
+                style={{
+                  borderColor: errors.startDate ? "var(--figma-alert)" : "var(--figma-border)",
+                  boxShadow: "var(--neu-inset)",
+                }}
+              />
+              {errors.startDate && (
+                <div className="text-[11px] text-[var(--figma-alert)]">{errors.startDate}</div>
+              )}
             </div>
           </div>
         )}
@@ -689,6 +689,66 @@ export function NewProjectModal({
                 {errors.phase}
               </div>
             )}
+
+            <div className="mt-6 flex flex-col gap-2">
+              <p className="m-0 text-[13px] font-medium text-[var(--figma-navy)]">Phase dates</p>
+              <p className="m-0 text-[12px] text-[var(--figma-gray500)]">
+                Optional. Leave a phase blank if the dates are not known yet.
+              </p>
+              <div className="grid grid-cols-[minmax(0,1.1fr)_1fr_1fr] gap-2 text-[11px] font-medium text-[var(--figma-gray400)]">
+                <span>Phase</span>
+                <span>Start</span>
+                <span>End</span>
+              </div>
+              {PHASES.map((phase) => {
+                const range = phaseDates[phase];
+                return (
+                  <div key={phase} className="grid grid-cols-[minmax(0,1.1fr)_1fr_1fr] items-center gap-2">
+                    <span className="truncate text-[12px] font-medium text-[var(--figma-navy)]">{phase}</span>
+                    <input
+                      type="date"
+                      aria-label={`${phase} start date`}
+                      value={range?.start ?? ""}
+                      onChange={(e) => {
+                        const start = e.target.value;
+                        setPhaseDates((prev) => ({ ...prev, [phase]: { ...prev[phase], start } }));
+                        setErrors((p) => ({ ...p, phaseDates: "" }));
+                      }}
+                      className="min-w-0 rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-2 py-2 font-[inherit] text-[12px] text-[var(--figma-navy)] outline-none"
+                    />
+                    <input
+                      type="date"
+                      aria-label={`${phase} end date`}
+                      value={range?.end ?? ""}
+                      onChange={(e) => {
+                        const end = e.target.value;
+                        setPhaseDates((prev) => ({ ...prev, [phase]: { ...prev[phase], end } }));
+                        setErrors((p) => ({ ...p, phaseDates: "" }));
+                      }}
+                      className="min-w-0 rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-2 py-2 font-[inherit] text-[12px] text-[var(--figma-navy)] outline-none"
+                    />
+                  </div>
+                );
+              })}
+              {errors.phaseDates && (
+                <div className="flex items-center gap-1.5 text-xs text-[var(--figma-alert)]">
+                  <MaterialIcon name="error_outline" outlined size={14} />
+                  {errors.phaseDates}
+                </div>
+              )}
+              <div className="mt-1 flex items-center justify-between rounded-[10px] bg-[var(--figma-gray50)] px-3 py-2">
+                <span className="text-[12px] text-[var(--figma-gray500)]">Project end</span>
+                <span className="text-[13px] font-semibold text-[var(--figma-navy)]">
+                  {projectEndDate
+                    ? parseCalendarDate(projectEndDate).toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })
+                    : "Not set"}
+                </span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -721,50 +781,121 @@ export function NewProjectModal({
               <label className="mb-3 block text-[13px] font-medium text-[var(--figma-navy)]">
                 Assign Team Members
               </label>
-              <div className="flex flex-col gap-2">
-                {usersLoading && (
-                  <div className="text-[13px] text-[var(--figma-gray500)]">Loading team members…</div>
-                )}
-                {!usersLoading && studioMembers.length === 0 && (
-                  <div className="text-[13px] text-[var(--figma-gray500)]">No active users found.</div>
-                )}
-                {studioMembers.map((m) => {
-                  const isSelected = selectedTeam.includes(m.id);
-                  const initials = getUserInitials(m);
-                  const name = getUserListPrimaryLabel(m);
-                  const role = m.roles[0] ?? "Member";
+              <div className="relative">
+                <MaterialIcon
+                  name="person_search"
+                  outlined
+                  size={16}
+                  className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2"
+                  style={{ color: teamFocused ? "var(--figma-teal)" : "var(--figma-gray400)" }}
+                />
+                <input
+                  value={teamSearch}
+                  onChange={(e) => {
+                    setTeamSearch(e.target.value);
+                    setShowTeamDropdown(true);
+                  }}
+                  onFocus={() => {
+                    setTeamFocused(true);
+                    setShowTeamDropdown(true);
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      setShowTeamDropdown(false);
+                      setTeamFocused(false);
+                    }, 200);
+                  }}
+                  placeholder="Search team member…"
+                  className="hub-input-focus w-full rounded-[10px] border bg-white py-2.5 pr-3 pl-9 text-[13px] text-[var(--figma-navy)] outline-none"
+                  style={{
+                    borderColor: teamFocused ? "var(--figma-teal)" : "var(--figma-border)",
+                    borderWidth: teamFocused ? 2 : 1.5,
+                    boxShadow: teamFocused
+                      ? "var(--neu-inset), 0 0 0 3px rgba(14,124,134,0.08)"
+                      : "var(--neu-inset)",
+                  }}
+                />
+              {showTeamDropdown && (
+                <div
+                  className="absolute top-full right-0 left-0 z-50 mt-1 overflow-hidden rounded-xl border border-[var(--figma-border)] bg-white"
+                  style={{ boxShadow: "var(--neu-dropdown)" }}
+                >
+                  {usersLoading ? (
+                    <div className="px-4 py-3 text-[12px] text-[var(--figma-gray500)]">
+                      Loading team members…
+                    </div>
+                  ) : filteredTeamMembers.length === 0 ? (
+                    <div className="px-4 py-3 text-[12px] text-[var(--figma-gray500)]">
+                      {teamQuery
+                        ? "No team members match your search"
+                        : studioMembers.length === 0
+                          ? "No active users found."
+                          : "All active users are already assigned"}
+                    </div>
+                  ) : (
+                    filteredTeamMembers.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onMouseDown={() => {
+                          setSelectedTeam((prev) => (prev.includes(m.id) ? prev : [...prev, m.id]));
+                          setTeamSearch("");
+                          setShowTeamDropdown(false);
+                        }}
+                        className="flex w-full cursor-pointer items-center gap-2.5 border-b border-[var(--figma-border)] bg-transparent px-4 py-2.5 text-left font-[inherit] last:border-b-0 hover:bg-[var(--figma-gray50)]"
+                      >
+                        <div
+                          className="flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                          style={{ background: memberColor(m.id) }}
+                        >
+                          {getUserInitials(m)}
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-[13px] font-medium text-[var(--figma-navy)]">
+                            {getUserListPrimaryLabel(m)}
+                          </div>
+                          <div className="text-[11px] text-[var(--figma-gray500)]">
+                            {m.roles[0] ?? "Member"}
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+              </div>
+              <div className="mt-3 flex flex-col gap-2">
+                {selectedTeam.map((id) => {
+                  const member = studioMembers.find((m) => m.id === id);
+                  if (!member) return null;
                   return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => toggleTeamMember(m.id)}
-                      className="flex cursor-pointer items-center gap-3 rounded-xl border-[1.5px] px-3.5 py-[11px] text-left font-[inherit] transition-all duration-150"
-                      style={{
-                        background: isSelected ? "rgba(14,124,134,0.05)" : "#fff",
-                        borderColor: isSelected ? "var(--figma-teal)" : "var(--figma-border)",
-                        borderWidth: isSelected ? 2 : 1.5,
-                      }}
+                    <div
+                      key={id}
+                      className="flex items-center gap-3 rounded-xl border-[1.5px] border-[var(--figma-teal)] bg-[rgba(14,124,134,0.05)] px-3.5 py-[11px]"
                     >
                       <div
                         className="flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                        style={{ background: memberColor(m.id) }}
+                        style={{ background: memberColor(id) }}
                       >
-                        {initials}
+                        {getUserInitials(member)}
                       </div>
                       <div className="flex-1">
-                        <div className="text-[13px] font-semibold text-[var(--figma-navy)]">{name}</div>
-                        <div className="text-[11px] text-[var(--figma-gray500)]">{role}</div>
+                        <div className="text-[13px] font-semibold text-[var(--figma-navy)]">
+                          {getUserListPrimaryLabel(member)}
+                        </div>
+                        <div className="text-[11px] text-[var(--figma-gray500)]">
+                          {member.roles[0] ?? "Member"}
+                        </div>
                       </div>
-                      <div
-                        className="flex size-5 shrink-0 items-center justify-center rounded-full transition-all duration-150"
-                        style={{
-                          background: isSelected ? "var(--figma-teal)" : "var(--figma-gray100)",
-                          border: isSelected ? "none" : "1.5px solid var(--figma-border)",
-                        }}
+                      <button
+                        type="button"
+                        onClick={() => toggleTeamMember(id)}
+                        aria-label={`Remove ${getUserListPrimaryLabel(member)}`}
+                        className="flex size-7 cursor-pointer items-center justify-center rounded-full border-none bg-transparent text-[var(--figma-gray400)] hover:text-[var(--figma-navy)]"
                       >
-                        {isSelected && <MaterialIcon name="check" size={13} className="text-white" />}
-                      </div>
-                    </button>
+                        <MaterialIcon name="close" outlined size={16} />
+                      </button>
+                    </div>
                   );
                 })}
               </div>

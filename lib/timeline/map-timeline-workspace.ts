@@ -1,3 +1,4 @@
+import { calendarDateFromApi, parseCalendarDate, toCalendarDateIso } from "@/lib/projects/calendar-date";
 import { resolveProjectEndDate } from "@/lib/projects/duration";
 import { mapMilestoneToView, mapStageToView } from "@/lib/projects/map-stages";
 import { STAGE_CHART_COLORS, deriveTimelineStatus } from "@/lib/projects/timeline";
@@ -38,11 +39,11 @@ const PHASE_BG: Record<string, string> = {
 };
 
 function toDateOnly(iso: string): string {
-  return iso.slice(0, 10);
+  return calendarDateFromApi(iso);
 }
 
 function parseDay(iso: string): number {
-  return new Date(`${toDateOnly(iso)}T00:00:00`).getTime();
+  return parseCalendarDate(iso).getTime();
 }
 
 function daysBetween(startIso: string, endIso: string): number {
@@ -59,7 +60,7 @@ function weekOffset(projectStartIso: string, dateIso: string): number {
 }
 
 function formatLabel(iso: string): string {
-  const d = new Date(iso);
+  const d = parseCalendarDate(iso);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("en-GB", {
     day: "numeric",
@@ -75,14 +76,15 @@ function phaseStatusFromApi(
   now = new Date(),
 ): GanttPhase["status"] {
   if (apiStatus === "COMPLETED") return "completed";
-  const end = new Date(endDate);
-  const start = new Date(startDate);
+  const end = calendarDateFromApi(endDate);
+  const start = calendarDateFromApi(startDate);
+  const today = toCalendarDateIso(now);
   if (
     apiStatus === "IN_PROGRESS" ||
     apiStatus === "IN_REVIEW" ||
     apiStatus === "REOPENED" ||
-    (start <= now && end >= now) ||
-    end < now
+    (start <= today && end >= today) ||
+    (end !== "" && end < today)
   ) {
     return "active";
   }
@@ -112,8 +114,8 @@ export function weeksToIsoRange(
   const end = new Date(start);
   end.setDate(end.getDate() + Math.max(1, durationWeeks) * 7);
   return {
-    startDateIso: start.toISOString().slice(0, 10),
-    endDateIso: end.toISOString().slice(0, 10),
+    startDateIso: toCalendarDateIso(start),
+    endDateIso: toCalendarDateIso(end),
   };
 }
 
@@ -134,22 +136,23 @@ export function mapTimelineWorkspace(
     .sort((a, b) => a.order - b.order);
 
   const stageById = Object.fromEntries(stages.map((s) => [s.id, s]));
+  const scheduledStages = stages.filter((s) => s.scheduled);
 
-  const earliestStage = stages[0];
-  const latestStageEnd = stages.reduce(
+  const earliestStage = scheduledStages[0];
+  const latestStageEnd = scheduledStages.reduce(
     (max, s) => (parseDay(s.endDate) > parseDay(max) ? s.endDate : max),
     earliestStage?.endDate ?? "",
   );
 
   const candidateStarts = [
     project?.start_date,
-    earliestStage?.startDate,
+    ...scheduledStages.map((s) => s.startDate),
     ...milestoneTasks.map((m) => m.start_date),
   ].filter((d): d is string => !!d);
 
   const earliestStart = candidateStarts.length
     ? candidateStarts.reduce((min, d) => (parseDay(d) < parseDay(min) ? d : min))
-    : now.toISOString().slice(0, 10);
+    : toCalendarDateIso(now);
 
   const projectStartIso = toDateOnly(earliestStart);
 
@@ -173,27 +176,27 @@ export function mapTimelineWorkspace(
       (() => {
         const d = new Date(`${projectStartIso}T00:00:00`);
         d.setFullYear(d.getFullYear() + 1);
-        return d.toISOString().slice(0, 10);
+        return toCalendarDateIso(d);
       })(),
   );
 
   const totalWeeks = weeksBetween(projectStartIso, projectEndIso);
   const currentWeek = Math.min(
     totalWeeks,
-    Math.max(0, weekOffset(projectStartIso, now.toISOString().slice(0, 10))),
+    Math.max(0, weekOffset(projectStartIso, toCalendarDateIso(now))),
   );
 
   const phases: GanttPhase[] = stages.map((stage, index) => {
     const color = STAGE_CHART_COLORS[index % STAGE_CHART_COLORS.length]!;
-    const startWeek = weekOffset(projectStartIso, stage.startDate);
-    const endWeek = Math.max(
-      startWeek + 1,
-      weekOffset(projectStartIso, stage.endDate),
-    );
-    const durationWeeks = Math.max(1, endWeek - startWeek);
     const linkedMilestone = milestoneTasks.find(
       (m) => m.parentTaskableId === stage.id,
     );
+    const scheduled = stage.scheduled;
+    const startWeek = scheduled ? weekOffset(projectStartIso, stage.startDate) : 0;
+    const endWeek = scheduled
+      ? Math.max(startWeek + 1, weekOffset(projectStartIso, stage.endDate))
+      : startWeek + 1;
+    const durationWeeks = Math.max(1, endWeek - startWeek);
 
     return {
       id: index + 1,
@@ -203,6 +206,9 @@ export function mapTimelineWorkspace(
       bg: hexToBg(color),
       startWeek,
       durationWeeks,
+      startDate: scheduled ? toDateOnly(stage.startDate) : "",
+      endDate: scheduled ? toDateOnly(stage.endDate) : "",
+      scheduled,
       progress: progressFromStatus(stage.status),
       milestone: linkedMilestone?.title,
       status: phaseStatusFromApi(stage.startDate, stage.endDate, stage.status, now),

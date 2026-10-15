@@ -1,4 +1,4 @@
-import { pickNumber, pickString } from "@/lib/api/normalize";
+import { pickBoolean, pickNumber, pickString } from "@/lib/api/normalize";
 import type { Task, TaskablePriority, TaskableStatus, TaskableType } from "@/types/tasks";
 
 const TASKABLE_STATUSES: TaskableStatus[] = [
@@ -62,6 +62,8 @@ export function mapTask(raw: unknown): Task {
       pickString(obj, "parentTaskableId", "parent_taskable_id") ?? null,
     created_at: pickString(obj, "created_at", "createdAt"),
     updated_at: pickString(obj, "updated_at", "updatedAt"),
+    amendment_count: pickNumber(obj, "amendment_count", "amendmentCount") ?? 0,
+    amendment_open: pickBoolean(obj, "amendment_open", "amendmentOpen") ?? false,
     subtasks: children,
     children,
   };

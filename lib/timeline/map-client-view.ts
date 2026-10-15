@@ -1,3 +1,4 @@
+import { calendarDateFromApi, toCalendarDateIso } from "@/lib/projects/calendar-date";
 import type { GanttPhase, Milestone } from "@/lib/timeline/mock-timeline";
 import type { SiteSubStageStatus } from "@/types/execution";
 import type { Task, TaskableStatus } from "@/types/tasks";
@@ -37,8 +38,8 @@ function formatLabel(iso: string): string {
 }
 
 function keyDateStatusFromIso(iso: string, now = new Date()): ClientKeyDateStatus {
-  const day = iso.slice(0, 10);
-  const today = now.toISOString().slice(0, 10);
+  const day = calendarDateFromApi(iso);
+  const today = toCalendarDateIso(now);
   if (!day || day === "—") return "upcoming";
   if (day < today) return "completed";
   if (day === today) return "active";

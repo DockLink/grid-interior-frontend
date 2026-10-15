@@ -103,7 +103,9 @@ export function useProjectTasksBoard(projectId: string) {
   const [assigneeMap, setAssigneeMap] = useState<Record<string, TaskAssigneeView[]>>({});
   const [taskMilestoneMap, setTaskMilestoneMap] = useState<Record<string, string>>({});
   const [taskStageMap, setTaskStageMap] = useState<Record<string, string>>({});
-  const [milestoneParents, setMilestoneParents] = useState<Record<string, { stageId: string; stageName: string }>>({});
+  const [walkedMilestoneParents, setWalkedMilestoneParents] = useState<
+    Record<string, { stageId: string; stageName: string }>
+  >({});
   const [assigneesLoading, setAssigneesLoading] = useState(false);
   const [assigneesReady, setAssigneesReady] = useState(false);
   const [statusOverrides, setStatusOverrides] = useState<Record<string, Task["status"]>>({});
@@ -118,7 +120,7 @@ export function useProjectTasksBoard(projectId: string) {
     setAssigneeMap({});
     setTaskMilestoneMap({});
     setTaskStageMap({});
-    setMilestoneParents({});
+    setWalkedMilestoneParents({});
     setAssigneesLoading(false);
     setAssigneesReady(false);
     setStatusOverrides({});
@@ -169,16 +171,17 @@ export function useProjectTasksBoard(projectId: string) {
   useEffect(() => {
     if (isAuthDisabled()) return;
     if (hierarchyKeyRef.current === hierarchyComboKey) return;
-    hierarchyKeyRef.current = hierarchyComboKey;
 
     if (!stageIdsKey) {
-      setMilestoneParents({});
+      hierarchyKeyRef.current = hierarchyComboKey;
+      setWalkedMilestoneParents({});
       setTaskMilestoneMap({});
       setTaskStageMap({});
       return;
     }
 
     let cancelled = false;
+    const key = hierarchyComboKey;
 
     void (async () => {
       const parentMap: Record<string, { stageId: string; stageName: string }> = {};
@@ -220,7 +223,10 @@ export function useProjectTasksBoard(projectId: string) {
 
       if (cancelled) return;
 
-      setMilestoneParents(parentMap);
+      // Commit only after an uninterrupted walk. A stage refetch that cancels
+      // this run leaves the key unset so the next effect retries.
+      hierarchyKeyRef.current = key;
+      setWalkedMilestoneParents(parentMap);
       setTaskMilestoneMap(milestoneToTasks);
       setTaskStageMap(taskToStage);
     })();
@@ -229,6 +235,23 @@ export function useProjectTasksBoard(projectId: string) {
       cancelled = true;
     };
   }, [stageIdsKey, stageTasks, hierarchyComboKey]);
+
+  // Parent ids on the milestone rows are available as soon as the cache updates.
+  // Overlay them on the walked map so a just-created milestone is selectable
+  // before the children walk finishes.
+  const milestoneParents = useMemo(() => {
+    const resolved: Record<string, { stageId: string; stageName: string }> = {
+      ...walkedMilestoneParents,
+    };
+    for (const milestone of milestoneTasks) {
+      const stageId = milestone.parentTaskableId;
+      if (!stageId) continue;
+      const stage = stageTasks.find((s) => s.id === stageId);
+      if (!stage) continue;
+      resolved[milestone.id] = { stageId: stage.id, stageName: stage.title };
+    }
+    return resolved;
+  }, [walkedMilestoneParents, milestoneTasks, stageTasks]);
 
   useEffect(() => {
     if (isAuthDisabled()) return;

@@ -569,6 +569,8 @@ function CategoryBlock({
           <TimelineWidget
             phase={cat.label}
             projectId={projectId}
+            mode="duration"
+            anchorPhase="Execution"
             initialDays={String(cat.durationDays)}
             badgeVariant="teal"
             onDaysChange={(days) => {

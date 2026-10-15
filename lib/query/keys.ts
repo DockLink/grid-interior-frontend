@@ -103,6 +103,8 @@ export const queryKeys = {
   consultation: {
     all: ["consultation"] as const,
     project: (projectId: string) => ["consultation", "project", projectId] as const,
+    questionnaire: (projectId: string) =>
+      ["consultation", "questionnaire", projectId] as const,
   },
   execution: {
     all: ["execution"] as const,

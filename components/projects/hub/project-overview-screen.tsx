@@ -2,16 +2,21 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { useProjectContext } from "@/components/projects/project-context";
 import { ManageTeamModal } from "@/components/projects/hub/manage-team-modal";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { PhaseStepper } from "@/components/projects/hub/phase-stepper";
 import { StatTile } from "@/components/projects/hub/stat-tile";
+import { useConcept } from "@/hooks/use-concept";
 import { useProjectMembers } from "@/hooks/use-project-members";
 import { useProjectRecentFiles } from "@/hooks/use-project-recent-files";
 import { useProjectTaskables } from "@/hooks/use-project-taskables";
+import { getApiErrorMessage } from "@/lib/api/handle-api-error";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { isConceptPhaseReady } from "@/lib/concept/concept-phase-ready";
 import {
   PHASE_WORKSPACES,
   WS_STATUS_CFG,
@@ -23,6 +28,7 @@ import {
   workspaceToPhase,
 } from "@/lib/projects/map-project-hub";
 import { mapProjectToOverviewView } from "@/lib/projects/map-project-overview";
+import { findStageTaskable } from "@/lib/projects/seed-phases";
 import { canManageProject, canViewBoqFinancials } from "@/lib/projects/permissions";
 import { PROJECT_BOARD_TASK_OPTIONS } from "@/lib/tasks/project-task-query";
 import { getUserInitials, getUserListPrimaryLabel } from "@/lib/user/display";
@@ -245,6 +251,40 @@ export function ProjectOverviewScreen({ projectId }: { projectId: string }) {
     projectId,
     10,
   );
+  const authDisabled = isAuthDisabled();
+  const conceptSyncStarted = useRef(false);
+  const {
+    areas: conceptAreas,
+    cards: conceptCards,
+    isLoading: conceptLoading,
+    completeConcept,
+  } = useConcept(projectId, { enabled: !authDisabled });
+
+  useEffect(() => {
+    if (authDisabled || conceptSyncStarted.current) return;
+    if (conceptLoading || stagesLoading) return;
+
+    const stage = findStageTaskable(stageTasks, "Concept Design");
+    if (stage?.status === "COMPLETED") {
+      conceptSyncStarted.current = true;
+      return;
+    }
+    if (!isConceptPhaseReady(conceptAreas, conceptCards)) return;
+
+    conceptSyncStarted.current = true;
+    void completeConcept().catch((err: unknown) => {
+      toast.error(getApiErrorMessage(err) || "Failed to complete Concept Design");
+    });
+  }, [
+    authDisabled,
+    conceptAreas,
+    conceptCards,
+    conceptLoading,
+    completeConcept,
+    stageTasks,
+    stagesLoading,
+  ]);
+
   const [showManageTeam, setShowManageTeam] = useState(false);
   const canManageTeam = canManageProject(effectiveRole, isViewer);
   const allowBoq = canViewBoqFinancials(effectiveRole, isViewer);

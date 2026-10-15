@@ -178,7 +178,11 @@ export type ConsultInventoryUpdatePayload = Partial<ConsultInventoryCreatePayloa
 export interface ConsultNoteCreatePayload {
   /** Note body. May be empty when an attachment is provided. */
   text: string;
-  /** Floating file UUID from POST /api/storage/upload (same as audio/sketch). */
+  /**
+   * Project File UUID from multipart upload
+   * (`POST /projects/:id/files/multipart/*`), NOT a floating `/storage/upload` token.
+   * Backend `assertProjectFile` requires the file to belong to the project.
+   */
   storage_file_id?: string | null;
   attachment_name?: string | null;
 }
@@ -221,6 +225,58 @@ export interface ConsultationCompletePayload {
   time?: string;
   mode?: ModeType;
   consult_type?: "free" | "paid";
+}
+
+/** Paid-consultation questionnaire. All fields optional so partial drafts persist. */
+export interface ConsultQuestionnaireAnswers {
+  name?: string;
+  phone?: string;
+  email?: string;
+  preferred_communication?: string;
+  space_type?: string;
+  space_other?: string;
+  scope?: string;
+  scope_other?: string;
+  site_visit?: boolean | null;
+  location?: string;
+  tenure?: string;
+  consult_when?: string;
+  drawings?: boolean | null;
+  size?: string;
+  measure_service?: boolean | null;
+  engineer_analysis?: boolean | null;
+  goals?: string;
+  styles_pref?: string;
+  must_haves?: string;
+  avoid?: string;
+  budget?: string;
+  budget_notes?: string;
+  start_date?: string;
+  end_date?: string;
+  likes?: string;
+  dislikes?: string;
+  keep_furniture?: string;
+  use_space?: string;
+  functional?: string;
+  special_needs?: string;
+  colors?: string;
+  materials?: string;
+  inspo_file_name?: string | null;
+  brands?: string;
+  structural?: string;
+  lighting?: string;
+  temperature?: string;
+  concerns?: string;
+  other?: string;
+}
+
+export interface ConsultQuestionnaireResponse {
+  answers: ConsultQuestionnaireAnswers | null;
+  updated_at: string | null;
+}
+
+export interface ConsultQuestionnaireUpsertPayload {
+  answers: ConsultQuestionnaireAnswers;
 }
 
 export interface ConsultationCompleteResponse {

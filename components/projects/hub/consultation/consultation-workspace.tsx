@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation";
 import { DemoCaption } from "@/components/demo/demo-caption";
 import { PhaseLockedContent } from "@/components/projects/hub/shared/workspace-ui";
 import { useActiveProjectView } from "@/hooks/use-active-project-view";
+import { usePhaseEditAccess } from "@/hooks/use-phase-edit-access";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { HubTeamProvider } from "@/lib/projects/hub-team-context";
-import { isPhaseEditable } from "@/lib/projects/map-project-hub";
 import type { ConsultType, ConsultView, ModeType } from "@/types/consultation";
 import { paidTabFromView } from "@/types/consultation";
 
@@ -28,6 +28,7 @@ export function ConsultationWorkspace({
   const router = useRouter();
   const authDisabled = isAuthDisabled();
   const { project, teamMembers, isLoading, error } = useActiveProjectView(projectId);
+  const phaseAccess = usePhaseEditAccess(projectId, project?.phase, "Consultation");
 
   const [view, setView] = useState<ConsultView>(initialView);
   const [mode, setMode] = useState<ModeType>("online");
@@ -79,13 +80,15 @@ export function ConsultationWorkspace({
     );
   }
 
-  const readOnly = !isPhaseEditable(project.phase, "Consultation");
+  const readOnly = phaseAccess.readOnly;
 
   const wrap = (content: React.ReactNode) => (
     <HubTeamProvider members={teamMembers}>
       <div>
         {authDisabled && <DemoCaption className="mb-4 px-10 pt-6" />}
-        <PhaseLockedContent locked={readOnly}>{content}</PhaseLockedContent>
+        <PhaseLockedContent locked={readOnly} amendment={phaseAccess.amendment}>
+          {content}
+        </PhaseLockedContent>
       </div>
     </HubTeamProvider>
   );

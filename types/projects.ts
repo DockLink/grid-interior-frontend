@@ -126,7 +126,7 @@ export interface CreateProjectRequest {
   main_type?: string;
   sub_type?: string;
   start_date: string;
-  end_date: string;
+  end_date?: string;
   location?: string;
   latitude?: number;
   longitude?: number;
@@ -181,8 +181,9 @@ export interface ProjectMemberAssignItem {
 
 export interface CreateProjectStageInput {
   name: string;
-  start_date: string;
-  /** Either an explicit end date or a duration must be provided. */
+  /** Omitted when the user left the phase start blank. */
+  start_date?: string;
+  /** Omitted when the user left the phase end blank. */
   end_date?: string;
   duration?: string;
   order: number;

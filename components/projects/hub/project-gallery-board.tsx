@@ -171,7 +171,6 @@ export function ProjectGalleryBoard({
   projectId: string;
   projectName: string;
 }) {
-  const [filter, setFilter] = useState<"all" | GalleryPhotoCategory>("all");
   const [lightbox, setLightbox] = useState<GalleryPhoto | null>(null);
   const [showUpload, setShowUpload] = useState(false);
 
@@ -349,10 +348,7 @@ export function ProjectGalleryBoard({
     return [...livePhotos, ...scopedMock];
   }, [livePhotos, scopedMock]);
 
-  const filtered =
-    filter === "all" ? allPhotos : allPhotos.filter((p) => p.category === filter);
-
-  const grouped = filtered.reduce<Record<string, GalleryPhoto[]>>((acc, p) => {
+  const grouped = allPhotos.reduce<Record<string, GalleryPhoto[]>>((acc, p) => {
     (acc[p.month] ??= []).push(p);
     return acc;
   }, {});
@@ -410,48 +406,6 @@ export function ProjectGalleryBoard({
           small
           onClick={() => void handleUploadClick()}
         />
-      </div>
-
-      {/* Filter tabs */}
-      <div
-        style={{
-          display: "flex",
-          gap: 6,
-          marginBottom: 20,
-          flexWrap: "wrap",
-        }}
-      >
-        {(
-          [
-            { id: "all", label: "All" },
-            { id: "site", label: GALLERY_CATEGORY_META.site.label },
-            { id: "underway", label: GALLERY_CATEGORY_META.underway.label },
-            { id: "completion", label: GALLERY_CATEGORY_META.completion.label },
-          ] as const
-        ).map((f) => (
-          <button
-            key={f.id}
-            onClick={() => setFilter(f.id)}
-            style={{
-              padding: "7px 16px",
-              borderRadius: 18,
-              border: "none",
-              cursor: "pointer",
-              fontFamily: "inherit",
-              fontSize: 12,
-              fontWeight: filter === f.id ? 700 : 400,
-              background:
-                filter === f.id
-                  ? `linear-gradient(135deg, ${T.navy}, ${T.teal})`
-                  : T.white,
-              color: filter === f.id ? T.white : T.gray500,
-              boxShadow: filter === f.id ? S.raised : S.inset,
-              transition: "all 180ms",
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
       </div>
 
       {filesLoading && allPhotos.length === 0 ? (

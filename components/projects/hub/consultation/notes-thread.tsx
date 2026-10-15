@@ -5,10 +5,23 @@ import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { useConsultation } from "@/hooks/use-consultation";
-import { useUploadFile } from "@/hooks/use-upload-file";
+import { authApiClient } from "@/lib/api/authenticated-client";
 import { getApiErrorMessage } from "@/lib/api/handle-api-error";
+import { uploadFileMultipart } from "@/lib/files/multipart-upload";
 import { useHubTeam } from "@/lib/projects/hub-team-context";
 import type { ConsultComment } from "@/types/consultation";
+import type { ProjectFile } from "@/types/files";
+
+/** Provisioned admin folder used for consultation note attachments (project File IDs). */
+const CONSULTATION_NOTES_FOLDER = "4.0 ADMIN/4.4 Meeting Minutes";
+
+function extractUploadedFileId(uploaded: unknown): string | null {
+  if (!uploaded || typeof uploaded !== "object") return null;
+  const row = uploaded as Partial<ProjectFile> & { file_id?: string };
+  if (typeof row.id === "string" && row.id) return row.id;
+  if (typeof row.file_id === "string" && row.file_id) return row.file_id;
+  return null;
+}
 
 export function NotesThread({
   projectId,
@@ -21,7 +34,6 @@ export function NotesThread({
 }) {
   const teamMembers = useHubTeam();
   const { notes: remoteNotes, createNote, isAuthOff } = useConsultation(projectId);
-  const { uploadFile } = useUploadFile();
   const [comments, setComments] = useState<ConsultComment[]>(
     section ? remoteNotes.slice(0, 2) : remoteNotes,
   );
@@ -54,8 +66,21 @@ export function NotesThread({
       let storageFileId: string | undefined;
       if (file) {
         if (!isAuthOff) {
-          const { token } = await uploadFile(file);
-          storageFileId = token;
+          // Ensure project folder tree exists before multipart initiate.
+          await authApiClient(`/projects/${projectId}/folders`, {
+            method: "POST",
+          }).catch(() => undefined);
+
+          const uploaded = await uploadFileMultipart({
+            projectId,
+            folderPath: CONSULTATION_NOTES_FOLDER,
+            file,
+          });
+          const fileId = extractUploadedFileId(uploaded);
+          if (!fileId) {
+            throw new Error("Upload succeeded but no file id was returned");
+          }
+          storageFileId = fileId;
         } else {
           storageFileId = `local-${Date.now()}`;
         }

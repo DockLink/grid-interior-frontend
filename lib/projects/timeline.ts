@@ -1,3 +1,4 @@
+import { calendarDateFromApi, parseCalendarDate, toCalendarDateIso } from "@/lib/projects/calendar-date";
 import { resolveProjectEndDate } from "@/lib/projects/duration";
 import type { ProjectMilestoneView, ProjectStageView } from "@/lib/projects/map-stages";
 import type { Task, TaskableStatus } from "@/types/tasks";
@@ -57,7 +58,7 @@ export function stageColor(index: number): string {
 }
 
 export function toDateOnlyIso(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return toCalendarDateIso(date);
 }
 
 export function isoDurationBetween(start: string, end: string): string {
@@ -80,10 +81,12 @@ export function deriveTimelineStatus(
   now = new Date()
 ): TimelineItemStatus {
   if (apiStatus === "COMPLETED") return "completed";
-  const end = new Date(endDate);
-  const start = new Date(startDate);
-  if (end < now) return "overdue";
-  if (start <= now && end >= now) return "active";
+  const end = calendarDateFromApi(endDate);
+  const start = calendarDateFromApi(startDate);
+  const today = toCalendarDateIso(now);
+  if (!end || !start) return "upcoming";
+  if (end < today) return "overdue";
+  if (start <= today && end >= today) return "active";
   return "upcoming";
 }
 
@@ -93,17 +96,17 @@ export function daysRemainingLabel(
   now = new Date()
 ): { text: string; color: string } {
   if (status === "completed") return { text: "Done", color: "#2D6A4F" };
-  const diff = Math.round(
-    (new Date(endDate).getTime() - now.getTime()) / 86400000
-  );
+  const end = parseCalendarDate(calendarDateFromApi(endDate));
+  const today = parseCalendarDate(toCalendarDateIso(now));
+  const diff = Math.round((end.getTime() - today.getTime()) / 86400000);
   if (diff < 0) return { text: `${Math.abs(diff)}d late`, color: "#9B1C1C" };
   if (diff === 0) return { text: "Due today", color: "#7B5E0A" };
   return { text: `${diff}d`, color: "#9C8573" };
 }
 
 export function dayOffset(chartStart: string, dateStr: string): number {
-  const start = new Date(chartStart + "T00:00:00").getTime();
-  const target = new Date(dateStr.slice(0, 10) + "T00:00:00").getTime();
+  const start = parseCalendarDate(chartStart).getTime();
+  const target = parseCalendarDate(dateStr).getTime();
   return Math.round((target - start) / 86400000);
 }
 
@@ -115,19 +118,22 @@ export function computeChartBounds(
   const dates: number[] = [];
   const now = new Date();
 
-  if (project?.start_date) {
-    dates.push(new Date(project.start_date).getTime());
-  }
-  const projectEnd = project ? resolveProjectEndDate(project) : null;
-  if (projectEnd) {
-    dates.push(new Date(projectEnd).getTime());
-  }
+  const pushDay = (value: string | null | undefined) => {
+    if (!value) return;
+    const ms = parseCalendarDate(value).getTime();
+    if (!Number.isNaN(ms)) dates.push(ms);
+  };
+
+  pushDay(project?.start_date);
+  pushDay(project ? resolveProjectEndDate(project) : null);
 
   for (const s of stages) {
-    dates.push(new Date(s.startDate).getTime(), new Date(s.endDate).getTime());
+    pushDay(s.startDate);
+    pushDay(s.endDate);
   }
   for (const m of milestones) {
-    dates.push(new Date(m.startDate).getTime(), new Date(m.endDate).getTime());
+    pushDay(m.startDate);
+    pushDay(m.endDate);
   }
 
   if (dates.length === 0) {
@@ -174,15 +180,24 @@ export function buildMonthMarkers(chartStart: string, chartEnd: string) {
   return markers;
 }
 
+function earliestDay(dates: string[]): string {
+  return dates.reduce((min, day) => (day < min ? day : min));
+}
+
+function latestDay(dates: string[]): string {
+  return dates.reduce((max, day) => (day > max ? day : max));
+}
+
 export function mapTaskToTimelineItem(t: Task): TimelineTaskItem {
-  const endIso = t.end_date ?? t.start_date;
+  const startIso = calendarDateFromApi(t.start_date);
+  const endIso = calendarDateFromApi(t.end_date ?? t.start_date) || startIso;
   return {
     id: t.id,
     title: t.title,
-    startDate: t.start_date,
+    startDate: startIso,
     endDate: endIso,
     apiStatus: t.status,
-    status: deriveTimelineStatus(t.start_date, endIso, t.status),
+    status: deriveTimelineStatus(startIso, endIso, t.status),
   };
 }
 
@@ -219,10 +234,10 @@ export function buildTimelineGroups(
 
     // Span the milestone bar across its tasks so changes (e.g. a task whose
     // end date was extended by an approved hold request) move the parent bar.
-    const startCandidates = [new Date(m.startDate).getTime(), ...tasks.map((t) => new Date(t.startDate).getTime())];
-    const endCandidates = [new Date(m.endDate).getTime(), ...tasks.map((t) => new Date(t.endDate).getTime())];
-    const startDate = toDateOnlyIso(new Date(Math.min(...startCandidates)));
-    const endDate = toDateOnlyIso(new Date(Math.max(...endCandidates)));
+    const startCandidates = [calendarDateFromApi(m.startDate), ...tasks.map((t) => calendarDateFromApi(t.startDate))].filter(Boolean);
+    const endCandidates = [calendarDateFromApi(m.endDate), ...tasks.map((t) => calendarDateFromApi(t.endDate))].filter(Boolean);
+    const startDate = startCandidates.length > 0 ? earliestDay(startCandidates) : "";
+    const endDate = endCandidates.length > 0 ? latestDay(endCandidates) : startDate;
 
     const item: TimelineMilestoneItem = {
       id: m.id,
@@ -245,34 +260,30 @@ export function buildTimelineGroups(
   }
 
   for (const g of groups) {
-    g.milestones.sort(
-      (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
-    );
+    g.milestones.sort((a, b) => a.startDate.localeCompare(b.startDate));
 
     // Tasks attached directly to the stage (no milestone) are rendered as their
     // own rows under the stage — no synthetic "Tasks (no milestone)" parent.
     const orphans = (g.orphanTasks ?? [])
       .slice()
-      .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+      .sort((a, b) => a.startDate.localeCompare(b.startDate));
     g.orphanTasks = orphans;
 
     // Roll the stage bar up across every child (milestones + their tasks + orphan
     // tasks) so it always reflects the true span, even after a hold extends a task.
     const childStarts = [
-      ...g.milestones.map((m) => new Date(m.startDate).getTime()),
-      ...orphans.map((t) => new Date(t.startDate).getTime()),
-    ];
+      calendarDateFromApi(g.startDate),
+      ...g.milestones.map((m) => calendarDateFromApi(m.startDate)),
+      ...orphans.map((t) => calendarDateFromApi(t.startDate)),
+    ].filter(Boolean);
     const childEnds = [
-      ...g.milestones.map((m) => new Date(m.endDate).getTime()),
-      ...orphans.map((t) => new Date(t.endDate).getTime()),
-    ];
+      calendarDateFromApi(g.endDate),
+      ...g.milestones.map((m) => calendarDateFromApi(m.endDate)),
+      ...orphans.map((t) => calendarDateFromApi(t.endDate)),
+    ].filter(Boolean);
     if (childStarts.length > 0) {
-      g.startDate = toDateOnlyIso(
-        new Date(Math.min(new Date(g.startDate).getTime(), ...childStarts))
-      );
-      g.endDate = toDateOnlyIso(
-        new Date(Math.max(new Date(g.endDate).getTime(), ...childEnds))
-      );
+      g.startDate = earliestDay(childStarts);
+      g.endDate = latestDay(childEnds);
     }
   }
 
