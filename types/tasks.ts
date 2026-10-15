@@ -28,6 +28,10 @@ export interface Task {
   parentTaskableId?: string | null;
   created_at?: string;
   updated_at?: string;
+  /** How many times this completed stage has been reopened for amendments. Server max is 4. */
+  amendment_count?: number;
+  /** True while a completed stage is temporarily editable. Status stays COMPLETED. */
+  amendment_open?: boolean;
   subtasks?: Task[];
   children?: Task[];
 }

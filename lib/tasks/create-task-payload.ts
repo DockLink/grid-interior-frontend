@@ -1,17 +1,29 @@
+import { toCalendarDateIso } from "@/lib/projects/calendar-date";
 import { addIsoDuration } from "@/lib/projects/duration";
 import type { CreateTaskRequest } from "@/types/tasks";
 
-/** Ensure create payload includes end_date required by the backend. */
-export function withTaskEndDate(
-  payload: CreateTaskRequest & { end_date?: string; duration?: string }
-): CreateTaskRequest & { end_date: string } {
-  const { duration, ...rest } = payload;
-  if (rest.end_date) {
-    return { ...rest, end_date: rest.end_date };
+type TaskDatePayload = Omit<CreateTaskRequest, "start_date"> & {
+  start_date?: string;
+  end_date?: string;
+  duration?: string;
+};
+
+/**
+ * Keep an explicit end date, or derive one from a duration.
+ * A STAGE with neither is created without an end date.
+ */
+export function withTaskEndDate<T extends TaskDatePayload>(payload: T): T {
+  const { duration, start_date, end_date, ...rest } = payload;
+  const start = start_date || undefined;
+  if (end_date) {
+    return { ...rest, ...(start ? { start_date: start } : {}), end_date } as T;
   }
-  if (duration) {
-    const end = addIsoDuration(rest.start_date, duration);
-    return { ...rest, end_date: end.toISOString() };
+  if (duration && start) {
+    const end = addIsoDuration(start, duration);
+    return { ...rest, start_date: start, end_date: toCalendarDateIso(end) } as T;
+  }
+  if (rest.taskable_type === "STAGE") {
+    return { ...rest, ...(start ? { start_date: start } : {}) } as T;
   }
   throw new Error("Task requires end_date or duration");
 }

@@ -8,6 +8,7 @@ import { useProjectTaskables } from "@/hooks/use-project-taskables";
 import { authApiClient } from "@/lib/api/authenticated-client";
 import { mapStageToView } from "@/lib/projects/map-stages";
 import { withTaskEndDate } from "@/lib/tasks/create-task-payload";
+import { parseCalendarDate } from "@/lib/projects/calendar-date";
 import { resolveTaskEndDateIso } from "@/lib/tasks/task-dates";
 import type { Task } from "@/types/tasks";
 
@@ -528,7 +529,7 @@ function MilestoneRow({
   }
 
   const range = task
-    ? `${new Date(task.start_date).toLocaleDateString()} – ${new Date(resolveTaskEndDateIso(task)).toLocaleDateString()}`
+    ? `${parseCalendarDate(task.start_date).toLocaleDateString()} – ${parseCalendarDate(resolveTaskEndDateIso(task)).toLocaleDateString()}`
     : null;
   const isCompleted = task?.status === "COMPLETED";
 

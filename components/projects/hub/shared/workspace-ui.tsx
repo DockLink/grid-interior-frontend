@@ -3,6 +3,7 @@
 import { useRef, useState, type ReactNode } from "react";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
+import type { PhaseAmendmentBannerState } from "@/hooks/use-phase-edit-access";
 import { cn } from "@/lib/utils";
 
 export {
@@ -147,21 +148,77 @@ export function UploadDropzone({
   );
 }
 
-export function PhaseReadOnlyBanner() {
+export function PhaseReadOnlyBanner({
+  amendment,
+}: {
+  amendment?: PhaseAmendmentBannerState | null;
+} = {}) {
+  const amending = amendment?.mode === "amending";
+  const remaining = amendment ? Math.max(0, amendment.limit - amendment.used) : 0;
+
   return (
     <div
-      className="mx-4 mb-4 flex items-start gap-3 rounded-[12px] border border-[var(--figma-border)] bg-[var(--figma-gray50)] px-4 py-3 sm:mx-10"
+      className={cn(
+        "mx-4 mb-4 flex flex-col gap-3 rounded-[12px] border px-4 py-3 sm:mx-10 sm:flex-row sm:items-center sm:justify-between",
+        amending
+          ? "border-[var(--figma-teal)]/30 bg-[rgba(14,124,134,0.06)]"
+          : "border-[var(--figma-border)] bg-[var(--figma-gray50)]",
+      )}
       role="status"
     >
-      <MaterialIcon name="lock" outlined size={18} className="mt-0.5 shrink-0 text-[var(--figma-gray500)]" />
-      <div>
-        <div className="text-[13px] font-semibold text-[var(--figma-navy)]">
-          This phase is completed and is read-only
-        </div>
-        <div className="mt-0.5 text-[12px] text-[var(--figma-gray500)]">
-          You can review past work here, but editing is locked because the project has moved past this phase.
+      <div className="flex min-w-0 items-start gap-3">
+        <MaterialIcon
+          name={amending ? "edit" : "lock"}
+          outlined
+          size={18}
+          className={cn(
+            "mt-0.5 shrink-0",
+            amending ? "text-[var(--figma-teal)]" : "text-[var(--figma-gray500)]",
+          )}
+        />
+        <div>
+          <div className="text-[13px] font-semibold text-[var(--figma-navy)]">
+            {amending
+              ? "This phase is open for amendments"
+              : "This phase is completed and is read-only"}
+          </div>
+          <div className="mt-0.5 text-[12px] text-[var(--figma-gray500)]">
+            {amending
+              ? `Correct what you need, then finish amendments to lock this phase again. ${amendment.used} of ${amendment.limit} reopens used.`
+              : "You can review past work here, but editing is locked because the project has moved past this phase."}
+          </div>
+          {amendment && !amending && amendment.canReopen && (
+            <div className="mt-1 text-[12px] text-[var(--figma-gray500)]">
+              {remaining} of {amendment.limit} reopens remaining
+            </div>
+          )}
+          {amendment?.limitReached && (
+            <div className="mt-1 text-[12px] text-[var(--figma-gray500)]">
+              This phase has been reopened {amendment.limit} times and can no longer be edited.
+            </div>
+          )}
         </div>
       </div>
+      {amendment?.canReopen && (
+        <button
+          type="button"
+          onClick={amendment.onReopen}
+          disabled={amendment.busy}
+          className="inline-flex shrink-0 items-center justify-center rounded-3xl border-[1.5px] border-[var(--figma-teal)] px-4 py-[7px] text-xs font-semibold text-[var(--figma-teal)] hover:bg-[rgba(14,124,134,0.08)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {amendment.busy ? "Reopening…" : "Reopen for editing"}
+        </button>
+      )}
+      {amending && (
+        <button
+          type="button"
+          onClick={amendment.onFinish}
+          disabled={amendment.busy}
+          className="inline-flex shrink-0 items-center justify-center rounded-3xl border-[1.5px] border-[var(--figma-teal)] px-4 py-[7px] text-xs font-semibold text-[var(--figma-teal)] hover:bg-[rgba(14,124,134,0.08)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {amendment.busy ? "Locking…" : "Finish amendments"}
+        </button>
+      )}
     </div>
   );
 }
@@ -169,23 +226,29 @@ export function PhaseReadOnlyBanner() {
 /** View-only wrapper for completed phases — keeps navigation, blocks interactions. */
 export function PhaseLockedContent({
   locked,
+  amendment,
   children,
   className,
 }: {
   locked: boolean;
+  amendment?: PhaseAmendmentBannerState | null;
   children: ReactNode;
   className?: string;
 }) {
-  if (!locked) return <>{children}</>;
+  if (!locked && !amendment) return <>{children}</>;
   return (
     <div className={className}>
-      <PhaseReadOnlyBanner />
-      <div
-        className="pointer-events-none select-none opacity-80 [&_[data-allow-phase-nav]]:pointer-events-auto"
-        aria-disabled="true"
-      >
-        {children}
-      </div>
+      <PhaseReadOnlyBanner amendment={amendment} />
+      {locked ? (
+        <div
+          className="pointer-events-none select-none opacity-80 [&_[data-allow-phase-nav]]:pointer-events-auto"
+          aria-disabled="true"
+        >
+          {children}
+        </div>
+      ) : (
+        children
+      )}
     </div>
   );
 }

@@ -5,16 +5,28 @@ import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { useConsultation } from "@/hooks/use-consultation";
-import { useUploadFile } from "@/hooks/use-upload-file";
+import { authApiClient } from "@/lib/api/authenticated-client";
 import { getApiErrorMessage } from "@/lib/api/handle-api-error";
+import { uploadFileMultipart } from "@/lib/files/multipart-upload";
 import { useHubTeam } from "@/lib/projects/hub-team-context";
 import type { ConsultRoom, ConsultSketch } from "@/types/consultation";
+import type { ProjectFile } from "@/types/files";
 
 import { GradientBtn, SectionCard, SectionTitle } from "./consultation-ui";
 import { SectionNotes } from "./section-notes";
 
 const SKETCH_MAX_BYTES = 25 * 1024 * 1024;
 const SKETCH_ACCEPT = ".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg";
+/** Provisioned drawings folder used for the measurement sketch (project File IDs). */
+const CONSULTATION_SKETCH_FOLDER = "1.0 DRAWINGS/1.1 Space Plans";
+
+function extractUploadedFileId(uploaded: unknown): string | null {
+  if (!uploaded || typeof uploaded !== "object") return null;
+  const row = uploaded as Partial<ProjectFile> & { file_id?: string };
+  if (typeof row.id === "string" && row.id) return row.id;
+  if (typeof row.file_id === "string" && row.file_id) return row.file_id;
+  return null;
+}
 
 function isDraftId(id: string) {
   return id.startsWith("mock-");
@@ -104,7 +116,6 @@ export function SiteMeasurementsTab({ projectId }: { projectId: string }) {
     deleteSketch,
     isAuthOff,
   } = useConsultation(projectId);
-  const { uploadFile } = useUploadFile();
   const [rooms, setRooms] = useState<ConsultRoom[]>(remoteRooms);
   const [sketch, setSketch] = useState<ConsultSketch | null>(remoteSketch);
   const [dragOver, setDragOver] = useState(false);
@@ -195,8 +206,20 @@ export function SiteMeasurementsTab({ projectId }: { projectId: string }) {
     try {
       let storageFileId = `local-${Date.now()}`;
       if (!isAuthOff) {
-        const { token } = await uploadFile(file);
-        storageFileId = token;
+        await authApiClient(`/projects/${projectId}/folders`, {
+          method: "POST",
+        }).catch(() => undefined);
+
+        const uploaded = await uploadFileMultipart({
+          projectId,
+          folderPath: CONSULTATION_SKETCH_FOLDER,
+          file,
+        });
+        const fileId = extractUploadedFileId(uploaded);
+        if (!fileId) {
+          throw new Error("Upload succeeded but no file id was returned");
+        }
+        storageFileId = fileId;
       }
 
       const uploadedAt = new Date().toISOString();

@@ -6,10 +6,10 @@ import { useRouter } from "next/navigation";
 import { DemoCaption } from "@/components/demo/demo-caption";
 import { PhaseLockedContent } from "@/components/projects/hub/shared/workspace-ui";
 import { useActiveProjectView } from "@/hooks/use-active-project-view";
+import { usePhaseEditAccess } from "@/hooks/use-phase-edit-access";
 import { useProjectMembers } from "@/hooks/use-project-members";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { HubTeamProvider } from "@/lib/projects/hub-team-context";
-import { isPhaseEditable } from "@/lib/projects/map-project-hub";
 import { canViewBoqFinancials } from "@/lib/projects/permissions";
 import type { DetailView } from "@/types/detail";
 
@@ -29,6 +29,7 @@ export function DetailDrawingsWorkspace({
   const router = useRouter();
   const authDisabled = isAuthDisabled();
   const { project, teamMembers, isLoading, error } = useActiveProjectView(projectId);
+  const phaseAccess = usePhaseEditAccess(projectId, project?.phase, "Detail Drawings");
   const { effectiveRole, isViewer } = useProjectMembers();
   const allowBoq = authDisabled || canViewBoqFinancials(effectiveRole, isViewer);
 
@@ -75,13 +76,15 @@ export function DetailDrawingsWorkspace({
     );
   }
 
-  const readOnly = !isPhaseEditable(project.phase, "Detail Drawings");
+  const readOnly = phaseAccess.readOnly;
 
   const wrap = (content: React.ReactNode) => (
     <HubTeamProvider members={teamMembers}>
       <div>
         {authDisabled && <DemoCaption className="mb-4 px-10 pt-6" />}
-        <PhaseLockedContent locked={readOnly}>{content}</PhaseLockedContent>
+        <PhaseLockedContent locked={readOnly} amendment={phaseAccess.amendment}>
+          {content}
+        </PhaseLockedContent>
       </div>
     </HubTeamProvider>
   );

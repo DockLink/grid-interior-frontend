@@ -14,6 +14,12 @@ export interface GanttPhase {
   bg: string;
   startWeek: number; // 0-indexed from project start
   durationWeeks: number;
+  /** Calendar start (YYYY-MM-DD) when this phase is a live stage. */
+  startDate?: string;
+  /** Calendar end (YYYY-MM-DD) when this phase is a live stage. */
+  endDate?: string;
+  /** False when a live stage has no dates. Mock phases omit this and keep week bars. */
+  scheduled?: boolean;
   progress: number; // 0–100
   milestone?: string;
   status: "completed" | "active" | "upcoming";

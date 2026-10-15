@@ -8,9 +8,9 @@ import { AreaSetupScreen } from "@/components/projects/hub/concept/area-setup-sc
 import { ConceptListScreen } from "@/components/projects/hub/concept/concept-list-screen";
 import { PhaseLockedContent } from "@/components/projects/hub/shared/workspace-ui";
 import { useActiveProjectView } from "@/hooks/use-active-project-view";
+import { usePhaseEditAccess } from "@/hooks/use-phase-edit-access";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { HubTeamProvider } from "@/lib/projects/hub-team-context";
-import { isPhaseEditable } from "@/lib/projects/map-project-hub";
 import type { ConceptView } from "@/types/concept";
 
 export function ConceptDesignWorkspace({
@@ -25,6 +25,7 @@ export function ConceptDesignWorkspace({
   const router = useRouter();
   const authDisabled = isAuthDisabled();
   const { project, teamMembers, isLoading, error } = useActiveProjectView(projectId);
+  const phaseAccess = usePhaseEditAccess(projectId, project?.phase, "Concept Design");
 
   const [view, setView] = useState<ConceptView>(initialView);
   const [selectedArea, setSelectedArea] = useState<string>("");
@@ -62,13 +63,13 @@ export function ConceptDesignWorkspace({
     );
   }
 
-  const readOnly = !isPhaseEditable(project.phase, "Concept Design");
+  const readOnly = phaseAccess.readOnly;
 
   return (
     <HubTeamProvider members={teamMembers}>
       <div className="relative">
         {authDisabled && <DemoCaption className="mb-4 px-10 pt-6" />}
-        <PhaseLockedContent locked={readOnly}>
+        <PhaseLockedContent locked={readOnly} amendment={phaseAccess.amendment}>
           {view === "area-setup" && (
             <AreaSetupScreen
               project={project}

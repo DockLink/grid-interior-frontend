@@ -210,7 +210,7 @@ export function ConceptRenderScreen({
 
       <RevisionTrackerWidget projectId={projectId} />
       <ClientPresentationWidget />
-      <TimelineWidget phase="Concept Design" initialDays="10" badgeVariant="teal" />
+      <TimelineWidget phase="Concept Design" projectId={projectId} badgeVariant="teal" />
       <SectionCard className="px-5 py-4">
         <SectionTitle icon="group" title="Team Assignment" />
         <div className="flex flex-wrap items-center gap-2">

@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -22,6 +23,10 @@ import { useProjectTimeline } from "@/hooks/use-project-timeline";
 import { useVendorTasks } from "@/hooks/use-vendor-tasks";
 import { handleApiError } from "@/lib/api/handle-api-error";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import {
+  parseCalendarDate,
+  toCalendarDateIso,
+} from "@/lib/projects/calendar-date";
 import {
   averagePhaseProgress,
   findSiteExecutionStage,
@@ -116,8 +121,8 @@ interface TimelineLiveData {
   currentWeek: number;
   updateStageDates: (
     stageId: string,
-    startWeek: number,
-    durationWeeks: number,
+    startDateIso: string,
+    endDateIso: string,
   ) => Promise<void>;
 }
 
@@ -241,6 +246,35 @@ function Avatar({
   );
 }
 
+const PHASE_LABEL_W = 280;
+
+function addCalendarDays(iso: string, days: number): string {
+  const date = parseCalendarDate(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  date.setDate(date.getDate() + Math.round(days));
+  return toCalendarDateIso(date);
+}
+
+function calendarDaysBetween(startIso: string, endIso: string): number {
+  const start = parseCalendarDate(startIso);
+  const end = parseCalendarDate(endIso);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+  return Math.round((end.getTime() - start.getTime()) / 86400000);
+}
+
+function resolvePhaseDates(
+  phase: GanttPhase,
+  projectStartIso: string,
+): { start: string; end: string } | null {
+  if (phase.scheduled === false && (!phase.startDate || !phase.endDate)) return null;
+  const start =
+    phase.startDate || addCalendarDays(projectStartIso, phase.startWeek * 7);
+  let end = phase.endDate || addCalendarDays(start, Math.max(1, phase.durationWeeks) * 7);
+  if (!start || !end) return null;
+  if (end <= start) end = addCalendarDays(start, 1);
+  return { start, end };
+}
+
 // ── GANTT CHART ───────────────────────────────────────────────────────────────
 function GanttChart() {
   const params = useParams();
@@ -253,57 +287,185 @@ function GanttChart() {
   const [phases, setPhases] = useState<GanttPhase[]>(live.phases);
   const [fridaySent, setFridaySent] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [dragScale, setDragScale] = useState<{ pxPerDay: number; axisDays: number } | null>(
+    null,
+  );
+  const [dragAnchorStart, setDragAnchorStart] = useState<string | null>(null);
+  const [syncTick, setSyncTick] = useState(0);
+  const suspendSyncRef = useRef(0);
   const siteStages = useSiteSubstages();
-  const keyDates = getClientKeyDatesFromSite(siteStages);
-  const overlapBars = getSiteOverlapBarsFromSite(resolveSiteSubstages(siteStages));
-
-  const totalWeeks = Math.max(1, live.totalWeeks);
-  const currentWeek = live.currentWeek;
   const projectStartIso = live.projectStartIso;
   const milestones = live.milestones;
+  const keyDates = mapClientKeyDates({
+    projectStartIso: live.projectStartIso,
+    projectEndIso: live.projectEndIso,
+    projectStartLabel: live.projectStartLabel,
+    projectEndLabel: live.projectEndLabel,
+    milestones,
+  });
+  const overlapBars = getSiteOverlapBarsFromSite(resolveSiteSubstages(siteStages));
 
   useEffect(() => {
+    if (suspendSyncRef.current > 0) return;
     setPhases(live.phases);
-  }, [live.phases]);
+  }, [live.phases, syncTick]);
 
-  const persistPhase = async (phase: GanttPhase) => {
+  const chartStartIso = useMemo(() => {
+    if (dragScale && dragAnchorStart) return dragAnchorStart;
+    let start = projectStartIso;
+    for (const phase of phases) {
+      const date = resolvePhaseDates(phase, projectStartIso)?.start;
+      if (date && date < start) start = date;
+    }
+    return start;
+  }, [dragAnchorStart, dragScale, phases, projectStartIso]);
+
+  const chartEndIso = useMemo(() => {
+    let end = live.projectEndIso;
+    for (const phase of phases) {
+      const date = resolvePhaseDates(phase, projectStartIso)?.end;
+      if (date && date > end) end = date;
+    }
+    return end;
+  }, [phases, projectStartIso, live.projectEndIso]);
+
+  const axisDays = Math.max(7, calendarDaysBetween(chartStartIso, chartEndIso));
+  const axisWeeks = Math.max(1, Math.ceil(axisDays / 7));
+  const axisSpanDays = axisWeeks * 7;
+  const todayIso = toCalendarDateIso(new Date());
+  const todayDays = calendarDaysBetween(chartStartIso, todayIso);
+  const showToday = todayDays >= 0 && todayDays <= axisSpanDays;
+  const todayPct = (todayDays / axisSpanDays) * 100;
+  const barAreaMinWidth =
+    dragScale && axisSpanDays > dragScale.axisDays
+      ? dragScale.pxPerDay * axisSpanDays
+      : undefined;
+
+  const savePhaseDates = async (
+    phase: GanttPhase,
+    start: string,
+    end: string,
+    prevStart: string,
+    prevEnd: string,
+  ) => {
     if (authDisabled || !phase.stageId) return;
+    suspendSyncRef.current += 1;
     try {
-      await live.updateStageDates(phase.stageId, phase.startWeek, phase.durationWeeks);
+      await live.updateStageDates(phase.stageId, start, end);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update stage dates");
-      setPhases(live.phases);
+      setPhases((prev) =>
+        prev.map((item) =>
+          item.id === phase.id
+            ? {
+                ...item,
+                startDate: prevStart,
+                endDate: prevEnd,
+                scheduled: Boolean(prevStart && prevEnd),
+              }
+            : item,
+        ),
+      );
+    } finally {
+      suspendSyncRef.current = Math.max(0, suspendSyncRef.current - 1);
+      setSyncTick((tick) => tick + 1);
     }
   };
 
-  const nudge = (id: number, delta: number) => {
-    setPhases((prev) => {
-      const next = prev.map((p) =>
-        p.id === id
-          ? {
-              ...p,
-              startWeek: Math.max(
-                0,
-                Math.min(totalWeeks - p.durationWeeks, p.startWeek + delta),
-              ),
-            }
-          : p,
-      );
-      const updated = next.find((p) => p.id === id);
-      if (updated) void persistPhase(updated);
-      return next;
-    });
+  const commitPhaseDates = (phase: GanttPhase, start: string, end: string) => {
+    if (!start || !end) {
+      if (phase.scheduled === false) {
+        setPhases((current) =>
+          current.map((item) =>
+            item.id === phase.id ? { ...item, startDate: start, endDate: end, scheduled: false } : item,
+          ),
+        );
+      }
+      return;
+    }
+    const nextEnd = end <= start ? addCalendarDays(start, 1) : end;
+    const prev = resolvePhaseDates(phase, projectStartIso);
+    setPhases((current) =>
+      current.map((item) =>
+        item.id === phase.id
+          ? { ...item, startDate: start, endDate: nextEnd, scheduled: true }
+          : item,
+      ),
+    );
+    if (prev && start === prev.start && nextEnd === prev.end) return;
+    void savePhaseDates(phase, start, nextEnd, prev?.start ?? "", prev?.end ?? "");
   };
 
-  const setDuration = (id: number, weeks: number) => {
-    setPhases((prev) => {
-      const next = prev.map((p) =>
-        p.id === id ? { ...p, durationWeeks: Math.max(1, weeks) } : p,
+  const beginDrag = (
+    event: React.PointerEvent<HTMLElement>,
+    phase: GanttPhase,
+    mode: "move" | "resize",
+  ) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const track = event.currentTarget.closest("[data-phase-track]") as HTMLElement | null;
+    if (!track) return;
+    const width = track.getBoundingClientRect().width;
+    if (width <= 0) return;
+    const origin = resolvePhaseDates(phase, projectStartIso);
+    if (!origin) return;
+    const pxPerDay = width / axisSpanDays;
+    setDragAnchorStart(chartStartIso);
+    setDragScale({ pxPerDay, axisDays: axisSpanDays });
+    suspendSyncRef.current += 1;
+
+    const apply = (clientX: number) => {
+      const deltaDays = Math.round((clientX - event.clientX) / pxPerDay);
+      const nextStart =
+        mode === "move" ? addCalendarDays(origin.start, deltaDays) : origin.start;
+      let nextEnd = addCalendarDays(origin.end, deltaDays);
+      if (nextEnd <= nextStart) nextEnd = addCalendarDays(nextStart, 1);
+      setPhases((current) =>
+        current.map((item) =>
+          item.id === phase.id
+            ? { ...item, startDate: nextStart, endDate: nextEnd }
+            : item,
+        ),
       );
-      const updated = next.find((p) => p.id === id);
-      if (updated) void persistPhase(updated);
-      return next;
-    });
+      return { start: nextStart, end: nextEnd };
+    };
+
+    let latest = { start: origin.start, end: origin.end };
+    const onMove = (ev: PointerEvent) => {
+      latest = apply(ev.clientX);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setDragAnchorStart(null);
+      setDragScale(null);
+      const unchanged = latest.start === origin.start && latest.end === origin.end;
+      if (unchanged || !phase.stageId || authDisabled) {
+        suspendSyncRef.current = Math.max(0, suspendSyncRef.current - 1);
+        setSyncTick((tick) => tick + 1);
+        return;
+      }
+      void (async () => {
+        try {
+          await live.updateStageDates(phase.stageId!, latest.start, latest.end);
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "Failed to update stage dates");
+          setPhases((current) =>
+            current.map((item) =>
+              item.id === phase.id
+                ? { ...item, startDate: origin.start, endDate: origin.end }
+                : item,
+            ),
+          );
+        } finally {
+          suspendSyncRef.current = Math.max(0, suspendSyncRef.current - 1);
+          setSyncTick((tick) => tick + 1);
+        }
+      })();
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   };
 
   const sendFriday = () => {
@@ -336,22 +498,6 @@ function GanttChart() {
       toast.error("Clipboard API not available. Cannot copy link.");
     }
   };
-
-  // Compute week labels from live project start
-  const weekLabels: { week: number; label: string }[] = [];
-  for (let w = 0; w < totalWeeks; w++) {
-    const d = new Date(`${projectStartIso}T00:00:00`);
-    d.setDate(d.getDate() + w * 7);
-    const label =
-      zoom === "month"
-        ? w % 4 === 0
-          ? d.toLocaleDateString("en-US", { month: "short" })
-          : ""
-        : `W${w + 1}`;
-    weekLabels.push({ week: w, label });
-  }
-
-  const displayed = zoom === "month" ? weekLabels.filter((_, i) => i % 4 === 0) : weekLabels;
 
   return (
     <div style={{ padding: "28px 40px" }}>
@@ -686,11 +832,11 @@ function GanttChart() {
         }}
       >
         {/* Week header */}
-        <div style={{ display: "flex", minWidth: 900 }}>
+        <div style={{ display: "flex", minWidth: 960 }}>
           {/* Phase label column */}
           <div
             style={{
-              width: 220,
+              width: PHASE_LABEL_W,
               flexShrink: 0,
               padding: "10px 16px",
               background: T.gray50,
@@ -708,6 +854,7 @@ function GanttChart() {
           <div
             style={{
               flex: 1,
+              minWidth: barAreaMinWidth,
               display: "flex",
               background: T.gray50,
               borderBottom: `1px solid ${T.border}`,
@@ -715,9 +862,9 @@ function GanttChart() {
             }}
           >
             {zoom === "month"
-              ? Array.from({ length: Math.ceil(totalWeeks / 4) }).map(
+              ? Array.from({ length: Math.ceil(axisWeeks / 4) }).map(
                   (_, i) => {
-                    const d = new Date(`${projectStartIso}T00:00:00`);
+                    const d = parseCalendarDate(chartStartIso);
                     d.setDate(d.getDate() + i * 28);
                     return (
                       <div
@@ -739,7 +886,7 @@ function GanttChart() {
                     );
                   }
                 )
-              : Array.from({ length: totalWeeks }).map((_, i) => (
+              : Array.from({ length: axisWeeks }).map((_, i) => (
                   <div
                     key={i}
                     style={{
@@ -756,18 +903,19 @@ function GanttChart() {
                   </div>
                 ))}
 
-            {/* Current week marker */}
-            <div
-              style={{
-                position: "absolute",
-                top: 0,
-                bottom: 0,
-                left: `${(currentWeek / totalWeeks) * 100}%`,
-                width: 2,
-                background: T.teal,
-                zIndex: 5,
-              }}
-            />
+            {showToday ? (
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  bottom: 0,
+                  left: `${todayPct}%`,
+                  width: 2,
+                  background: T.teal,
+                  zIndex: 5,
+                }}
+              />
+            ) : null}
           </div>
         </div>
 
@@ -784,12 +932,20 @@ function GanttChart() {
             No stages yet. Add stages from the Tasks board to populate this timeline.
           </div>
         ) : null}
-        {phases.map((phase, idx) => (
+        {phases.map((phase, idx) => {
+          const dates = resolvePhaseDates(phase, projectStartIso);
+          const startValue = phase.scheduled === false ? (phase.startDate ?? "") : (dates?.start ?? "");
+          const endValue = phase.scheduled === false ? (phase.endDate ?? "") : (dates?.end ?? "");
+          const startOffset = dates ? calendarDaysBetween(chartStartIso, dates.start) : 0;
+          const lengthDays = dates ? Math.max(1, calendarDaysBetween(dates.start, dates.end)) : 0;
+          const barLeft = (startOffset / axisSpanDays) * 100;
+          const barWidth = (lengthDays / axisSpanDays) * 100;
+          return (
           <div
             key={phase.id}
             style={{
               display: "flex",
-              minWidth: 900,
+              minWidth: 960,
               borderBottom:
                 idx < phases.length - 1
                   ? `1px solid ${T.border}`
@@ -799,122 +955,131 @@ function GanttChart() {
             {/* Phase label */}
             <div
               style={{
-                width: 220,
+                width: PHASE_LABEL_W,
                 flexShrink: 0,
-                padding: "12px 16px",
+                padding: "10px 12px",
                 borderRight: `1px solid ${T.border}`,
                 display: "flex",
-                alignItems: "center",
-                gap: 10,
+                flexDirection: "column",
+                gap: 6,
               }}
             >
-              <span
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: "50%",
-                  background: phase.color,
-                  flexShrink: 0,
-                  boxShadow: `0 0 6px ${phase.color}66`,
-                }}
-              />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span
                   style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: T.navy,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    background: phase.color,
+                    flexShrink: 0,
+                    boxShadow: `0 0 6px ${phase.color}66`,
                   }}
-                >
-                  {phase.name}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: T.navy,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {phase.name}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color:
+                        phase.status === "active"
+                          ? T.teal
+                          : phase.status === "completed"
+                          ? T.success
+                          : T.gray400,
+                      fontWeight: 600,
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    {phase.status === "active"
+                      ? `${phase.progress}% done`
+                      : phase.status}
+                  </div>
                 </div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color:
-                      phase.status === "active"
-                        ? T.teal
-                        : phase.status === "completed"
-                        ? T.success
-                        : T.gray400,
-                    fontWeight: 600,
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {phase.status === "active"
-                    ? `${phase.progress}% done`
-                    : phase.status}
-                </div>
+                <Avatar
+                  initials={phase.lead.initials}
+                  color={phase.lead.color}
+                  size={22}
+                  title={phase.lead.name}
+                />
               </div>
-              <Avatar
-                initials={phase.lead.initials}
-                color={phase.lead.color}
-                size={22}
-                title={phase.lead.name}
-              />
-              <input
-                type="number"
-                min={1}
-                value={phase.durationWeeks}
-                onChange={(e) => setDuration(phase.id, Number(e.target.value) || 1)}
-                title="Duration (weeks)"
-                style={{
-                  width: 40,
-                  padding: "2px 4px",
-                  borderRadius: 6,
-                  border: `1px solid ${T.border}`,
-                  fontSize: 11,
-                  fontFamily: "inherit",
-                  textAlign: "center",
-                }}
-              />
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <button
-                  type="button"
-                  onClick={() => nudge(phase.id, -1)}
-                  style={{ border: "none", background: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
-                >
-                  <span className="material-icons-outlined" style={{ fontSize: 14, color: T.gray400 }}>
-                    chevron_left
+              <div style={{ display: "flex", gap: 6 }}>
+                <label style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 9, fontWeight: 700, color: T.gray400, marginBottom: 2 }}>
+                    Start
                   </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => nudge(phase.id, 1)}
-                  style={{ border: "none", background: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
-                >
-                  <span className="material-icons-outlined" style={{ fontSize: 14, color: T.gray400 }}>
-                    chevron_right
+                  <input
+                    type="date"
+                    value={startValue}
+                    onChange={(e) => commitPhaseDates(phase, e.target.value, endValue)}
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      padding: "3px 4px",
+                      borderRadius: 6,
+                      border: `1px solid ${T.border}`,
+                      fontSize: 11,
+                      fontFamily: "inherit",
+                      color: T.navy,
+                    }}
+                  />
+                </label>
+                <label style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 9, fontWeight: 700, color: T.gray400, marginBottom: 2 }}>
+                    End
                   </span>
-                </button>
+                  <input
+                    type="date"
+                    value={endValue}
+                    min={startValue ? addCalendarDays(startValue, 1) : undefined}
+                    onChange={(e) => commitPhaseDates(phase, startValue, e.target.value)}
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      padding: "3px 4px",
+                      borderRadius: 6,
+                      border: `1px solid ${T.border}`,
+                      fontSize: 11,
+                      fontFamily: "inherit",
+                      color: T.navy,
+                    }}
+                  />
+                </label>
               </div>
             </div>
 
             {/* Bar area */}
             <div
+              data-phase-track
               style={{
                 flex: 1,
+                minWidth: barAreaMinWidth,
                 position: "relative",
                 padding: "10px 0",
                 display: "flex",
                 alignItems: "center",
-                cursor: "pointer",
               }}
               onMouseEnter={() => setTooltip(phase)}
               onMouseLeave={() => setTooltip(null)}
             >
-              {/* Grid lines */}
-              {Array.from({ length: totalWeeks }).map((_, i) => (
+              {Array.from({ length: axisWeeks }).map((_, i) => (
                 <div
                   key={i}
                   style={{
                     position: "absolute",
                     top: 0,
                     bottom: 0,
-                    left: `${(i / totalWeeks) * 100}%`,
+                    left: `${(i / axisWeeks) * 100}%`,
                     width: 1,
                     background:
                       i % 4 === 0
@@ -924,53 +1089,28 @@ function GanttChart() {
                 />
               ))}
 
-              {/* Current week highlight */}
-              <div
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  bottom: 0,
-                  left: `${(currentWeek / totalWeeks) * 100}%`,
-                  width: 2,
-                  background: `${T.teal}99`,
-                  zIndex: 3,
-                }}
-              />
+              {showToday ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    bottom: 0,
+                    left: `${todayPct}%`,
+                    width: 2,
+                    background: `${T.teal}99`,
+                    zIndex: 3,
+                  }}
+                />
+              ) : null}
 
-              {/* Phase bar — drag to reschedule */}
+              {dates ? (
               <div
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData("text/plain", String(phase.id));
-                  e.dataTransfer.effectAllowed = "move";
-                }}
-                onDragEnd={(e) => {
-                  const row = e.currentTarget.parentElement;
-                  if (!row) return;
-                  const rect = row.getBoundingClientRect();
-                  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                  const week = Math.round(pct * totalWeeks);
-                  setPhases((prev) => {
-                    const next = prev.map((p) =>
-                      p.id === phase.id
-                        ? {
-                            ...p,
-                            startWeek: Math.max(
-                              0,
-                              Math.min(totalWeeks - p.durationWeeks, week),
-                            ),
-                          }
-                        : p,
-                    );
-                    const updated = next.find((p) => p.id === phase.id);
-                    if (updated) void persistPhase(updated);
-                    return next;
-                  });
-                }}
+                onPointerDown={(e) => beginDrag(e, phase, "move")}
+                title="Drag to move"
                 style={{
                   position: "absolute",
-                  left: `${(phase.startWeek / totalWeeks) * 100}%`,
-                  width: `${(phase.durationWeeks / totalWeeks) * 100}%`,
+                  left: `${barLeft}%`,
+                  width: `${barWidth}%`,
                   height: 28,
                   borderRadius: 14,
                   background:
@@ -985,10 +1125,10 @@ function GanttChart() {
                   overflow: "hidden",
                   zIndex: 2,
                   boxShadow: phase.status === "active" ? `0 2px 8px ${phase.color}44` : "none",
-                  transition: "all 150ms",
+                  cursor: "grab",
+                  touchAction: "none",
                 }}
               >
-                {/* Progress fill */}
                 {phase.progress > 0 && phase.status !== "completed" && (
                   <div
                     style={{
@@ -1010,18 +1150,34 @@ function GanttChart() {
                     fontWeight: 700,
                     color:
                       phase.status === "upcoming" ? phase.color : T.white,
-                    padding: "0 10px",
+                    padding: "0 14px 0 10px",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
+                    pointerEvents: "none",
                   }}
                 >
                   {phase.name}
                 </span>
+                <div
+                  onPointerDown={(e) => beginDrag(e, phase, "resize")}
+                  title="Drag to change end date"
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 12,
+                    cursor: "ew-resize",
+                    zIndex: 3,
+                  }}
+                />
               </div>
+              ) : null}
             </div>
           </div>
-        ))}
+          );
+        })}
 
         <div
           style={{
@@ -1035,11 +1191,15 @@ function GanttChart() {
         >
           Execution sub-stages (overlapping) · synced from Site Execution
         </div>
-        {overlapBars.map((bar) => (
-          <div key={bar.id} style={{ display: "flex", minWidth: 900, borderBottom: `1px solid ${T.border}` }}>
+        {overlapBars.map((bar) => {
+          const startShiftDays = calendarDaysBetween(chartStartIso, projectStartIso);
+          const subLeft = ((bar.startWeek * 7 + startShiftDays) / axisSpanDays) * 100;
+          const subWidth = ((bar.durationWeeks * 7) / axisSpanDays) * 100;
+          return (
+          <div key={bar.id} style={{ display: "flex", minWidth: 960, borderBottom: `1px solid ${T.border}` }}>
             <div
               style={{
-                width: 220,
+                width: PHASE_LABEL_W,
                 flexShrink: 0,
                 padding: "8px 16px",
                 borderRight: `1px solid ${T.border}`,
@@ -1049,12 +1209,12 @@ function GanttChart() {
             >
               {bar.id} {bar.name}
             </div>
-            <div style={{ flex: 1, position: "relative", height: 28 }}>
+            <div style={{ flex: 1, minWidth: barAreaMinWidth, position: "relative", height: 28 }}>
               <div
                 style={{
                   position: "absolute",
-                  left: `${(bar.startWeek / totalWeeks) * 100}%`,
-                  width: `${(bar.durationWeeks / totalWeeks) * 100}%`,
+                  left: `${subLeft}%`,
+                  width: `${subWidth}%`,
                   top: 6,
                   height: 16,
                   borderRadius: 8,
@@ -1071,7 +1231,8 @@ function GanttChart() {
               />
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Tooltip */}
@@ -1103,7 +1264,10 @@ function GanttChart() {
               background: tooltip.color,
             }}
           />
-          {tooltip.name} · {tooltip.durationWeeks}w ·{" "}
+          {tooltip.name}
+          {resolvePhaseDates(tooltip, projectStartIso)
+            ? ` · ${resolvePhaseDates(tooltip, projectStartIso)?.start} – ${resolvePhaseDates(tooltip, projectStartIso)?.end} · `
+            : " · "}
           {tooltip.status === "active"
             ? `${tooltip.progress}% complete`
             : tooltip.status}

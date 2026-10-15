@@ -1,3 +1,4 @@
+import { calendarDateFromApi, parseCalendarDate, toCalendarDateIso } from "@/lib/projects/calendar-date";
 import { getUserInitials, getUserListPrimaryLabel } from "@/lib/user/display";
 import { resolveTaskEndDateIso, resolveTaskDurationIso } from "@/lib/tasks/task-dates";
 import type { Task, TaskablePriority, TaskableStatus } from "@/types/tasks";
@@ -63,11 +64,11 @@ export function apiStatusFromBoard(status: BoardColumnId): TaskableStatus {
 }
 
 export function taskDueDate(task: Task): Date {
-  return new Date(resolveTaskEndDateIso(task));
+  return parseCalendarDate(resolveTaskEndDateIso(task));
 }
 
 export function taskDueDateIso(task: Task): string {
-  return taskDueDate(task).toISOString().slice(0, 10);
+  return calendarDateFromApi(resolveTaskEndDateIso(task));
 }
 
 export function durationBetweenDates(startIso: string, endIso: string): string {
@@ -84,7 +85,7 @@ export function formatBoardDate(dateIso: string): string {
   });
 }
 
-export function dueDateColor(dateIso: string, status: BoardColumnId, today = new Date().toISOString().slice(0, 10)) {
+export function dueDateColor(dateIso: string, status: BoardColumnId, today = toCalendarDateIso(new Date())) {
   if (status === "done") return "#9CA3AF";
   if (dateIso < today) return "#DC2626";
   if (dateIso === today) return "#D97706";

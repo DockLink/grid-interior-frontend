@@ -27,6 +27,7 @@ import type {
   ConceptCardUpdatePayload,
   ConceptRenderApi,
   ConceptRenderCreatePayload,
+  ConceptCompleteResponse,
   ConceptRevisionApi,
   ConceptRevisionCreatePayload,
   ConceptTreeResponse,
@@ -286,6 +287,37 @@ export function useConcept(
     },
   });
 
+  const completeConceptMutation = useMutation({
+    mutationFn: async () => {
+      if (authOff) {
+        return {
+          stage: { id: "mock-concept-stage", status: "COMPLETED", title: "Concept Design" },
+          next_stage: null,
+          completed: true,
+        } satisfies ConceptCompleteResponse;
+      }
+      return authApiClient<ConceptCompleteResponse>(`${base(projectId)}/complete`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+    },
+    onSuccess: () => {
+      if (authOff) return;
+      void invalidate();
+      void qc.invalidateQueries({
+        queryKey: ["projects", "taskables", projectId],
+      });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.projects.detail(projectId),
+      });
+    },
+  });
+
+  const completeConcept = useCallback(
+    () => completeConceptMutation.mutateAsync(),
+    [completeConceptMutation],
+  );
+
   return {
     areas,
     cards,
@@ -307,6 +339,7 @@ export function useConcept(
       updateCardMutation.mutateAsync({ cardId, payload }),
     confirmCard: (cardId: string, status: "confirmed" | "pending") =>
       confirmCardMutation.mutateAsync({ cardId, status }),
+    completeConcept,
     createRender: (payload: ConceptRenderCreatePayload) =>
       createRenderMutation.mutateAsync(payload),
     deleteRender: (renderId: string) => deleteRenderMutation.mutateAsync(renderId),
@@ -317,6 +350,7 @@ export function useConcept(
       createCardMutation.isPending ||
       updateCardMutation.isPending ||
       confirmCardMutation.isPending ||
+      completeConceptMutation.isPending ||
       createRenderMutation.isPending ||
       deleteRenderMutation.isPending ||
       createRevisionMutation.isPending,

@@ -126,6 +126,20 @@ export interface ConceptRevisionCreatePayload {
   chargeable?: boolean;
 }
 
+export interface ConceptCompleteResponse {
+  stage: {
+    id: string;
+    status: string;
+    title?: string;
+  };
+  next_stage?: {
+    id: string;
+    status: string;
+    title?: string;
+  } | null;
+  completed: boolean;
+}
+
 const ALLOWED: ConceptView[] = ["area-setup", "concept-list"];
 
 export function conceptViewFromParam(view: string | undefined): ConceptView {

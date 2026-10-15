@@ -1,9 +1,16 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { useOptionalProjectContext } from "@/components/projects/project-context";
+import { useQuestionnaire } from "@/hooks/use-questionnaire";
+import {
+  questionnaireFromAnswers,
+  questionnaireToAnswers,
+  type QuestionnaireForm,
+} from "@/lib/consultation/questionnaire-form";
 import { cn } from "@/lib/utils";
 import type { ActiveProjectView } from "@/types/project-hub";
 
@@ -19,21 +26,24 @@ function projectLocation(project: ActiveProjectView): string {
 function questionnaireDefaults(
   project: ActiveProjectView,
   client?: { contact_number?: string | null; contact_email?: string | null } | null,
-) {
+): QuestionnaireForm {
   return {
     name: project.clientName === "No client" ? "" : project.clientName,
     phone: client?.contact_number?.trim() || "",
     email: client?.contact_email?.trim() || "",
+    comms: "Email",
     location: projectLocation(project) || "",
     spaceType: "",
+    spaceOther: "",
     scope: "",
-    siteVisit: null as boolean | null,
+    scopeOther: "",
+    siteVisit: null,
     tenure: "",
     consultWhen: "",
-    drawings: null as boolean | null,
+    drawings: null,
     size: "",
-    measureService: null as boolean | null,
-    engineerAnalysis: null as boolean | null,
+    measureService: null,
+    engineerAnalysis: null,
     goals: "",
     stylesPref: "",
     mustHaves: "",
@@ -50,12 +60,13 @@ function questionnaireDefaults(
     specialNeeds: "",
     colors: "",
     materials: "",
-    inspoFileName: null as string | null,
+    inspoFileName: null,
     brands: "",
     structural: "",
     lighting: "",
     temperature: "",
     concerns: "",
+    other: "",
   };
 }
 
@@ -186,82 +197,150 @@ function YesNo({
 export function QuestionnaireTab({ project }: { project: ActiveProjectView }) {
   const apiClient = useOptionalProjectContext()?.project?.client;
   const seed = questionnaireDefaults(project, apiClient);
+  const seedRef = useRef(seed);
+  const { answers, isLoading, isFetched, isAuthOff, isSaving, save } = useQuestionnaire(project.id);
 
-  const touch = <T,>(fn: (v: T) => void) => (v: T) => {
-    fn(v);
+  const [form, setForm] = useState(seed);
+  const [ready, setReady] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const dirtyRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef(form);
+  const saveRef = useRef(save);
+  const inFlightRef = useRef(false);
+  const queuedRef = useRef(false);
+  formRef.current = form;
+  saveRef.current = save;
+
+  const flushSaveRef = useRef(() => {});
+  flushSaveRef.current = () => {
+    if (isAuthOff) return;
+    if (inFlightRef.current) {
+      queuedRef.current = true;
+      return;
+    }
+    inFlightRef.current = true;
+    const payload = questionnaireToAnswers(formRef.current);
+    setSaveState("saving");
+    void saveRef
+      .current(payload)
+      .then(() => {
+        if (!queuedRef.current) setSaveState("saved");
+      })
+      .catch(() => {
+        if (queuedRef.current) return;
+        setSaveState("error");
+        toast.error("Couldn't save questionnaire answers");
+      })
+      .finally(() => {
+        inFlightRef.current = false;
+        if (queuedRef.current) {
+          queuedRef.current = false;
+          flushSaveRef.current();
+        }
+      });
   };
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const patch =
+    <K extends keyof QuestionnaireForm>(key: K) =>
+    (value: QuestionnaireForm[K]) => {
+      dirtyRef.current = true;
+      setForm((prev) => ({ ...prev, [key]: value }));
+    };
+
+  useEffect(() => {
+    if (ready) return;
+    if (isAuthOff) {
+      setReady(true);
+      return;
+    }
+    if (!isFetched || isLoading) return;
+    if (answers && !dirtyRef.current) {
+      setForm(questionnaireFromAnswers(answers, seedRef.current));
+    }
+    setReady(true);
+  }, [answers, isAuthOff, isFetched, isLoading, ready]);
+
+  useEffect(() => {
+    if (!ready || !dirtyRef.current || isAuthOff) return;
+    const handle = window.setTimeout(() => {
+      flushSaveRef.current();
+    }, 800);
+    return () => window.clearTimeout(handle);
+  }, [form, isAuthOff, ready]);
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      setInspoFileName(e.target.files[0].name);
+      patch("inspoFileName")(e.target.files[0].name);
     }
   };
 
-  const [name, setName] = useState(seed.name);
-  const [phone, setPhone] = useState(seed.phone);
-  const [email, setEmail] = useState(seed.email);
-  const [comms, setComms] = useState("Email");
+  const {
+    name,
+    phone,
+    email,
+    comms,
+    spaceType,
+    spaceOther,
+    scope,
+    scopeOther,
+    siteVisit,
+    location,
+    tenure,
+    consultWhen,
+    drawings,
+    size,
+    measureService,
+    engineerAnalysis,
+    goals,
+    stylesPref,
+    mustHaves,
+    avoid,
+    budget,
+    budgetNotes,
+    startDate,
+    endDate,
+    likes,
+    dislikes,
+    keepFurniture,
+    useSpace,
+    functional,
+    specialNeeds,
+    colors,
+    materials,
+    inspoFileName,
+    brands,
+    structural,
+    lighting,
+    temperature,
+    concerns,
+    other,
+  } = form;
 
-  const [spaceType, setSpaceType] = useState(seed.spaceType);
-  const [spaceOther, setSpaceOther] = useState("");
-  const [scope, setScope] = useState(seed.scope);
-  const [scopeOther, setScopeOther] = useState("");
-  const [siteVisit, setSiteVisit] = useState<boolean | null>(seed.siteVisit);
-  const [location, setLocation] = useState(seed.location);
-  const [tenure, setTenure] = useState(seed.tenure);
-  const [consultWhen, setConsultWhen] = useState(seed.consultWhen);
-  const [drawings, setDrawings] = useState<boolean | null>(seed.drawings);
-  const [size, setSize] = useState(seed.size);
-  const [measureService, setMeasureService] = useState<boolean | null>(seed.measureService);
-  const [engineerAnalysis, setEngineerAnalysis] = useState<boolean | null>(seed.engineerAnalysis);
-
-  const [goals, setGoals] = useState(seed.goals);
-  const [stylesPref, setStylesPref] = useState(seed.stylesPref);
-  const [mustHaves, setMustHaves] = useState(seed.mustHaves);
-  const [avoid, setAvoid] = useState(seed.avoid);
-
-  const [budget, setBudget] = useState(seed.budget);
-  const [budgetNotes, setBudgetNotes] = useState(seed.budgetNotes);
-  const [startDate, setStartDate] = useState(seed.startDate);
-  const [endDate, setEndDate] = useState(seed.endDate);
-
-  const [likes, setLikes] = useState(seed.likes);
-  const [dislikes, setDislikes] = useState(seed.dislikes);
-  const [keepFurniture, setKeepFurniture] = useState(seed.keepFurniture);
-
-  const [useSpace, setUseSpace] = useState(seed.useSpace);
-  const [functional, setFunctional] = useState(seed.functional);
-  const [specialNeeds, setSpecialNeeds] = useState(seed.specialNeeds);
-
-  const [colors, setColors] = useState(seed.colors);
-  const [materials, setMaterials] = useState(seed.materials);
-  const [inspoFileName, setInspoFileName] = useState<string | null>(seed.inspoFileName);
-  const [brands, setBrands] = useState(seed.brands);
-
-  const [structural, setStructural] = useState(seed.structural);
-  const [lighting, setLighting] = useState(seed.lighting);
-  const [temperature, setTemperature] = useState(seed.temperature);
-
-  const [concerns, setConcerns] = useState(seed.concerns);
-  const [other, setOther] = useState("");
+  const statusLabel = isAuthOff
+    ? null
+    : !ready || isLoading
+      ? "Loading questionnaire…"
+      : isSaving || saveState === "saving"
+        ? "Saving…"
+        : saveState === "saved"
+          ? "Saved"
+          : saveState === "error"
+            ? "Save failed"
+            : null;
 
   return (
     <div>
-      <div className="mb-5 flex items-start gap-2 rounded-[10px] border border-[#FDE68A] bg-[#FFFBEB] px-3.5 py-2.5 text-[12px] text-[#92400E]">
-        <MaterialIcon name="info" outlined size={16} className="mt-0.5 shrink-0" />
-        <span>
-          Questionnaire answers are draft-only in this browser session and are not saved to the server
-          yet. Section notes below do persist.
-        </span>
-      </div>
+      {statusLabel && (
+        <p className="mb-4 text-right text-[12px] text-[var(--figma-gray400)]">{statusLabel}</p>
+      )}
 
       <SectionCard>
         <SectionTitle icon="person" title="1. Client Information" />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Name" value={name} onChange={touch(setName)} />
-          <Field label="Phone" value={phone} onChange={touch(setPhone)} type="tel" />
-          <Field label="Email" value={email} onChange={touch(setEmail)} type="email" />
+          <Field label="Name" value={name} onChange={patch("name")} />
+          <Field label="Phone" value={phone} onChange={patch("phone")} type="tel" />
+          <Field label="Email" value={email} onChange={patch("email")} type="email" />
           <div>
             <span className="mb-1.5 block text-[13px] font-medium text-[var(--figma-navy)]">
               Preferred method of communication
@@ -269,7 +348,7 @@ export function QuestionnaireTab({ project }: { project: ActiveProjectView }) {
             <PillGroup
               options={["Phone", "Email", "WhatsApp", "In person"]}
               value={comms}
-              onChange={touch(setComms)}
+              onChange={patch("comms")}
             />
           </div>
         </div>
@@ -283,10 +362,10 @@ export function QuestionnaireTab({ project }: { project: ActiveProjectView }) {
             <PillGroup
               options={["Residential", "Commercial", "Other"]}
               value={spaceType}
-              onChange={touch(setSpaceType)}
+              onChange={patch("spaceType")}
               allowOther
               otherValue={spaceOther}
-              onOtherChange={touch(setSpaceOther)}
+              onOtherChange={patch("spaceOther")}
             />
           </div>
           <div>
@@ -294,40 +373,40 @@ export function QuestionnaireTab({ project }: { project: ActiveProjectView }) {
             <PillGroup
               options={["Full renovation", "Room makeover", "New construction", "Specific area"]}
               value={scope}
-              onChange={touch(setScope)}
+              onChange={patch("scope")}
               allowOther
               otherValue={scopeOther}
-              onOtherChange={touch(setScopeOther)}
+              onOtherChange={patch("scopeOther")}
             />
           </div>
-          <YesNo label="Site visit required?" value={siteVisit} onChange={touch(setSiteVisit)} />
-          <Field label="Project location" value={location} onChange={touch(setLocation)} />
+          <YesNo label="Site visit required?" value={siteVisit} onChange={patch("siteVisit")} />
+          <Field label="Project location" value={location} onChange={patch("location")} />
           <div>
             <span className="mb-1.5 block text-[13px] font-medium text-[var(--figma-navy)]">Owned or rented</span>
-            <PillGroup options={["Owned", "Rented", "Leased"]} value={tenure} onChange={touch(setTenure)} />
+            <PillGroup options={["Owned", "Rented", "Leased"]} value={tenure} onChange={patch("tenure")} />
           </div>
           <Field
             label="Convenient date and time for consultation"
             value={consultWhen}
-            onChange={touch(setConsultWhen)}
+            onChange={patch("consultWhen")}
             type="datetime-local"
           />
-          <YesNo label="Any architectural drawings available?" value={drawings} onChange={touch(setDrawings)} />
+          <YesNo label="Any architectural drawings available?" value={drawings} onChange={patch("drawings")} />
           <Field
             label="Approximate size of the space"
             value={size}
-            onChange={touch(setSize)}
+            onChange={patch("size")}
             placeholder="sq ft or perches"
           />
           <YesNo
             label="Is a site measurement service required?"
             value={measureService}
-            onChange={touch(setMeasureService)}
+            onChange={patch("measureService")}
           />
           <YesNo
             label="Do you need a site analysis done by an engineer?"
             value={engineerAnalysis}
-            onChange={touch(setEngineerAnalysis)}
+            onChange={patch("engineerAnalysis")}
           />
         </div>
       </SectionCard>
@@ -335,15 +414,15 @@ export function QuestionnaireTab({ project }: { project: ActiveProjectView }) {
       <SectionCard>
         <SectionTitle icon="flag" title="3. Design Goals" />
         <div className="flex flex-col gap-4">
-          <NeuTextarea label="Primary goals for this project" value={goals} onChange={touch(setGoals)} rows={3} />
+          <NeuTextarea label="Primary goals for this project" value={goals} onChange={patch("goals")} rows={3} />
           <NeuTextarea
             label="Preferred styles or themes"
             value={stylesPref}
-            onChange={touch(setStylesPref)}
+            onChange={patch("stylesPref")}
             rows={2}
           />
-          <NeuTextarea label="Must-have features or elements" value={mustHaves} onChange={touch(setMustHaves)} rows={2} />
-          <NeuTextarea label="Styles or themes to avoid" value={avoid} onChange={touch(setAvoid)} rows={2} />
+          <NeuTextarea label="Must-have features or elements" value={mustHaves} onChange={patch("mustHaves")} rows={2} />
+          <NeuTextarea label="Styles or themes to avoid" value={avoid} onChange={patch("avoid")} rows={2} />
         </div>
       </SectionCard>
 
@@ -353,35 +432,35 @@ export function QuestionnaireTab({ project }: { project: ActiveProjectView }) {
           <Field
             label="Estimated budget (only if the client is willing to share)"
             value={budget}
-            onChange={touch(setBudget)}
+            onChange={patch("budget")}
           />
           <div className="sm:col-span-2">
             <NeuTextarea
               label="Budget constraints or priorities"
               value={budgetNotes}
-              onChange={touch(setBudgetNotes)}
+              onChange={patch("budgetNotes")}
               rows={2}
             />
           </div>
-          <Field label="Preferred start date" value={startDate} onChange={touch(setStartDate)} type="date" />
-          <Field label="Desired completion date" value={endDate} onChange={touch(setEndDate)} type="date" />
+          <Field label="Preferred start date" value={startDate} onChange={patch("startDate")} type="date" />
+          <Field label="Desired completion date" value={endDate} onChange={patch("endDate")} type="date" />
         </div>
       </SectionCard>
 
       <SectionCard>
         <SectionTitle icon="weekend" title="5. Current Space Details" />
         <div className="flex flex-col gap-4">
-          <NeuTextarea label="What do you like about your current space?" value={likes} onChange={touch(setLikes)} rows={2} />
+          <NeuTextarea label="What do you like about your current space?" value={likes} onChange={patch("likes")} rows={2} />
           <NeuTextarea
             label="What do you dislike or find challenging?"
             value={dislikes}
-            onChange={touch(setDislikes)}
+            onChange={patch("dislikes")}
             rows={2}
           />
           <NeuTextarea
             label="Existing furniture or items you want to keep"
             value={keepFurniture}
-            onChange={touch(setKeepFurniture)}
+            onChange={patch("keepFurniture")}
             rows={2}
           />
         </div>
@@ -390,17 +469,17 @@ export function QuestionnaireTab({ project }: { project: ActiveProjectView }) {
       <SectionCard>
         <SectionTitle icon="diversity_3" title="6. Lifestyle and Functionality" />
         <div className="flex flex-col gap-4">
-          <NeuTextarea label="How do you use the space?" value={useSpace} onChange={touch(setUseSpace)} rows={2} />
+          <NeuTextarea label="How do you use the space?" value={useSpace} onChange={patch("useSpace")} rows={2} />
           <NeuTextarea
             label="Specific functional requirements or challenges"
             value={functional}
-            onChange={touch(setFunctional)}
+            onChange={patch("functional")}
             rows={2}
           />
           <NeuTextarea
             label="Special needs or preferences (accessibility, storage)"
             value={specialNeeds}
-            onChange={touch(setSpecialNeeds)}
+            onChange={patch("specialNeeds")}
             rows={2}
           />
         </div>
@@ -409,8 +488,8 @@ export function QuestionnaireTab({ project }: { project: ActiveProjectView }) {
       <SectionCard>
         <SectionTitle icon="palette" title="7. Aesthetic Preferences" />
         <div className="flex flex-col gap-4">
-          <Field label="Favorite colors" value={colors} onChange={touch(setColors)} />
-          <Field label="Favorite materials or finishes" value={materials} onChange={touch(setMaterials)} />
+          <Field label="Favorite colors" value={colors} onChange={patch("colors")} />
+          <Field label="Favorite materials or finishes" value={materials} onChange={patch("materials")} />
           <div>
             <span className="mb-1.5 block text-[13px] font-medium text-[var(--figma-navy)]">
               Inspirational images or design references
@@ -428,7 +507,7 @@ export function QuestionnaireTab({ project }: { project: ActiveProjectView }) {
                 <button
                   type="button"
                   onClick={() => {
-                    setInspoFileName(null);
+                    patch("inspoFileName")(null);
                     if (fileInputRef.current) fileInputRef.current.value = "";
                   }}
                   className="ml-auto cursor-pointer border-none bg-transparent text-[12px] text-[var(--figma-gray400)]"
@@ -447,7 +526,7 @@ export function QuestionnaireTab({ project }: { project: ActiveProjectView }) {
               </button>
             )}
           </div>
-          <Field label="Particular brands or designers you admire" value={brands} onChange={touch(setBrands)} />
+          <Field label="Particular brands or designers you admire" value={brands} onChange={patch("brands")} />
         </div>
       </SectionCard>
 
@@ -457,19 +536,19 @@ export function QuestionnaireTab({ project }: { project: ActiveProjectView }) {
           <NeuTextarea
             label="Existing structural changes or limitations"
             value={structural}
-            onChange={touch(setStructural)}
+            onChange={patch("structural")}
             rows={3}
           />
           <NeuTextarea
             label="Preferred lighting (natural, ambient, task)"
             value={lighting}
-            onChange={touch(setLighting)}
+            onChange={patch("lighting")}
             rows={2}
           />
           <NeuTextarea
             label="Temperature preferences (warm, cool)"
             value={temperature}
-            onChange={touch(setTemperature)}
+            onChange={patch("temperature")}
             rows={2}
           />
         </div>
@@ -481,13 +560,13 @@ export function QuestionnaireTab({ project }: { project: ActiveProjectView }) {
           <NeuTextarea
             label="Concerns or questions about the design process"
             value={concerns}
-            onChange={touch(setConcerns)}
+            onChange={patch("concerns")}
             rows={2}
           />
           <NeuTextarea
             label="Any other details or preferences not covered above"
             value={other}
-            onChange={touch(setOther)}
+            onChange={patch("other")}
             rows={2}
           />
         </div>

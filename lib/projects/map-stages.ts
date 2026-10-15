@@ -1,3 +1,4 @@
+import { calendarDateFromApi, toCalendarDateIso } from "@/lib/projects/calendar-date";
 import { resolveTaskDurationIso, resolveTaskEndDateIso } from "@/lib/tasks/task-dates";
 import type { Task, TaskableStatus } from "@/types/tasks";
 
@@ -8,6 +9,8 @@ export interface ProjectStageView {
   startDate: string;
   duration: string;
   endDate: string;
+  /** False when the stage has neither an end date nor a duration. */
+  scheduled: boolean;
   isActive: boolean;
   status: TaskableStatus;
   isCompleted: boolean;
@@ -25,19 +28,22 @@ export interface ProjectMilestoneView {
 }
 
 export function mapStageToView(stage: Task, now = new Date()): ProjectStageView {
-  const endIso = resolveTaskEndDateIso(stage);
-  const end = new Date(endIso);
-  const start = new Date(stage.start_date);
+  const scheduled = Boolean(stage.end_date || stage.duration);
+  const endIso = scheduled ? resolveTaskEndDateIso(stage) : "";
+  const startIso = scheduled ? calendarDateFromApi(stage.start_date) : "";
+  const today = toCalendarDateIso(now);
   const isCompleted = stage.status === "COMPLETED";
-  const isActive = !isCompleted && start <= now && end >= now;
+  const isActive =
+    scheduled && !isCompleted && !!startIso && !!endIso && startIso <= today && endIso >= today;
 
   return {
     id: stage.id,
     name: stage.title,
     order: stage.order,
-    startDate: stage.start_date,
-    duration: resolveTaskDurationIso(stage),
+    startDate: scheduled ? startIso || stage.start_date : "",
+    duration: scheduled ? resolveTaskDurationIso(stage) : "",
     endDate: endIso,
+    scheduled,
     isActive,
     status: stage.status,
     isCompleted,
@@ -48,7 +54,7 @@ export function mapMilestoneToView(milestone: Task): ProjectMilestoneView {
   return {
     id: milestone.id,
     name: milestone.title,
-    startDate: milestone.start_date,
+    startDate: calendarDateFromApi(milestone.start_date) || milestone.start_date,
     endDate: resolveTaskEndDateIso(milestone),
     description: milestone.description ?? undefined,
     status: milestone.status,
@@ -104,8 +110,9 @@ export function isTaskOverdue(
   now = new Date(),
 ): boolean {
   if (isTaskCompleted(task.status)) return false;
-  const due = new Date(resolveTaskEndDateIso(task));
-  return due < now;
+  const due = resolveTaskEndDateIso(task);
+  if (!due) return false;
+  return due < toCalendarDateIso(now);
 }
 
 export function computeProjectStats(tasks: Task[], memberCount: number, fileCount: number) {

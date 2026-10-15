@@ -6,10 +6,10 @@ import { useRouter } from "next/navigation";
 import { DemoCaption } from "@/components/demo/demo-caption";
 import { PhaseLockedContent } from "@/components/projects/hub/shared/workspace-ui";
 import { useActiveProjectView } from "@/hooks/use-active-project-view";
+import { usePhaseEditAccess } from "@/hooks/use-phase-edit-access";
 import { useProjectMembers } from "@/hooks/use-project-members";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { HubTeamProvider } from "@/lib/projects/hub-team-context";
-import { isPhaseEditable } from "@/lib/projects/map-project-hub";
 import { canViewBoqFinancials } from "@/lib/projects/permissions";
 import type { ExecutionView } from "@/types/execution";
 
@@ -29,6 +29,7 @@ export function ExecutionWorkspace({
   const router = useRouter();
   const authDisabled = isAuthDisabled();
   const { project, teamMembers, isLoading, error } = useActiveProjectView(projectId);
+  const phaseAccess = usePhaseEditAccess(projectId, project?.phase, "Execution");
   const { effectiveRole, isViewer } = useProjectMembers();
   const allowBoq = authDisabled || canViewBoqFinancials(effectiveRole, isViewer);
   const [view, setView] = useState<ExecutionView>(initialView);
@@ -74,13 +75,13 @@ export function ExecutionWorkspace({
     );
   }
 
-  const readOnly = !isPhaseEditable(project.phase, "Execution");
+  const readOnly = phaseAccess.readOnly;
 
   return (
     <HubTeamProvider members={teamMembers}>
       <div>
         {authDisabled && <DemoCaption className="mb-4 px-4 pt-6 sm:px-10" />}
-        <PhaseLockedContent locked={readOnly}>
+        <PhaseLockedContent locked={readOnly} amendment={phaseAccess.amendment}>
           {view === "boq" ? (
             <BoqLineTable project={project} onBack={() => navigateView("stages")} />
           ) : view === "site" ? (

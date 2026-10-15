@@ -1,3 +1,4 @@
+import { calendarDateFromApi, toCalendarDateIso } from "@/lib/projects/calendar-date";
 import { addIsoDuration } from "@/lib/projects/duration";
 
 export type TaskLike = {
@@ -24,7 +25,11 @@ export function resolveTaskEndDate(task: TaskLike): Date {
 }
 
 export function resolveTaskEndDateIso(task: TaskLike): string {
-  return resolveTaskEndDate(task).toISOString();
+  if (task.end_date) {
+    const day = calendarDateFromApi(task.end_date);
+    if (day) return day;
+  }
+  return toCalendarDateIso(resolveTaskEndDate(task));
 }
 
 export function resolveTaskDurationIso(task: TaskLike): string {

@@ -278,14 +278,7 @@ export function ThreeDVisualizationsScreen({
 
       <WalkthroughCard onExpand={() => setShowWalkthrough(true)} />
 
-      <TimelineWidget
-        phase="3D Design"
-        projectId={project.id}
-        initialDays="14"
-        startDate="11 Aug 2026"
-        startDateIso="2026-08-11"
-        badgeVariant="teal"
-      />
+      <TimelineWidget phase="3D Design" projectId={project.id} badgeVariant="teal" />
 
       <SectionCard>
         <SectionTitle icon="verified" title="Final 3D Files" />

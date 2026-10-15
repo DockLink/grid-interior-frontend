@@ -12,7 +12,6 @@ import type {
   ProjectWithMembers,
 } from "@/types/projects";
 import { PROJECT_LEAD_ROLE } from "@/types/projects";
-import type { CreateTaskRequest } from "@/types/tasks";
 
 export function useCreateProject() {
   const createProject = useCallback(
@@ -65,14 +64,14 @@ export function useCreateProject() {
 
       if (options?.stages?.length) {
         for (const stage of options.stages) {
-          const taskPayload: CreateTaskRequest & { end_date?: string; duration?: string } = {
+          const taskPayload = {
             project_id: project.id,
             title: stage.name,
-            start_date: stage.start_date,
-            end_date: stage.end_date,
-            duration: stage.duration,
+            ...(stage.start_date ? { start_date: stage.start_date } : {}),
+            ...(stage.end_date ? { end_date: stage.end_date } : {}),
+            ...(stage.duration ? { duration: stage.duration } : {}),
             order: stage.order,
-            taskable_type: "STAGE",
+            taskable_type: "STAGE" as const,
             ...(stage.status ? { status: stage.status } : {}),
           };
           await authApiClient("/tasks", {
