@@ -12,6 +12,7 @@ import {
   WorkspaceBreadcrumb,
 } from "@/components/projects/hub/shared/workspace-ui";
 import { useProjectBoq } from "@/hooks/use-boq";
+import { useSubVendors } from "@/hooks/use-sub-vendors";
 import { useSuppliers } from "@/hooks/use-suppliers";
 import { useUploadFile } from "@/hooks/use-upload-file";
 import { handleApiError } from "@/lib/api/handle-api-error";
@@ -28,7 +29,16 @@ import type {
 } from "@/types/execution";
 import { categorySubtotal, lineItemTotal } from "@/types/execution";
 import type { ActiveProjectView } from "@/types/project-hub";
-import type { Supplier } from "@/types/suppliers";
+
+type QuoteParty = {
+  id: string;
+  name: string;
+  kind: "supplier" | "subvendor";
+};
+
+function quotePartyLabel(party: QuoteParty): string {
+  return `${party.name} (${party.kind === "supplier" ? "Supplier" : "Sub-vendor"})`;
+}
 
 const NEG: Record<NegotiationStatus, { label: string; color: string; bg: string }> = {
   pending: { label: "Pending", color: "#9CA3AF", bg: "#F3F4F6" },
@@ -196,21 +206,21 @@ function exportBoqCsv(cats: BoqCategory[], projectName: string) {
 function QuoteCells({
   item,
   editing,
-  suppliers,
+  parties,
   onSelect,
   onQuotePrice,
   onAddQuote,
 }: {
   item: BoqLineItem;
   editing: boolean;
-  suppliers: Supplier[];
+  parties: QuoteParty[];
   onSelect: (supplierId: string) => void;
   onQuotePrice: (supplierId: string, price: number) => void;
   onAddQuote: (supplierId: string) => void;
 }) {
   const slots = [0, 1, 2].map((i) => item.quotes[i] ?? null);
   const used = new Set(item.quotes.map((q) => q.supplierId));
-  const available = suppliers.filter((s) => !used.has(s.id));
+  const available = parties.filter((party) => !used.has(party.id));
 
   return (
     <div className="flex min-w-[220px] flex-col gap-1">
@@ -263,10 +273,10 @@ function QuoteCells({
               e.target.value = "";
             }}
           >
-            <option value="">Add supplier…</option>
-            {available.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
+            <option value="">Add supplier or sub-vendor…</option>
+            {available.map((party) => (
+              <option key={`${party.kind}:${party.id}`} value={party.id}>
+                {quotePartyLabel(party)}
               </option>
             ))}
           </select>
@@ -452,14 +462,14 @@ type CategoryHandlers = {
 
 function CategoryBlock({
   cat,
-  suppliers,
+  parties,
   handlers,
   busyItemId,
   showCommercial,
   projectId,
 }: {
   cat: BoqCategory;
-  suppliers: Supplier[];
+  parties: QuoteParty[];
   handlers: CategoryHandlers & { getLatestItem: (itemId: string) => BoqLineItem | null };
   busyItemId: string | null;
   showCommercial: boolean;
@@ -744,7 +754,7 @@ function CategoryBlock({
                             <QuoteCells
                               item={row}
                               editing={editing}
-                              suppliers={suppliers}
+                              parties={parties}
                               onSelect={(supplierId) =>
                                 handlers.onCommercial(row.id, { selectedSupplierId: supplierId })
                               }
@@ -755,13 +765,13 @@ function CategoryBlock({
                                 handlers.onLocalItemPatch(row.id, { quotes });
                               }}
                               onAddQuote={(supplierId) => {
-                                const supplier = suppliers.find((s) => s.id === supplierId);
-                                if (!supplier || row.quotes.length >= 3) return;
+                                const party = parties.find((candidate) => candidate.id === supplierId);
+                                if (!party || row.quotes.length >= 3) return;
                                 const quotes = [
                                   ...row.quotes,
                                   {
-                                    supplierId: supplier.id,
-                                    supplierName: supplier.name,
+                                    supplierId: party.id,
+                                    supplierName: party.name,
                                     price: row.rate,
                                   },
                                 ];
@@ -906,6 +916,22 @@ export function BoqLineTable({
   } = useProjectBoq(project.id);
 
   const { suppliers } = useSuppliers({ page: 1, limit: 100 });
+  const { subVendors } = useSubVendors({ page: 1, limit: 100 });
+  const parties = useMemo<QuoteParty[]>(
+    () => [
+      ...suppliers.map((supplier) => ({
+        id: supplier.id,
+        name: supplier.name,
+        kind: "supplier" as const,
+      })),
+      ...subVendors.map((vendor) => ({
+        id: vendor.id,
+        name: vendor.name,
+        kind: "subvendor" as const,
+      })),
+    ],
+    [suppliers, subVendors],
+  );
   const { uploadFile } = useUploadFile();
   const authOff = isAuthDisabled();
 
@@ -1195,7 +1221,7 @@ export function BoqLineTable({
             key={cat.id}
             cat={cat}
             projectId={project.id}
-            suppliers={suppliers}
+            parties={parties}
             busyItemId={busyItemId}
             showCommercial={showCommercial}
             handlers={{

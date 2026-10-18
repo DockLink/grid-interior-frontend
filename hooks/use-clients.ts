@@ -64,7 +64,7 @@ export function useClients(
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: UpdateClientPayload }) =>
       authApiClient(`/clients/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
-    onSuccess: (result, { id }) => {
+    onSuccess: (result, { id, payload }) => {
       const mapped = mapClientApiToView(result as Record<string, unknown>);
       qc.setQueryData<{ data: Client[]; meta: unknown }>(qKey, (prev) => {
         if (!prev) return prev;
@@ -75,6 +75,9 @@ export function useClients(
       });
       qc.setQueryData(queryKeys.clients.detail(id), mapped);
       void invalidate();
+      if ("follow_up_date" in payload || "assigned_to_id" in payload) {
+        void qc.invalidateQueries({ queryKey: queryKeys.clients.myReminders() });
+      }
     },
   });
 

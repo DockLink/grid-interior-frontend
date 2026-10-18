@@ -1,4 +1,4 @@
-import { NAV_ROUTES, projectTabRoute } from "@/types/navigation";
+import { clientRoute, NAV_ROUTES, projectTabRoute } from "@/types/navigation";
 import type { AppNotification } from "@/types/notifications";
 
 export type NotificationUIFilter = "all" | "hold" | "access" | "file" | "deadline";
@@ -34,7 +34,7 @@ const FILTER_ICON: Record<
 function notificationFilter(type: AppNotification["type"]): Exclude<NotificationUIFilter, "all"> {
   if (type === "hold_request") return "hold";
   if (type === "access_request") return "access";
-  if (type === "deadline_alert") return "deadline";
+  if (type === "deadline_alert" || type === "follow_up_reminder") return "deadline";
   return "file";
 }
 
@@ -42,6 +42,7 @@ function projectLabelFor(n: AppNotification): string {
   if (n.type === "access_request") return n.projectName;
   if (n.type === "file_version" || n.type === "share_link") return n.projectName;
   if (n.type === "deadline_alert") return n.projectName;
+  if (n.type === "follow_up_reminder") return n.company?.trim() || "Follow-up";
   if (n.type === "hold_request" && n.projectId) return "Project";
   return "Studio";
 }
@@ -54,6 +55,7 @@ function hrefFor(n: AppNotification): string {
   if (n.type === "deadline_alert") {
     return n.projectId ? projectTabRoute(n.projectId, "tasks") : NAV_ROUTES.myTasks;
   }
+  if (n.type === "follow_up_reminder") return clientRoute(n.clientId);
   if (n.type === "file_version" || n.type === "share_link") {
     return projectTabRoute(n.projectId, "files");
   }
@@ -103,7 +105,11 @@ function timeGroup(iso: string): NotificationUIRow["group"] {
 export function mapAppNotificationToRow(n: AppNotification): NotificationUIRow {
   const filter = notificationFilter(n.type);
   const cfg =
-    n.type === "deadline_alert" && n.urgency === "due_soon"
+    n.type === "follow_up_reminder" && n.overdue
+      ? { icon: "event_busy", color: "#EF4444", bg: "rgba(239,68,68,0.1)" }
+      : n.type === "follow_up_reminder"
+        ? { icon: "event", color: "#0FA8A0", bg: "rgba(15,168,160,0.12)" }
+        : n.type === "deadline_alert" && n.urgency === "due_soon"
       ? { icon: "event", color: "#D97706", bg: "rgba(217,119,6,0.1)" }
       : FILTER_ICON[filter];
   const bold = n.requesterName || n.title.split(" ")[0] || "Update";

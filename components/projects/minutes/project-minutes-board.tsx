@@ -57,6 +57,7 @@ export function ProjectMinutesBoard({ projectId }: { projectId: string }) {
     isLoading,
     error,
     canManage,
+    canCreate,
     createMinute,
     updateMinute,
     removeMinute,
@@ -336,7 +337,7 @@ export function ProjectMinutesBoard({ projectId }: { projectId: string }) {
             <span style={{ fontSize: "14px", fontWeight: 500, color: "var(--ds-label)" }}>
               Meeting minutes
             </span>
-            {canManage && (
+            {canCreate && (
               <button
                 type="button"
                 onClick={openCreate}
@@ -444,7 +445,7 @@ export function ProjectMinutesBoard({ projectId }: { projectId: string }) {
                 No minute selected
               </div>
               <div style={{ fontSize: "13px", color: "var(--figma-gray500)", maxWidth: "320px" }}>
-                {canManage
+                {canCreate
                   ? "Select a meeting from the list, or click New to create one."
                   : "No meeting minutes have been published yet."}
               </div>

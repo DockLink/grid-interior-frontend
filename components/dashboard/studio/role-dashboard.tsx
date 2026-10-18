@@ -29,6 +29,7 @@ export function RoleDashboard({
   todaysTasksFooter,
   showTodaysTasks = true,
   showActions = true,
+  allowHoldActions = false,
   isLoading = false,
   onAttentionAction,
 }: {
@@ -44,6 +45,7 @@ export function RoleDashboard({
   todaysTasksFooter?: string;
   showTodaysTasks?: boolean;
   showActions?: boolean;
+  allowHoldActions?: boolean;
   isLoading?: boolean;
   onAttentionAction?: (item: AttentionItem, action: "approve" | "decline") => void;
 }) {
@@ -120,6 +122,7 @@ export function RoleDashboard({
           items={attention}
           title={attentionTitle}
           onAction={showActions ? onAttentionAction : undefined}
+          allowHoldActions={allowHoldActions}
         />
         <FileActivityPanel items={fileActivity} title={activityTitle} />
       </div>

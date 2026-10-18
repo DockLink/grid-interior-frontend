@@ -1,5 +1,6 @@
 "use client";
 
+import { ForbiddenScreen } from "@/components/auth/forbidden-screen";
 import { useAuthStore } from "@/stores/auth-store";
 import type { UserRole } from "@/types/users";
 
@@ -13,14 +14,13 @@ export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
   const user = session?.user;
 
   if (!user) {
-    return null; // Not logged in
+    return <ForbiddenScreen />;
   }
 
-  // Check if user has any of the allowed roles
   const hasAccess = allowedRoles.some((role) => user.roles.includes(role));
 
   if (!hasAccess) {
-    return null;
+    return <ForbiddenScreen />;
   }
 
   return <>{children}</>;

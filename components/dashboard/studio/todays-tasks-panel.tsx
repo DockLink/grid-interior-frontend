@@ -121,10 +121,14 @@ export function TodaysTasksPanel({
 
               <ul className="space-y-1.5 pl-[42px]">
                 {group.tasks.map((task) => {
-                  const status = TODAYS_TASK_STATUS_CONFIG[task.status];
-                  const href = task.projectId
-                    ? projectTabRoute(task.projectId, "tasks")
-                    : NAV_ROUTES.myTasks;
+                  const status = task.overdue
+                    ? { label: "Overdue", bg: "rgba(255,107,107,0.12)", color: "#FF6B6B" }
+                    : task.href
+                      ? { label: "Due today", bg: "rgba(15,168,160,0.12)", color: "#0FA8A0" }
+                      : TODAYS_TASK_STATUS_CONFIG[task.status];
+                  const href =
+                    task.href ??
+                    (task.projectId ? projectTabRoute(task.projectId, "tasks") : NAV_ROUTES.myTasks);
                   return (
                     <li key={task.id}>
                       <Link

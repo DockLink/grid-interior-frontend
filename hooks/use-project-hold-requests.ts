@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { useAuth } from "@/hooks/use-auth";
 import { authApiClient } from "@/lib/api/authenticated-client";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import {
@@ -53,6 +54,7 @@ async function fetchHoldRequests(
 
 export function useHoldRequests(options: HoldRequestsQueryParams = {}) {
   const qc = useQueryClient();
+  const { primaryRole } = useAuth();
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
 
   const queryParams = useMemo(
@@ -73,11 +75,15 @@ export function useHoldRequests(options: HoldRequestsQueryParams = {}) {
   });
 
   const processMutation = useMutation({
-    mutationFn: (payload: ProcessHoldRequestPayload) =>
-      authApiClient("/taskable-hold-requests/process", {
+    mutationFn: (payload: ProcessHoldRequestPayload) => {
+      if (primaryRole !== "SUPER_ADMIN") {
+        return Promise.reject(new Error("Only a Super Admin can review hold requests"));
+      }
+      return authApiClient("/taskable-hold-requests/process", {
         method: "POST",
         body: JSON.stringify(toProcessHoldRequestBody(payload)),
-      }),
+      });
+    },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: queryKeys.holdRequests.all });
       await qc.invalidateQueries({ queryKey: queryKeys.notifications.all });

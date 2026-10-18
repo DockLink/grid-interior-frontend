@@ -25,10 +25,12 @@ export function AttentionPanel({
   items,
   title = "Needs Your Attention",
   onAction,
+  allowHoldActions = false,
 }: {
   items: AttentionItem[];
   title?: string;
   onAction?: (item: AttentionItem, action: "approve" | "decline") => void;
+  allowHoldActions?: boolean;
 }) {
   const { visible, clearAll } = useClearedPanelItems(items, "dashboard-attention");
 
@@ -90,7 +92,8 @@ export function AttentionPanel({
                     {item.detail ? ` · ${item.detail}` : ""} · {item.date}
                   </div>
                 </div>
-                {onAction && (item.type === "access" || item.type === "hold") ? (
+                {onAction &&
+                (item.type === "access" || (item.type === "hold" && allowHoldActions)) ? (
                   <div className="flex shrink-0 gap-2">
                     <Button
                       size="sm"

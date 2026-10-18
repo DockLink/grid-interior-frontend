@@ -112,7 +112,6 @@ export function detailViewFromParam(view: string | undefined): DetailView {
 }
 
 export function formatLKR(n: number) {
-  if (n >= 1_000_000) return `LKR ${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `LKR ${(n / 1_000).toFixed(0)}K`;
-  return `LKR ${n.toLocaleString()}`;
+  const value = Number.isFinite(n) ? n : 0;
+  return `LKR ${value.toLocaleString("en-US")}`;
 }

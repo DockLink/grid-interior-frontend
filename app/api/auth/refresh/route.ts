@@ -2,22 +2,32 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { backendFetch } from "@/lib/api/backend";
 import { clientForwardHeaders } from "@/lib/api/client-forward-headers";
-import { normalizeLoginResponse } from "@/lib/auth/normalize-login";
+import { normalizeLoginResponse, toPublicAuthResponse } from "@/lib/auth/normalize-login";
+import { refreshBodySchema } from "@/lib/auth/request-schemas";
+import { REFRESH_COOKIE } from "@/lib/auth/session-header";
+import { setSessionCookies } from "@/lib/auth/session-cookies";
 import type { BackendLoginResponse } from "@/types/auth";
 
 export async function POST(req: NextRequest) {
-  const body = (await req.json()) as { refresh_token?: string };
+  const cookieToken = req.cookies.get(REFRESH_COOKIE)?.value?.trim();
+  let refreshToken = cookieToken;
 
-  if (!body.refresh_token) {
+  if (!refreshToken) {
+    const json = await req.json().catch(() => ({}));
+    const parsed = refreshBodySchema.safeParse(json);
+    refreshToken = parsed.success ? parsed.data.refresh_token : undefined;
+  }
+
+  if (!refreshToken) {
     return NextResponse.json(
       { statusCode: 400, message: "Missing refresh token" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   const result = await backendFetch<BackendLoginResponse>("/auth/refresh", {
     method: "POST",
-    body: JSON.stringify({ refresh_token: body.refresh_token }),
+    body: JSON.stringify({ refresh_token: refreshToken }),
     headers: clientForwardHeaders(req),
   });
 
@@ -26,11 +36,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    return NextResponse.json(normalizeLoginResponse(result.data));
+    const normalized = normalizeLoginResponse(result.data);
+    const res = NextResponse.json(toPublicAuthResponse(normalized));
+    setSessionCookies(res, normalized);
+    return res;
   } catch {
     return NextResponse.json(
       { statusCode: 502, message: "Invalid refresh response from backend" },
-      { status: 502 }
+      { status: 502 },
     );
   }
 }

@@ -4,9 +4,10 @@ import { useState } from "react";
 import { AlertCircle, FolderPlus, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useProjectContribution } from "@/hooks/use-project-contribution";
 import { useProjectFiles } from "@/hooks/use-project-files";
 import { useProjectMembers } from "@/hooks/use-project-members";
-import { canDownloadProjectFiles, canManageProject } from "@/lib/projects/permissions";
+import { canDownloadProjectFiles } from "@/lib/projects/permissions";
 import { isArchiveFolderPath } from "@/lib/files/archive-path";
 import type { ProjectFile, ProjectFolderNode } from "@/types/files";
 
@@ -52,7 +53,8 @@ function breadcrumbPath(
 
 export function ProjectFilesBoard({ projectId }: { projectId: string }) {
   const { effectiveRole, isViewer } = useProjectMembers();
-  const canManage = canManageProject(effectiveRole, isViewer);
+  const { canManage, canContribute } = useProjectContribution(projectId);
+  const canUpload = canContribute;
   const canDownload = canDownloadProjectFiles(effectiveRole, isViewer);
   const canManageFolders = canManage;
   const isAdmin = effectiveRole === "admin";
@@ -278,19 +280,19 @@ export function ProjectFilesBoard({ projectId }: { projectId: string }) {
         <div
           className="relative flex flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--figma-border)] bg-white"
           style={{ boxShadow: "var(--neu-card)" }}
-          onDragOver={canManage ? (e) => { e.preventDefault(); setIsDragging(true); } : undefined}
-          onDragLeave={canManage ? (e) => {
+          onDragOver={canUpload ? (e) => { e.preventDefault(); setIsDragging(true); } : undefined}
+          onDragLeave={canUpload ? (e) => {
             if (!e.currentTarget.contains(e.relatedTarget as Node))
               setIsDragging(false);
           } : undefined}
-          onDrop={canManage ? (e) => {
+          onDrop={canUpload ? (e) => {
             e.preventDefault();
             setIsDragging(false);
             if (currentFolderPath && canUploadHere) setShowUpload(true);
           } : undefined}
         >
           {/* Drag overlay */}
-          {isDragging && canManage && currentFolderPath && canUploadHere && (
+          {isDragging && canUpload && currentFolderPath && canUploadHere && (
             <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-2xl border-[3px] border-dashed border-[var(--figma-teal)] bg-[rgba(14,124,134,0.06)]">
               <div className="rounded-xl bg-white px-10 py-5 text-[15px] font-medium text-[var(--figma-teal)] shadow-lg">
                 Drop to upload
@@ -323,7 +325,7 @@ export function ProjectFilesBoard({ projectId }: { projectId: string }) {
             </div>
 
             {/* Actions */}
-            {currentFolderPath && canManage && (
+            {currentFolderPath && canUpload && (
               <div className="ml-3 flex shrink-0 items-center gap-2">
                 {canUploadHere ? (
                   <>

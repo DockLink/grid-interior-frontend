@@ -1,4 +1,7 @@
-import { mapProjectToOverviewView } from "@/lib/projects/map-project-overview";
+import {
+  formatProjectStartDate,
+  mapProjectToOverviewView,
+} from "@/lib/projects/map-project-overview";
 import type { ActiveProjectView } from "@/types/project-hub";
 import type { Project, ProjectMember } from "@/types/projects";
 import type { Task } from "@/types/tasks";
@@ -17,6 +20,7 @@ export function mapProjectToActiveView(
 ): ActiveProjectView {
   const overview = mapProjectToOverviewView(project, options);
   const activeMembers = (options.members ?? []).filter((m) => m.status === "ACTIVE");
+  const createdAt = formatProjectStartDate(project.created_at);
 
   return {
     id: overview.id,
@@ -30,6 +34,7 @@ export function mapProjectToActiveView(
     nextDeadline: overview.nextDeadline,
     teamIds: activeMembers.map((_, i) => i + 1),
     startDate: overview.startDate,
+    createdAt: createdAt === "—" ? undefined : createdAt,
     endDate: overview.endDate,
     location: overview.location,
     distanceKm: overview.distanceKm,

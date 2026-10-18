@@ -2,22 +2,12 @@ import { apiClient } from "@/lib/api/client";
 import { handleApiError } from "@/lib/api/handle-api-error";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import {
-  ensureFreshToken,
+  ensureFreshSession,
   isAuthExpiryError,
   refreshAccessToken,
 } from "@/lib/auth/token-refresh";
 import { useAuthStore } from "@/stores/auth-store";
 import { ApiError, BackendDisabledError } from "@/types/api";
-
-function withAuth(init: RequestInit | undefined, token: string): RequestInit {
-  return {
-    ...init,
-    headers: {
-      ...init?.headers,
-      Authorization: `Bearer ${token}`,
-    },
-  };
-}
 
 export async function authApiClient<T>(
   path: string,
@@ -27,10 +17,11 @@ export async function authApiClient<T>(
     throw new BackendDisabledError();
   }
 
-  // Proactively refresh if the token is about to expire, so most requests
-  // never even see a 401.
-  const token = await ensureFreshToken();
-  if (!token) {
+  // Proactively refresh if the access cookie is about to expire, so most
+  // requests never even see a 401. The cookie is sent by the browser; the
+  // BFF proxy copies it into Authorization for Nest.
+  const ready = await ensureFreshSession();
+  if (!ready) {
     handleApiError(new ApiError(401, { message: "Unauthorized", statusCode: 401 }), {
       redirectOn401: true,
     });
@@ -38,18 +29,18 @@ export async function authApiClient<T>(
   }
 
   try {
-    return await apiClient<T>(path, withAuth(init, token));
+    return await apiClient<T>(path, init);
   } catch (error) {
-    // Reactive path: the token expired between checks (or clock skew). Refresh
-    // once and retry the original request with the new token.
+    // Reactive path: the cookie expired between checks (or clock skew). Refresh
+    // once and retry the original request.
     if (isAuthExpiryError(error)) {
       if (isAuthDisabled()) {
         throw error;
       }
 
-      const newToken = await refreshAccessToken();
-      if (newToken) {
-        return await apiClient<T>(path, withAuth(init, newToken));
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        return await apiClient<T>(path, init);
       }
       // Refresh failed → session is gone.
       handleApiError(
@@ -68,7 +59,8 @@ export async function authApiClient<T>(
   }
 }
 
-// Re-export so callers can detect the current session token if needed.
+/** Dev-bypass token only. Real sessions never expose an access token to JavaScript. */
 export function getAccessToken(): string | null {
+  if (!isAuthDisabled()) return null;
   return useAuthStore.getState().session?.accessToken ?? null;
 }

@@ -1,8 +1,22 @@
 import type { SidebarRole } from "@/lib/navigation/sidebar-role";
+import { isGuestProjectMember } from "@/lib/user/guest";
+import { PROJECT_LEAD_ROLE, type ProjectMember } from "@/types/projects";
 
 export function canManageProject(role: SidebarRole, isViewer = false): boolean {
   if (role === "guest" || isViewer) return false;
   return role === "superadmin" || role === "admin" || role === "lead";
+}
+
+/** Active MEMBER or project lead. Viewers and guests are not contributors. */
+export function isActiveProjectMember(
+  members: ProjectMember[],
+  userId: string | undefined,
+): boolean {
+  if (!userId) return false;
+  const membership = members.find((m) => m.user_id === userId && m.status === "ACTIVE");
+  if (!membership) return false;
+  if (membership.role === "VIEWER" || isGuestProjectMember(membership)) return false;
+  return membership.role === "MEMBER" || membership.role === PROJECT_LEAD_ROLE;
 }
 
 export function canViewHoldRequests(role: SidebarRole): boolean {

@@ -13,6 +13,7 @@ import {
   mapConsultRoomApi,
   mapConsultSketchApi,
   mapConsultTaskApi,
+  mapConsultTaskStatus,
   toConsultTaskStatusApi,
 } from "@/lib/consultation/map-consultation";
 import {
@@ -37,6 +38,7 @@ import type {
   ConsultRoomUpdatePayload,
   ConsultSketchApi,
   ConsultSketchUpsertPayload,
+  ConsultTask,
   ConsultTaskApi,
   ConsultTaskCreatePayload,
   ConsultTaskUpdatePayload,
@@ -351,7 +353,30 @@ export function useConsultation(
       taskId: string;
       payload: ConsultTaskUpdatePayload;
     }) => {
-      if (authOff) return null;
+      if (authOff) {
+        const snapshot = qc.getQueryData<ReturnType<typeof mapConsultationAggregate>>(qKey);
+        const existing = snapshot?.tasks.find((task) => task.id === taskId);
+        const next: ConsultTask = {
+          id: taskId,
+          title: payload.title ?? existing?.title ?? "",
+          assigneeId:
+            payload.assignee_user_id !== undefined
+              ? payload.assignee_user_id
+              : (existing?.assigneeId ?? null),
+          status: payload.status
+            ? mapConsultTaskStatus(payload.status)
+            : (existing?.status ?? "Pending"),
+        };
+        if (snapshot) {
+          qc.setQueryData(qKey, {
+            ...snapshot,
+            tasks: snapshot.tasks.some((task) => task.id === taskId)
+              ? snapshot.tasks.map((task) => (task.id === taskId ? next : task))
+              : [...snapshot.tasks, next],
+          });
+        }
+        return next;
+      }
       const body: Record<string, unknown> = {};
       if (payload.title !== undefined) body.title = payload.title;
       if (payload.assignee_user_id !== undefined) {
@@ -371,8 +396,16 @@ export function useConsultation(
       );
       return mapConsultTaskApi(raw);
     },
-    onSuccess: () => {
-      if (!authOff) void invalidate();
+    onSuccess: (updated) => {
+      if (authOff || !updated) return;
+      qc.setQueryData(qKey, (old: ReturnType<typeof mapConsultationAggregate> | undefined) => {
+        if (!old) return old;
+        return {
+          ...old,
+          tasks: old.tasks.map((task) => (task.id === updated.id ? updated : task)),
+        };
+      });
+      void invalidate();
     },
   });
 

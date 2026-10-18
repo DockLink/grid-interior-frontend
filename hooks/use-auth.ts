@@ -23,7 +23,7 @@ export function useAuth() {
     session,
     user: session?.user ?? null,
     accessToken: session?.accessToken ?? null,
-    isAuthenticated: Boolean(session?.accessToken),
+    isAuthenticated: Boolean(session?.user),
     isLoading,
     isHydrated,
     login,

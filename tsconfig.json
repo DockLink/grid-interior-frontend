@@ -35,6 +35,7 @@
     "Design Minimalist SaaS UI System",
     "Design System for GRID CRM",
     "tests/e2e",
+    "tests/unit",
     "playwright.config.ts"
   ]
 }

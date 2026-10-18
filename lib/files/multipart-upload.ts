@@ -16,11 +16,13 @@
  */
 
 import { recordActivity } from "@/lib/auth/activity";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import {
-  ensureFreshToken,
+  ensureFreshSession,
   isAuthExpiryError,
   refreshAccessToken,
 } from "@/lib/auth/token-refresh";
+import { useAuthStore } from "@/stores/auth-store";
 import { ApiError } from "@/types/api";
 
 type ProgressCb = (pct: number) => void;
@@ -115,13 +117,20 @@ function parseCompleteData(raw: unknown): unknown {
 }
 
 async function controlRequest<T>(path: string, body: unknown): Promise<T> {
-  const attempt = async (token: string): Promise<T> => {
+  const attempt = async (): Promise<T> => {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (isAuthDisabled()) {
+      const token = useAuthStore.getState().session?.accessToken;
+      if (!token) throw new Error("Not authenticated");
+      headers.Authorization = `Bearer ${token}`;
+    }
+
     const res = await fetch(path, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      credentials: "include",
+      headers,
       body: JSON.stringify(body),
     });
     const parsed = await res.json().catch(() => ({}));
@@ -134,15 +143,17 @@ async function controlRequest<T>(path: string, body: unknown): Promise<T> {
     return parsed as T;
   };
 
-  const token = await ensureFreshToken();
-  if (!token) throw new Error("Not authenticated");
+  if (!isAuthDisabled()) {
+    const ready = await ensureFreshSession();
+    if (!ready) throw new Error("Not authenticated");
+  }
 
   try {
-    return await attempt(token);
+    return await attempt();
   } catch (error) {
-    if (isAuthExpiryError(error)) {
-      const newToken = await refreshAccessToken();
-      if (newToken) return attempt(newToken);
+    if (!isAuthDisabled() && isAuthExpiryError(error)) {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) return attempt();
       throw new Error("Session expired, please log in");
     }
     throw error instanceof ApiError ? new Error(error.message) : error;

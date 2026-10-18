@@ -6,7 +6,8 @@ export type NotificationType =
   | "access_request"
   | "file_version"
   | "share_link"
-  | "deadline_alert";
+  | "deadline_alert"
+  | "follow_up_reminder";
 
 export interface FileVersionEvent {
   id: string;
@@ -89,6 +90,15 @@ export interface ShareLinkAppNotification extends BaseNotification {
   raw: ShareLinkEvent;
 }
 
+export interface FollowUpReminderNotification extends BaseNotification {
+  type: "follow_up_reminder";
+  clientId: string;
+  clientName: string;
+  company: string | null;
+  followUpDate: string;
+  overdue: boolean;
+}
+
 export interface DeadlineAppNotification extends BaseNotification {
   type: "deadline_alert";
   urgency: "overdue" | "due_soon";
@@ -104,4 +114,5 @@ export type AppNotification =
   | AccessAppNotification
   | FileVersionAppNotification
   | ShareLinkAppNotification
-  | DeadlineAppNotification;
+  | DeadlineAppNotification
+  | FollowUpReminderNotification;

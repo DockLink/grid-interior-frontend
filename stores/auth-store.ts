@@ -8,7 +8,7 @@ import { clearActivity, isInactiveTooLong, recordActivity } from "@/lib/auth/act
 import { getDevBypassSession, isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { notifySessionExpired } from "@/lib/auth/session-expiry";
 import { getPrimaryRole, hasAnyRole } from "@/lib/auth/rbac";
-import { toAuthSession } from "@/lib/auth/sessions";
+import { toAuthSession, toPersistedSession } from "@/lib/auth/sessions";
 import { AUTH_STORAGE_KEY } from "@/lib/constants";
 import { ApiError } from "@/types/api";
 import type { AuthState } from "@/types/auth";
@@ -55,14 +55,10 @@ export const useAuthStore = create<AuthState>()(
           return;
         }
 
-        const accessToken = get().session?.accessToken;
-        if (accessToken) {
-          // Best-effort Nest/Supabase session revoke; never block local clear.
-          void apiClient<{ success: boolean }>("/auth/logout", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }).catch(() => undefined);
-        }
+        // Cookie is sent with the request; the route revokes the session and clears it.
+        void apiClient<{ success: boolean }>("/auth/logout", {
+          method: "POST",
+        }).catch(() => undefined);
 
         clearActivity();
         set({ session: null });
@@ -70,18 +66,17 @@ export const useAuthStore = create<AuthState>()(
 
       refreshSession: async () => {
         if (isAuthDisabled()) {
-          const bypass = getDevBypassSession();
-          set({ session: bypass });
-          return bypass.accessToken;
+          set({ session: getDevBypassSession() });
+          return true;
         }
 
         const session = get().session;
-        if (!session?.refreshToken) {
+        if (!session?.user) {
           if (session) {
             set({ session: null });
             notifySessionExpired();
           }
-          return null;
+          return false;
         }
 
         // Honour the hard inactivity ceiling: if the user hasn't interacted in
@@ -90,13 +85,13 @@ export const useAuthStore = create<AuthState>()(
           clearActivity();
           set({ session: null });
           notifySessionExpired();
-          return null;
+          return false;
         }
 
         try {
           const response = await apiClient<LoginResponse>("/auth/refresh", {
             method: "POST",
-            body: JSON.stringify({ refresh_token: session.refreshToken }),
+            body: JSON.stringify({}),
           });
 
           const nextSession = toAuthSession(response);
@@ -105,14 +100,14 @@ export const useAuthStore = create<AuthState>()(
             // response somehow lacks it.
             session: { ...nextSession, user: nextSession.user ?? state.session?.user },
           }));
-          return nextSession.accessToken;
+          return true;
         } catch (error) {
           // Refresh token itself is dead → session is unrecoverable.
           if (error instanceof ApiError && (error.status === 401 || error.status === 400)) {
             clearActivity();
             set({ session: null });
             notifySessionExpired();
-            return null;
+            return false;
           }
           // Transient/network error: keep the session so a later retry can work.
           throw error;
@@ -126,31 +121,26 @@ export const useAuthStore = create<AuthState>()(
         }
 
         const session = get().session;
-        if (!session?.accessToken) return;
+        if (!session?.user) return;
 
         set({ isLoading: true });
 
-        const fetchMe = (token: string) =>
-          apiClient<User>("/auth/me", {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+        const fetchMe = () => apiClient<User>("/auth/me");
 
-        // If the persisted token is already expired (e.g. the tab was closed
-        // for a while), refresh BEFORE calling /auth/me so a page reload never
-        // bounces the user to login while a valid refresh token exists.
-        let token = session.accessToken;
+        // If the access cookie is about to expire, refresh BEFORE calling
+        // /auth/me so a page reload never bounces the user to login while a
+        // valid refresh cookie exists.
         const expiresAtMs = session.expiresAt ? session.expiresAt * 1000 : null;
-        if (session.refreshToken && expiresAtMs && expiresAtMs - Date.now() <= 60_000) {
-          const refreshed = await get().refreshSession().catch(() => null);
+        if (expiresAtMs && expiresAtMs - Date.now() <= 60_000) {
+          const refreshed = await get().refreshSession().catch(() => false);
           if (!refreshed) {
             set({ isLoading: false });
             return; // refreshSession already cleared the session if unrecoverable
           }
-          token = refreshed;
         }
 
         try {
-          const user = await fetchMe(token);
+          const user = await fetchMe();
           set((state) => ({
             session: state.session ? { ...state.session, user } : null,
             isLoading: false,
@@ -158,10 +148,10 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           if (error instanceof ApiError && error.status === 401) {
             // Token rejected — try a one-shot refresh + retry before giving up.
-            const refreshed = await get().refreshSession().catch(() => null);
+            const refreshed = await get().refreshSession().catch(() => false);
             if (refreshed) {
               try {
-                const user = await fetchMe(refreshed);
+                const user = await fetchMe();
                 set((state) => ({
                   session: state.session ? { ...state.session, user } : null,
                   isLoading: false,
@@ -191,7 +181,9 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: AUTH_STORAGE_KEY,
-      partialize: (state) => ({ session: state.session }),
+      partialize: (state) => ({
+        session: state.session ? toPersistedSession(state.session) : null,
+      }),
       skipHydration: true,
       onRehydrateStorage: () => (state, error) => {
         const finishHydration = () => {
@@ -213,11 +205,14 @@ export const useAuthStore = create<AuthState>()(
         }
 
         const session = state?.session;
-        if (!session?.accessToken || !state) {
+        if (!session?.user) {
+          finishHydration();
           return;
         }
 
-        void state.refreshUser().catch(() => {});
+        useAuthStore.setState({ session: toPersistedSession(session) });
+        finishHydration();
+        void useAuthStore.getState().refreshUser().catch(() => {});
       },
     }
   )

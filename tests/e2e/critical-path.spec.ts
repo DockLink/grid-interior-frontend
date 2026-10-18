@@ -2,8 +2,8 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Critical path", () => {
   test.skip(
-    process.env.NEXT_PUBLIC_ENABLE_AUTH !== "true",
-    "Requires NEXT_PUBLIC_ENABLE_AUTH=true against staging/local backend",
+    process.env.NEXT_PUBLIC_ENABLE_AUTH === "false",
+    "Skipped in UI-only mode (NEXT_PUBLIC_ENABLE_AUTH=false)",
   );
 
   test("login → create project → upload file → create task", async ({ page }) => {
