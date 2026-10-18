@@ -2,7 +2,9 @@
 
 import { useCallback } from "react";
 
-import { authApiClient } from "@/lib/api/authenticated-client";
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
+import { ensureFreshSession, refreshAccessToken } from "@/lib/auth/token-refresh";
+import { useAuthStore } from "@/stores/auth-store";
 
 function uploadFieldName(_file: File): string {
   // Backend StorageV2Controller FileInterceptor only accepts the field name "image"
@@ -15,15 +17,30 @@ export function useUploadFile() {
     const formData = new FormData();
     formData.append(uploadFieldName(file), file);
 
-    const token = (await import("@/stores/auth-store")).useAuthStore.getState().session
-      ?.accessToken;
-    if (!token) throw new Error("Unauthorized");
+    const headers: Record<string, string> = {};
+    if (isAuthDisabled()) {
+      const token = useAuthStore.getState().session?.accessToken;
+      if (!token) throw new Error("Unauthorized");
+      headers.Authorization = `Bearer ${token}`;
+    } else {
+      const ready = await ensureFreshSession();
+      if (!ready) throw new Error("Unauthorized");
+    }
 
-    const res = await fetch("/api/storage/upload", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData,
-    });
+    const send = () =>
+      fetch("/api/storage/upload", {
+        method: "POST",
+        credentials: "include",
+        headers,
+        body: formData,
+      });
+
+    let res = await send();
+    if (!isAuthDisabled() && res.status === 401) {
+      const refreshed = await refreshAccessToken().catch(() => false);
+      if (!refreshed) throw new Error("Session expired, please log in");
+      res = await send();
+    }
 
     const raw = await res.text();
     let body: { message?: string; token?: string };

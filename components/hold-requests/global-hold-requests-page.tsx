@@ -10,7 +10,7 @@ import {
   holdRequestStatusLabel,
   holdRequestStatusStyle,
 } from "@/lib/hold-requests/display";
-import { toSidebarRole } from "@/lib/navigation/sidebar-role";
+import { isSuperAdminRole } from "@/lib/navigation/sidebar-role";
 import type { TaskableHoldRequestStatus } from "@/types/hold-requests";
 
 type TabId = "queue" | "all" | "mine";
@@ -28,8 +28,7 @@ const STATUS_FILTERS: Array<{ id: TaskableHoldRequestStatus | "all"; label: stri
 export function GlobalHoldRequestsPage() {
   const { user, primaryRole } = useAuth();
   const authDisabled = isAuthDisabled();
-  const sidebarRole = primaryRole ? toSidebarRole(primaryRole) : null;
-  const canProcess = sidebarRole === "admin" || sidebarRole === "superadmin";
+  const canProcess = isSuperAdminRole(primaryRole);
 
   const [tab, setTab] = useState<TabId>("queue");
   const [status, setStatus] = useState<TaskableHoldRequestStatus | "all">("all");

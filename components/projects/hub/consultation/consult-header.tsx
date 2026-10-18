@@ -59,7 +59,11 @@ export function ConsultHeader({
 
         {showModeBadge && <ModeBadge mode={mode} />}
 
-        <span className="ml-auto text-xs text-[var(--figma-gray400)]">Created 24 Jul 2026</span>
+        {project.createdAt && project.createdAt !== "—" ? (
+          <span className="ml-auto text-xs text-[var(--figma-gray400)]">
+            Created {project.createdAt}
+          </span>
+        ) : null}
       </div>
     </div>
   );

@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { useUploadFile } from "@/hooks/use-upload-file";
 import { authApiClient } from "@/lib/api/authenticated-client";
-import { ROLE_LABEL, toSidebarRole } from "@/lib/navigation/sidebar-role";
+import { isSuperAdminRole, ROLE_LABEL, toSidebarRole } from "@/lib/navigation/sidebar-role";
 import { normalizeUserFields } from "@/lib/user/display";
 import type { User } from "@/types/users";
 
@@ -36,6 +36,7 @@ export function ProfileSettingsSection() {
 
   if (!user || !primaryRole) return null;
 
+  const isSuperAdmin = isSuperAdminRole(primaryRole);
   const roleLabel = ROLE_LABEL[toSidebarRole(primaryRole)];
   const normalized = normalizeUserFields(user);
   const profileDirty =
@@ -106,27 +107,29 @@ export function ProfileSettingsSection() {
             className="hidden"
             onChange={(e) => void handleAvatarChange(e)}
           />
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={uploadingAvatar}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {uploadingAvatar ? "Uploading…" : "Change photo"}
-            </Button>
-            {preferences.avatar_file_id ? (
+          {isSuperAdmin ? (
+            <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                onClick={() => void handleRemoveAvatar()}
+                disabled={uploadingAvatar}
+                onClick={() => fileInputRef.current?.click()}
               >
-                Remove
+                {uploadingAvatar ? "Uploading…" : "Change photo"}
               </Button>
-            ) : null}
-          </div>
+              {preferences.avatar_file_id ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void handleRemoveAvatar()}
+                >
+                  Remove
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="min-w-0 flex-1 space-y-4">

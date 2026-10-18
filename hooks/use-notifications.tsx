@@ -29,10 +29,12 @@ import { fileVersionToNotification } from "@/lib/notifications/file-version-map"
 import { mapFileVersionEventsList } from "@/lib/notifications/map-file-version-event";
 import { shareLinkToNotification } from "@/lib/notifications/share-link-map";
 import { holdRequestToNotification } from "@/lib/notifications/map";
+import { reminderToNotification } from "@/lib/notifications/reminder-map";
 import { toSidebarRole } from "@/lib/navigation/sidebar-role";
 import { toProjectsQueryString } from "@/lib/projects/query-string";
 import { toTasksQueryString } from "@/lib/tasks/query-string";
 import { NAV_ROUTES, projectTabRoute } from "@/types/navigation";
+import type { MyRemindersResponse } from "@/types/clients";
 import type { HoldRequestsListResponse } from "@/types/hold-requests";
 import type {
   AppNotification,
@@ -97,8 +99,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const { user, primaryRole, isAuthenticated } = useAuth();
 
   const sidebarRole = primaryRole ? toSidebarRole(primaryRole) : null;
-  const canReviewHolds = sidebarRole === "admin" || sidebarRole === "superadmin";
-  const isOrgAdmin = canReviewHolds;
+  const canReviewHolds = primaryRole === "SUPER_ADMIN";
+  const isOrgAdmin = sidebarRole === "admin" || sidebarRole === "superadmin";
   const userId = user?.id ?? null;
 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -151,12 +153,15 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   }, [isAuthenticated, userId, isOrgAdmin]);
 
   const processHoldRequest = useCallback(async (payload: ProcessHoldRequestPayload) => {
+    if (primaryRole !== "SUPER_ADMIN") {
+      throw new Error("Only a Super Admin can review hold requests");
+    }
     await authApiClient("/taskable-hold-requests/process", {
       method: "POST",
       body: JSON.stringify(toProcessHoldRequestBody(payload)),
     });
     await fetchRef.current();
-  }, []);
+  }, [primaryRole]);
 
   const processAccessRequest = useCallback(async (payload: ReviewAccessRequestPayload) => {
     await authApiClient("/access-requests/review", {
@@ -216,18 +221,23 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     try {
       const mapped: AppNotification[] = [];
 
-      // Hold requests
-      const holdQs = new URLSearchParams({ page: "1", limit: "50" });
-      if (!canReviewHolds) holdQs.set("requested_by_id", userId);
-      try {
-        const holdRes = await authApiClient<HoldRequestsListResponse>(
-          `/taskable-hold-requests?${holdQs}`
-        );
-        mapped.push(
-          ...mapHoldRequestsList(holdRes).map((r) => holdRequestToNotification(r, canReviewHolds)),
-        );
-      } catch {
-        /* non-critical */
+      // Hold requests. TEAM_LEAD must not see them. The API list is empty for
+      // that role; do not pull their own requests back with requested_by_id.
+      if (sidebarRole !== "lead") {
+        const holdQs = new URLSearchParams({ page: "1", limit: "50" });
+        if (!canReviewHolds && sidebarRole !== "admin") {
+          holdQs.set("requested_by_id", userId);
+        }
+        try {
+          const holdRes = await authApiClient<HoldRequestsListResponse>(
+            `/taskable-hold-requests?${holdQs}`
+          );
+          mapped.push(
+            ...mapHoldRequestsList(holdRes).map((r) => holdRequestToNotification(r, canReviewHolds)),
+          );
+        } catch {
+          /* non-critical */
+        }
       }
 
       // Access requests — reviewers see pending; members see their own history.
@@ -324,10 +334,21 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         /* non-critical */
       }
 
-      mapped.sort(
+      // Follow-up reminders for the signed-in user only. The API list is already
+      // scoped to the bearer token and sorted soonest first.
+      try {
+        const reminderRes = await authApiClient<MyRemindersResponse>("/clients/my-reminders");
+        mapped.push(...(reminderRes.data ?? []).map(reminderToNotification));
+      } catch {
+        /* non-critical */
+      }
+
+      const reminders = mapped.filter((n) => n.type === "follow_up_reminder");
+      const rest = mapped.filter((n) => n.type !== "follow_up_reminder");
+      rest.sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
-      setNotifications(mapped);
+      setNotifications([...reminders, ...rest]);
       hasLoadedRef.current = true;
 
       // Toast newly-arrived actionable items for reviewers.
@@ -365,6 +386,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     isAuthenticated,
     userId,
     canReviewHolds,
+    sidebarRole,
     canReviewAccess,
     isOrgAdmin,
     ledProjectIds,

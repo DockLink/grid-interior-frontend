@@ -6,11 +6,11 @@ export const DEV_BYPASS_TOKEN = "dev-bypass-token";
 const DEFAULT_BYPASS_EMAIL = "design@local.dev";
 
 /**
- * UI-only mode is on by default during frontend development.
- * Set NEXT_PUBLIC_ENABLE_AUTH=true to restore real backend auth.
+ * Real login is the default.
+ * Set NEXT_PUBLIC_ENABLE_AUTH=false to run UI-only mode with mock data.
  */
 export function isAuthDisabled(): boolean {
-  return process.env.NEXT_PUBLIC_ENABLE_AUTH !== "true";
+  return process.env.NEXT_PUBLIC_ENABLE_AUTH === "false";
 }
 
 export function isDevBypassAuthorization(authorization: string | null): boolean {

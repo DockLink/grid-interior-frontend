@@ -27,6 +27,8 @@ export const queryKeys = {
     assignees: (id: string) => ["tasks", "assignees", id] as const,
     batchAssignees: (ids: string[]) => ["tasks", "batchAssignees", ...ids.slice().sort()] as const,
     my: (userId: string) => ["tasks", "my", userId] as const,
+    projectAssignee: (projectId: string, userId: string) =>
+      ["tasks", "projectAssignee", projectId, userId] as const,
     todays: (scope: string, userId: string, ledProjectIds: string[]) =>
       ["tasks", "todays", scope, userId, ...ledProjectIds.slice().sort()] as const,
   },
@@ -70,6 +72,7 @@ export const queryKeys = {
     detail: (id: string) => ["clients", "detail", id] as const,
     commLog: (id: string) => ["clients", "commLog", id] as const,
     pipeline: () => ["clients", "pipeline"] as const,
+    myReminders: () => ["clients", "myReminders"] as const,
     projects: (id: string) => ["clients", "projects", id] as const,
     documents: (id: string) => ["clients", "documents", id] as const,
   },

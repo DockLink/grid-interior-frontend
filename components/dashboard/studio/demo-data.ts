@@ -53,6 +53,8 @@ export type TodaysTaskItem = {
   projectId?: string;
   status: TodaysTaskStatus;
   priority: "high" | "medium" | "low";
+  overdue?: boolean;
+  href?: string;
   assignee: {
     name: string;
     initials: string;
@@ -242,16 +244,6 @@ export const LEAD_ATTENTION_DATA: AttentionItem[] = [
     project: "Lumière Penthouse",
     date: "Today",
     detail: "Review due",
-  },
-  {
-    id: 2,
-    type: "hold",
-    requester: "Site survey delay",
-    initials: "SS",
-    color: "#FF6B6B",
-    project: "Noir Boutique Hotel",
-    date: "Yesterday",
-    detail: "Hold pending",
   },
   {
     id: 3,

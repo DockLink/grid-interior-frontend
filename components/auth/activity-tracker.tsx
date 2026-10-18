@@ -42,7 +42,7 @@ export function ActivityTracker() {
     const tick = () => {
       if (isAuthDisabled()) return;
       const session = useAuthStore.getState().session;
-      if (!session?.refreshToken) return;
+      if (!session?.user) return;
       if (msUntilExpiry() <= PROACTIVE_REFRESH_WINDOW_MS) {
         // refreshSession internally enforces the inactivity ceiling and will
         // log out + notify if the user has been gone too long.

@@ -1,10 +1,20 @@
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 
+import { DEV_BYPASS_TOKEN, isAuthDisabled } from "@/lib/auth/dev-bypass";
+
 let mapsReady: Promise<typeof google.maps> | null = null;
 let configuredKey: string | null = null;
 
 export async function fetchMapsApiKey(): Promise<string> {
-  const res = await fetch("/api/maps/config");
+  const headers: Record<string, string> = {};
+  if (isAuthDisabled()) {
+    headers.Authorization = `Bearer ${DEV_BYPASS_TOKEN}`;
+  }
+
+  const res = await fetch("/api/maps/config", {
+    credentials: "include",
+    headers,
+  });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { message?: string } | null;
     throw new Error(body?.message ?? "Google Maps is not configured.");

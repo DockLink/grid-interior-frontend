@@ -2,8 +2,8 @@ import { test, expect, type Page } from "@playwright/test";
 
 test.describe("Holds & meeting minutes", () => {
   test.skip(
-    process.env.NEXT_PUBLIC_ENABLE_AUTH !== "true",
-    "Requires NEXT_PUBLIC_ENABLE_AUTH=true against staging/local backend",
+    process.env.NEXT_PUBLIC_ENABLE_AUTH === "false",
+    "Skipped in UI-only mode (NEXT_PUBLIC_ENABLE_AUTH=false)",
   );
 
   async function createProject(page: Page, name: string) {

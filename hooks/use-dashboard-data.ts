@@ -12,11 +12,14 @@ import {
   type FileActivityItem,
   type ProjectOverviewItem,
   type StatItem,
+  type TodaysTaskItem,
 } from "@/components/dashboard/studio/demo-data";
+import { useAuth } from "@/hooks/use-auth";
 import { useAccessRequests } from "@/hooks/use-access-requests";
 import { useHoldRequests } from "@/hooks/use-project-hold-requests";
 import { useLedProjects } from "@/hooks/use-led-projects";
 import { useMemberProjects } from "@/hooks/use-member-projects";
+import { useMyReminders } from "@/hooks/use-my-reminders";
 import { useMyTasks } from "@/hooks/use-my-tasks";
 import { useNotifications } from "@/hooks/use-notifications";
 import { useProjects } from "@/hooks/use-projects";
@@ -35,8 +38,10 @@ import {
   mapProjectToOverview,
   mapTaskToAttention,
 } from "@/lib/dashboard/map-dashboard-data";
+import { calendarDateFromApi } from "@/lib/projects/calendar-date";
 import { todayIsoDate } from "@/lib/suppliers/map-vendor-tasks";
-import { getUserListPrimaryLabel } from "@/lib/user/display";
+import { getUserInitials, getUserListPrimaryLabel } from "@/lib/user/display";
+import { clientRoute } from "@/types/navigation";
 
 export type DashboardRole = "admin" | "superadmin" | "lead" | "member";
 
@@ -48,6 +53,7 @@ function todaysScopeForRole(role: DashboardRole): TodaysTasksScope {
 
 export function useDashboardData(role: DashboardRole) {
   const authDisabled = isAuthDisabled();
+  const { user } = useAuth();
 
   const { projects, isLoading: projectsLoading } = useProjects({
     status: "ACTIVE",
@@ -87,8 +93,28 @@ export function useDashboardData(role: DashboardRole) {
     refetch: refetchNotifications,
   } = useNotifications();
   const { files: recentFiles } = useGlobalRecentFiles();
+  const { reminders } = useMyReminders();
 
   const today = todayIsoDate();
+
+  const todaysTasksWithReminders: TodaysTaskItem[] = useMemo(() => {
+    if (authDisabled) return todaysTasks;
+    const name = user ? getUserListPrimaryLabel(user) : "You";
+    const initials = user ? getUserInitials(user) : "Y";
+    const dueReminders = reminders
+      .filter((reminder) => calendarDateFromApi(reminder.follow_up_date) === today)
+      .map((reminder) => ({
+        id: `reminder:${reminder.id}`,
+        title: reminder.name,
+        project: reminder.company?.trim() || "Follow-up",
+        href: clientRoute(reminder.id),
+        status: "todo" as const,
+        priority: reminder.overdue ? ("high" as const) : ("medium" as const),
+        overdue: reminder.overdue,
+        assignee: { name, initials, color: "#0E7C86" },
+      }));
+    return [...dueReminders, ...todaysTasks];
+  }, [authDisabled, reminders, today, todaysTasks, user]);
 
   const uploaderById = useMemo(() => {
     const map: Record<string, string> = {};
@@ -179,20 +205,10 @@ export function useDashboardData(role: DashboardRole) {
 
     if (role === "admin" || role === "superadmin") {
       items.push(...accessRequests.slice(0, 5).map(mapAccessRequestToAttention));
+      // API list only. TEAM_LEAD's GET is empty, and this dashboard must not
+      // rebuild a pending-hold queue from led projects.
       items.push(...holdRequests.slice(0, 5).map(mapHoldRequestToAttention));
     } else if (role === "lead") {
-      items.push(
-        ...holdRequests
-          .filter((h) => {
-            const projectId = h.task?.projectId;
-            // Include when project is known and led; keep unscoping holds visible
-            // so missing nested task.projectId does not empty the panel.
-            if (!projectId) return true;
-            return ledIds.has(projectId);
-          })
-          .slice(0, 5)
-          .map(mapHoldRequestToAttention),
-      );
       items.push(
         ...accessRequests
           .filter((a) => a.projectId && ledIds.has(a.projectId))
@@ -247,6 +263,7 @@ export function useDashboardData(role: DashboardRole) {
         });
         toast.success(action === "approve" ? "Access request approved" : "Access request declined");
       } else if (item.type === "hold") {
+        if (role !== "superadmin") return;
         await processHoldRequest({
           taskableHoldRequestId: item.sourceId,
           action: action === "approve" ? "approve" : "reject",
@@ -263,7 +280,7 @@ export function useDashboardData(role: DashboardRole) {
     stats,
     attention,
     projects: projectOverview,
-    todaysTasks,
+    todaysTasks: todaysTasksWithReminders,
     fileActivity,
     isLoading,
     authDisabled,

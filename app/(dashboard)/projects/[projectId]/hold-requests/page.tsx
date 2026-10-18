@@ -5,16 +5,17 @@ import { useParams } from "next/navigation";
 
 import { HoldRequestCard } from "@/components/hold-requests/hold-request-card";
 import { useProjectContext } from "@/components/projects/project-context";
+import { useAuth } from "@/hooks/use-auth";
 import { useHoldRequests } from "@/hooks/use-project-hold-requests";
-import { useProjectMembers } from "@/hooks/use-project-members";
+import { isSuperAdminRole } from "@/lib/navigation/sidebar-role";
 
 export default function ProjectHoldRequestsPage() {
   const params = useParams();
   const projectId = params.projectId as string;
   const { project } = useProjectContext();
   const [filter, setFilter] = useState<"PENDING" | "APPROVED" | "all">("PENDING");
-  const { effectiveRole } = useProjectMembers();
-  const canProcess = effectiveRole === "admin" || effectiveRole === "lead";
+  const { primaryRole } = useAuth();
+  const canProcess = isSuperAdminRole(primaryRole);
 
   const { requests, isLoading, isProcessing, error, processRequest } = useHoldRequests({
     projectId,

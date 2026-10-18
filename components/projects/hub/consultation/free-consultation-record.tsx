@@ -7,10 +7,11 @@ import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { useConsultation } from "@/hooks/use-consultation";
 import { useProjectTaskables } from "@/hooks/use-project-taskables";
 import { getApiErrorMessage } from "@/lib/api/handle-api-error";
+import { toConsultTaskStatusApi } from "@/lib/consultation/map-consultation";
 import { useHubTeam } from "@/lib/projects/hub-team-context";
 import { findStageTaskable } from "@/lib/projects/seed-phases";
-import type { ConsultTask, ModeType } from "@/types/consultation";
-import type { ActiveProjectView } from "@/types/project-hub";
+import type { ConsultTask, ConsultTaskUpdatePayload, ModeType } from "@/types/consultation";
+import type { ActiveProjectView, HubTeamMember } from "@/types/project-hub";
 
 import { ConsultHeader } from "./consult-header";
 import {
@@ -20,8 +21,139 @@ import {
   OutlineBtn,
   SectionCard,
   SectionTitle,
-  TaskBadge,
 } from "./consultation-ui";
+
+const TASK_STATUSES = ["Pending", "In Progress", "Done"] as const;
+
+function taskDotColor(status: string) {
+  if (status === "Done") return "#3FA66B";
+  if (status === "In Progress") return "var(--figma-teal)";
+  return "var(--figma-gray400)";
+}
+
+function displayTaskStatus(status: string) {
+  if (status === "Done" || status === "In Progress") return status;
+  return "Pending";
+}
+
+function readConsultationDateTime(projectId: string) {
+  try {
+    const saved = localStorage.getItem(`consultation-date-time-${projectId}`);
+    if (!saved) return { d: "", t: "" };
+    const parsed = JSON.parse(saved) as { d?: string; t?: string };
+    return { d: parsed.d ?? "", t: parsed.t ?? "" };
+  } catch {
+    return { d: "", t: "" };
+  }
+}
+
+function ConsultTaskRow({
+  task,
+  teamMembers,
+  readOnly,
+  showDivider,
+  onSave,
+}: {
+  task: ConsultTask;
+  teamMembers: HubTeamMember[];
+  readOnly: boolean;
+  showDivider: boolean;
+  onSave: (payload: ConsultTaskUpdatePayload, local: Partial<ConsultTask>) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const title = draft ?? task.title;
+  const assignee = teamMembers.find((member) => member.userId && member.userId === String(task.assigneeId));
+  const assignable = teamMembers.filter((member) => member.userId);
+  const assigneeKnown = !task.assigneeId || assignable.some((member) => member.userId === task.assigneeId);
+  const status = displayTaskStatus(task.status);
+
+  const saveTitle = () => {
+    const next = title.trim();
+    if (!next || next === task.title || readOnly) {
+      setDraft(null);
+      return;
+    }
+    void onSave({ title: next }, { title: next }).finally(() => setDraft(null));
+  };
+
+  return (
+    <div
+      className="flex items-center gap-3 py-[11px]"
+      style={{ borderBottom: showDivider ? "1px solid var(--figma-border)" : "none" }}
+    >
+      <div
+        className="size-[7px] shrink-0 rounded-full"
+        style={{ background: taskDotColor(status) }}
+      />
+      <input
+        type="text"
+        value={title}
+        disabled={readOnly}
+        aria-label="Task title"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={saveTitle}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+        }}
+        className="box-border min-w-0 flex-1 rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-2.5 py-1.5 text-[13px] text-[var(--figma-navy)] outline-none disabled:cursor-not-allowed disabled:opacity-70"
+      />
+      {assignee ? (
+        <div
+          title={assignee.name}
+          className="flex size-[26px] shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
+          style={{ background: assignee.color }}
+        >
+          {assignee.initials}
+        </div>
+      ) : (
+        <div className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-[var(--figma-gray200)] text-[9px] font-bold text-[var(--figma-gray500)]">
+          —
+        </div>
+      )}
+      <select
+        aria-label="Team member"
+        value={task.assigneeId ?? ""}
+        disabled={readOnly}
+        onChange={(e) => {
+          const assigneeId = e.target.value || null;
+          if (assigneeId === (task.assigneeId ?? null)) return;
+          onSave({ assignee_user_id: assigneeId }, { assigneeId });
+        }}
+        className="box-border max-w-[140px] rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-2 py-1.5 text-[12px] text-[var(--figma-navy)] outline-none disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        <option value="">Unassigned</option>
+        {!assigneeKnown && task.assigneeId ? (
+          <option value={task.assigneeId}>Assigned member</option>
+        ) : null}
+        {assignable.map((member) => (
+          <option key={member.userId} value={member.userId}>
+            {member.name}
+          </option>
+        ))}
+      </select>
+      <select
+        aria-label="Task status"
+        value={status}
+        disabled={readOnly}
+        onChange={(e) => {
+          const next = e.target.value;
+          if (next === status) return;
+          onSave({ status: toConsultTaskStatusApi(next) }, { status: next });
+        }}
+        className="box-border rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white px-2 py-1.5 text-[12px] font-semibold text-[var(--figma-navy)] outline-none disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        {TASK_STATUSES.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 export function FreeConsultationRecord({
   project,
@@ -40,6 +172,7 @@ export function FreeConsultationRecord({
   const {
     tasks: remoteTasks,
     createTask,
+    updateTask,
     completeConsultation,
     isAuthOff,
   } = useConsultation(project.id);
@@ -51,24 +184,33 @@ export function FreeConsultationRecord({
   const stageCompleted = consultationStage?.status === "COMPLETED";
 
   const [tasks, setTasks] = useState<ConsultTask[]>(remoteTasks);
+  const [tasksSource, setTasksSource] = useState(remoteTasks);
   const [notes, setNotes] = useState("");
   const [dateVal, setDateVal] = useState("");
   const [timeVal, setTimeVal] = useState("");
+  const [dateSourceId, setDateSourceId] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const [localCompleted, setLocalCompleted] = useState(false);
 
-  useEffect(() => {
-    const saved = localStorage.getItem(`consultation-date-time-${project.id}`);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.d) setDateVal(parsed.d);
-        if (parsed.t) setTimeVal(parsed.t);
-      } catch {
-        // ignore
-      }
-    }
-  }, [project.id]);
+  if (tasksSource !== remoteTasks) {
+    const previousRemoteIds = new Set(tasksSource.map((task) => task.id));
+    setTasksSource(remoteTasks);
+    setTasks((current) => {
+      const localOnly = current.filter((task) => !previousRemoteIds.has(task.id));
+      const localIds = new Set(localOnly.map((task) => task.id));
+      return [
+        ...remoteTasks.filter((task) => !localIds.has(task.id)),
+        ...localOnly,
+      ];
+    });
+  }
+
+  if (typeof window !== "undefined" && dateSourceId !== project.id) {
+    const saved = readConsultationDateTime(project.id);
+    setDateSourceId(project.id);
+    setDateVal(saved.d);
+    setTimeVal(saved.t);
+  }
 
   useEffect(() => {
     if (dateVal || timeVal) {
@@ -79,9 +221,19 @@ export function FreeConsultationRecord({
     }
   }, [dateVal, timeVal, project.id]);
 
-  useEffect(() => {
-    setTasks(remoteTasks);
-  }, [remoteTasks]);
+  const saveTask = async (
+    task: ConsultTask,
+    payload: ConsultTaskUpdatePayload,
+    local: Partial<ConsultTask>,
+  ) => {
+    setTasks((prev) => prev.map((item) => (item.id === task.id ? { ...item, ...local } : item)));
+    try {
+      await updateTask(task.id, payload);
+    } catch (err) {
+      setTasks((prev) => prev.map((item) => (item.id === task.id ? task : item)));
+      toast.error(getApiErrorMessage(err) || "Failed to update task");
+    }
+  };
 
   const isComplete = stageCompleted || localCompleted;
   const completeDisabled =
@@ -161,10 +313,8 @@ export function FreeConsultationRecord({
               <button
                 type="button"
                 onClick={() => {
-                  const assigneeUserId = teamMembers.find((m) => m.userId)?.userId;
                   void createTask({
                     title: "New task",
-                    ...(assigneeUserId ? { assignee_user_id: assigneeUserId } : {}),
                     status: "pending",
                   })
                     .then((task) => {
@@ -184,41 +334,16 @@ export function FreeConsultationRecord({
           }
         />
         <div className="flex flex-col">
-          {tasks.map((task, idx) => {
-            const m = teamMembers.find((t) => t.userId && t.userId === String(task.assigneeId));
-            return (
-              <div
-                key={task.id}
-                className="flex items-center gap-3 py-[11px]"
-                style={{
-                  borderBottom: idx < tasks.length - 1 ? "1px solid var(--figma-border)" : "none",
-                }}
-              >
-                <div
-                  className="size-[7px] shrink-0 rounded-full"
-                  style={{
-                    background:
-                      task.status === "Done"
-                        ? "#3FA66B"
-                        : task.status === "In Progress"
-                          ? "var(--figma-teal)"
-                          : "var(--figma-gray400)",
-                  }}
-                />
-                <span className="flex-1 text-[13px] text-[var(--figma-navy)]">{task.title}</span>
-                {m && (
-                  <div
-                    title={m.name}
-                    className="flex size-[26px] shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
-                    style={{ background: m.color }}
-                  >
-                    {m.initials}
-                  </div>
-                )}
-                <TaskBadge status={task.status} />
-              </div>
-            );
-          })}
+          {tasks.map((task, idx) => (
+            <ConsultTaskRow
+              key={task.id}
+              task={task}
+              teamMembers={teamMembers}
+              readOnly={readOnly}
+              showDivider={idx < tasks.length - 1}
+              onSave={(payload, local) => saveTask(task, payload, local)}
+            />
+          ))}
         </div>
       </SectionCard>
 

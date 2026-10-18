@@ -1,5 +1,6 @@
 "use client";
 
+import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { useAuthStore } from "@/stores/auth-store";
 import { ApiError } from "@/types/api";
 
@@ -31,14 +32,14 @@ export function isAuthExpiryError(error: unknown): boolean {
   return false;
 }
 
-/** Access tokens are proactively refreshed when they expire within this window. */
+/** Access cookies are proactively refreshed when they expire within this window. */
 export const PROACTIVE_REFRESH_WINDOW_MS = 60_000;
 
 // Single in-flight refresh shared across all concurrent callers so a burst of
 // simultaneous 401s only triggers one network round-trip.
-let inFlight: Promise<string | null> | null = null;
+let inFlight: Promise<boolean> | null = null;
 
-export function refreshAccessToken(): Promise<string | null> {
+export function refreshAccessToken(): Promise<boolean> {
   if (inFlight) return inFlight;
   inFlight = useAuthStore
     .getState()
@@ -49,7 +50,7 @@ export function refreshAccessToken(): Promise<string | null> {
   return inFlight;
 }
 
-/** Milliseconds until the current access token expires (Infinity if unknown). */
+/** Milliseconds until the current access cookie expires (Infinity if unknown). */
 export function msUntilExpiry(): number {
   const expiresAt = useAuthStore.getState().session?.expiresAt;
   if (!expiresAt) return Infinity;
@@ -58,23 +59,27 @@ export function msUntilExpiry(): number {
 }
 
 /**
- * Returns a valid (fresh enough) access token, proactively refreshing first if
- * the current one is about to expire. Returns null if there's no session.
+ * Ensures the httpOnly session is fresh enough for the next request.
+ * Returns false when there is no usable session.
  */
-export async function ensureFreshToken(): Promise<string | null> {
-  const session = useAuthStore.getState().session;
-  if (!session?.accessToken) return null;
+export async function ensureFreshSession(): Promise<boolean> {
+  if (isAuthDisabled()) {
+    return Boolean(useAuthStore.getState().session?.user);
+  }
 
-  if (session.refreshToken && msUntilExpiry() <= PROACTIVE_REFRESH_WINDOW_MS) {
+  const session = useAuthStore.getState().session;
+  if (!session?.user) return false;
+
+  if (msUntilExpiry() <= PROACTIVE_REFRESH_WINDOW_MS) {
     try {
       const refreshed = await refreshAccessToken();
-      return refreshed ?? useAuthStore.getState().session?.accessToken ?? null;
+      return refreshed || Boolean(useAuthStore.getState().session?.user);
     } catch {
-      // Network blip during proactive refresh — fall back to the existing
-      // token; the reactive path will retry on a real 401.
-      return useAuthStore.getState().session?.accessToken ?? null;
+      // Network blip during proactive refresh — keep going with the current
+      // cookie; the reactive path will retry on a real 401.
+      return Boolean(useAuthStore.getState().session?.user);
     }
   }
 
-  return session.accessToken;
+  return true;
 }

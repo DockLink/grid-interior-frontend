@@ -17,6 +17,7 @@ export function SuperAdminDashboard() {
       fileActivity={data.fileActivity}
       isLoading={data.isLoading}
       showActions
+      allowHoldActions
       onAttentionAction={data.handleAttentionAction}
     />
   );

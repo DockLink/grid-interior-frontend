@@ -15,8 +15,8 @@ export interface BackendLoginResponse {
   user: User;
 }
 
-/** Normalized login payload returned by the Next.js `/api/auth/login` proxy. */
-export interface LoginResponse {
+/** Server-only login shape. Tokens are written to httpOnly cookies, never to the browser store. */
+export interface NormalizedLogin {
   accessToken: string;
   refreshToken?: string;
   expiresAt?: number;
@@ -25,8 +25,19 @@ export interface LoginResponse {
   user: User;
 }
 
+/** Login/refresh payload returned to the browser. Contains no tokens. */
+export interface LoginResponse {
+  expiresAt?: number;
+  expiresIn?: number;
+  source: "supabase";
+  user: User;
+  /** Supabase auth.sessions row id (from JWT session_id claim). */
+  sessionId?: string;
+}
+
 export interface AuthSession {
-  accessToken: string;
+  /** Present only for the local UI-only bypass. Real sessions keep tokens in httpOnly cookies. */
+  accessToken?: string;
   refreshToken?: string;
   expiresAt?: number;
   expiresIn?: number;
@@ -43,8 +54,8 @@ export interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
-  /** Exchanges the refresh token for a fresh access token. Returns the new token, or null if the session is unrecoverable. */
-  refreshSession: () => Promise<string | null>;
+  /** Exchanges the refresh cookie for a fresh access cookie. False if the session is unrecoverable. */
+  refreshSession: () => Promise<boolean>;
   hasRole: (...roles: UserRole[]) => boolean;
   primaryRole: UserRole | null;
 }

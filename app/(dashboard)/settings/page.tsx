@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { KeyRound, Palette, ShieldCheck, SlidersHorizontal, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,8 +26,8 @@ const SETTINGS_NAV: {
   superAdminOnly?: boolean;
 }[] = [
   { id: "profile", label: "Profile", icon: UserIcon },
-  { id: "preferences", label: "Preferences", icon: SlidersHorizontal },
-  { id: "sessions", label: "Sessions", icon: ShieldCheck },
+  { id: "preferences", label: "Preferences", icon: SlidersHorizontal, superAdminOnly: true },
+  { id: "sessions", label: "Sessions", icon: ShieldCheck, superAdminOnly: true },
   { id: "appearance", label: "Appearance", icon: Palette, superAdminOnly: true },
 ];
 
@@ -35,6 +35,10 @@ export default function SettingsPage() {
   const { user, primaryRole } = useAuth();
   const isSuperAdmin = isSuperAdminRole(primaryRole);
   const [section, setSection] = useState<SettingsSection>("profile");
+
+  useEffect(() => {
+    if (!isSuperAdmin && section !== "profile") setSection("profile");
+  }, [isSuperAdmin, section]);
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -170,8 +174,8 @@ export default function SettingsPage() {
             </section>
           </div>
         ) : null}
-        {section === "preferences" ? <PreferencesSettingsSection /> : null}
-        {section === "sessions" ? (
+        {section === "preferences" && isSuperAdmin ? <PreferencesSettingsSection /> : null}
+        {section === "sessions" && isSuperAdmin ? (
           <div className="max-w-[760px]">
             <h2 className="mb-1 text-[22px] font-bold text-[#16233D]">Sessions</h2>
             <p className="mb-6 text-[14px] text-[#5B6B85]">

@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { useProjectMembers } from "@/hooks/use-project-members";
+import { useProjectContribution } from "@/hooks/use-project-contribution";
 import { useUploadFile } from "@/hooks/use-upload-file";
 import { authApiClient } from "@/lib/api/authenticated-client";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
-import { canManageProject } from "@/lib/projects/permissions";
 import {
   mapMeetingMinute,
   mapMeetingMinutesList,
@@ -19,15 +18,13 @@ import type {
 } from "@/types/meeting-minutes";
 
 export function useProjectMeetingMinutes(projectId: string) {
-  const { effectiveRole, isViewer } = useProjectMembers();
+  const { canManage, canContribute } = useProjectContribution(projectId);
   const { uploadFile } = useUploadFile();
 
   const [minutes, setMinutes] = useState<MeetingMinute[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionItemUpdating, setActionItemUpdating] = useState<string | null>(null);
-
-  const canManage = canManageProject(effectiveRole, isViewer);
 
   const fetchMinutes = useCallback(async () => {
     if (isAuthDisabled()) {
@@ -119,6 +116,7 @@ export function useProjectMeetingMinutes(projectId: string) {
     isLoading,
     error,
     canManage,
+    canCreate: canContribute,
     refetch: fetchMinutes,
     createMinute,
     updateMinute,

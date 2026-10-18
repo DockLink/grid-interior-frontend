@@ -14,10 +14,10 @@ cp .env.local.example .env.local
 
 3. Ensure `.env.local` contains:
 
-- `NEXT_PUBLIC_ENABLE_AUTH=true` — enables real login and API calls
+- `NEXT_PUBLIC_ENABLE_AUTH=true` — real login and API calls (this is also the default when the variable is unset)
 - `BACKEND_API_URL=http://localhost:3001/v2` — BFF proxy target
 
-Without `NEXT_PUBLIC_ENABLE_AUTH=true`, the app runs in UI-only mode with mock data and a dev auth bypass.
+Set `NEXT_PUBLIC_ENABLE_AUTH=false` to run UI-only mode with mock data and a dev auth bypass.
 
 ### Development server
 

@@ -15,6 +15,7 @@ export async function apiClient<T>(
 
   const res = await fetch(`/api${path}`, {
     ...init,
+    credentials: "include",
     headers: {
       ...defaultHeaders,
       ...init?.headers,

@@ -9,6 +9,7 @@ import {
   projectThumbnailUrl,
 } from "@/lib/projects/map-projects";
 import { resolveProjectEndDate } from "@/lib/projects/duration";
+import { formatProjectStartDate } from "@/lib/projects/map-project-overview";
 import { resolveProjectProgress } from "@/lib/projects/project-progress";
 import type { Project, ProjectCardView } from "@/types/projects";
 import type {
@@ -89,6 +90,7 @@ export function resolveCurrentPhase(
 
 export function mapProjectCardToActiveView(card: ProjectCardView): ActiveProjectView {
   const phase = stageToPhase(card.currentStage);
+  const createdAt = formatProjectStartDate(card.created_at);
   return {
     id: card.id,
     name: card.name,
@@ -105,6 +107,7 @@ export function mapProjectCardToActiveView(card: ProjectCardView): ActiveProject
     nextDeadline: card.updatedAt ?? "—",
     teamIds: [],
     startDate: card.startDate ?? "—",
+    createdAt: createdAt === "—" ? undefined : createdAt,
     endDate: card.endDate ?? undefined,
     location: card.location ?? "",
     distanceKm: null,

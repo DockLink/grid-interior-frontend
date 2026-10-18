@@ -1,18 +1,23 @@
-import { normalizeLoginResponse } from "@/lib/auth/normalize-login";
-import { getSessionIdFromAccessToken } from "@/lib/auth/jwt";
-import type { AuthSession, BackendLoginResponse, LoginResponse } from "@/types/auth";
+import type { AuthSession, LoginResponse } from "@/types/auth";
 
-export function toAuthSession(response: LoginResponse | BackendLoginResponse): AuthSession {
-  const normalized =
-    "accessToken" in response ? response : normalizeLoginResponse(response);
-
+/** Session kept in the client store. Real tokens are not copied here. */
+export function toAuthSession(response: LoginResponse): AuthSession {
   return {
-    accessToken: normalized.accessToken,
-    refreshToken: normalized.refreshToken,
-    expiresAt: normalized.expiresAt,
-    expiresIn: normalized.expiresIn,
-    source: "supabase",
-    user: normalized.user,
-    sessionId: getSessionIdFromAccessToken(normalized.accessToken) ?? undefined,
+    expiresAt: response.expiresAt,
+    expiresIn: response.expiresIn,
+    source: response.source ?? "supabase",
+    user: response.user,
+    sessionId: response.sessionId,
+  };
+}
+
+/** Drops tokens so persisted state and rehydration never keep them. */
+export function toPersistedSession(session: AuthSession): AuthSession {
+  return {
+    expiresAt: session.expiresAt,
+    expiresIn: session.expiresIn,
+    source: session.source,
+    user: session.user,
+    sessionId: session.sessionId,
   };
 }

@@ -180,6 +180,18 @@ export interface PipelineCard {
   overdue: boolean;
 }
 
+export interface MyReminder {
+  id: string;
+  name: string;
+  company: string | null;
+  follow_up_date: string | null;
+  overdue: boolean;
+}
+
+export interface MyRemindersResponse {
+  data: MyReminder[];
+}
+
 export interface LeadPipelineResponse {
   new: PipelineCard[];
   meeting: PipelineCard[];
