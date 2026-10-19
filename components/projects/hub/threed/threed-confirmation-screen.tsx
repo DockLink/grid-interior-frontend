@@ -25,6 +25,8 @@ export function ThreeDConfirmationScreen({
         <ClientConfirmationWidget
           phase="3D Design"
           nextPhase="Execution"
+          projectId={project.id}
+          localOnly={false}
           defaultFeedback="Client approved the 3D renders and walkthrough. Minor lighting adjustment requested for the lobby east view."
         />
       </div>

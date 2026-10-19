@@ -200,12 +200,25 @@ export interface SubVendorHistoryApi {
 
 export interface SubVendorHistory {
   id: string;
+  projectId?: string;
   project: string;
   startDate: string;
   endDate: string;
   scope: string;
   status: SubVendorHistoryStatus;
   amount?: string;
+}
+
+export interface SubVendorAssignedProjectApi {
+  project_id: string;
+  name: string;
+  status: string;
+  current_stage?: string | null;
+  scope?: string | null;
+}
+
+export interface SubVendorAssignedProjectsResponse {
+  data: SubVendorAssignedProjectApi[];
 }
 
 export interface SubVendorHistoryListResponse {
@@ -231,6 +244,14 @@ export interface SubVendorPayment {
 
 export interface SubVendorPaymentsListResponse {
   data: SubVendorPaymentApi[];
+}
+
+export interface CreateSubVendorPaymentPayload {
+  project_id?: string;
+  project_name: string;
+  amount: number;
+  payment_date: string;
+  status: PaymentStatus;
 }
 
 export interface SuppliersListMeta {

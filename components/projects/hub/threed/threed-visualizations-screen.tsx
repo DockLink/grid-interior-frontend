@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
@@ -23,12 +23,53 @@ import {
   folderChildrenAsAreas,
   resolveThreedFolder,
 } from "@/lib/files/resolve-folder";
-import { isImageProjectFile } from "@/lib/files/map-project-file";
+import { formatFileDate, formatFileSize, isImageProjectFile } from "@/lib/files/map-project-file";
 import { THREED_AREAS, THREED_RENDER_GALLERY } from "@/lib/projects/mock-threed";
 import { queryKeys } from "@/lib/query/keys";
 import type { ActiveProjectView } from "@/types/project-hub";
 import type { ThreeDArea, ThreeDRenderImage } from "@/types/threed";
-import type { ProjectFile } from "@/types/files";
+import type { ProjectFile, ProjectFolderTree } from "@/types/files";
+
+const FINAL_FOLDER_NAME = "Final";
+const FINAL_FILE_ACCEPT =
+  ".obj,.fbx,.max,.3ds,.zip,.rar,.7z,.skp,.blend,.dae,.stl,.pdf,image/*";
+
+type FinalFileRecord = {
+  id: string;
+  fileName: string;
+  fileSize: string;
+  created_at: string;
+};
+
+function isFinalFolderName(name: string): boolean {
+  return name.replace(/^\d+(\.\d+)*\s+/, "").trim().toLowerCase() === "final";
+}
+
+function finalFilesSummary(files: FinalFileRecord[]): string {
+  const first = files[0];
+  if (!first) return "";
+  const totalBytes = files.reduce((sum, file) => {
+    const size = Number(file.fileSize);
+    return sum + (Number.isFinite(size) ? size : 0);
+  }, 0);
+  const latest = files.reduce(
+    (max, file) => (file.created_at > max ? file.created_at : max),
+    first.created_at,
+  );
+  const countLabel = `${files.length} file${files.length === 1 ? "" : "s"}`;
+  return `${first.fileName} · ${countLabel} · ${formatFileSize(totalBytes)} · ${formatFileDate(latest)}`;
+}
+
+async function fetchProjectFolderFiles(
+  projectId: string,
+  folderPath: string,
+): Promise<ProjectFile[]> {
+  const qs = new URLSearchParams({ folderPath });
+  const res = await authApiClient<{ data: ProjectFile[] }>(
+    `/projects/${projectId}/files?${qs}`,
+  );
+  return res.data ?? [];
+}
 
 function RenderThumb({
   img,
@@ -101,50 +142,61 @@ export function ThreeDVisualizationsScreen({
   onBack: () => void;
 }) {
   const authDisabled = isAuthDisabled();
+  const qc = useQueryClient();
   const { project: apiProject } = useProject(project.id);
-  const { folderTree, uploadFile, deleteFile, getDownloadUrl } = useProjectFiles(project.id);
+  const { folderTree, uploadFile, deleteFile, getDownloadUrl, createFolder } = useProjectFiles(project.id);
   const threedFolder = useMemo(() => resolveThreedFolder(folderTree), [folderTree]);
+  const finalInputRef = useRef<HTMLInputElement>(null);
 
   const liveAreas = useMemo(() => {
     if (authDisabled || !threedFolder) return null;
-    const children = folderChildrenAsAreas(threedFolder);
-    if (children.length === 1 && children[0]?.path === threedFolder.path) {
+    const children = folderChildrenAsAreas(threedFolder).filter(
+      (area) => !isFinalFolderName(area.name),
+    );
+    if (!children.length || (children.length === 1 && children[0]?.path === threedFolder.path)) {
       return [{ id: 0, name: "All", path: threedFolder.path }];
     }
     return children.map((c, idx) => ({ id: idx + 1, name: c.name, path: c.path }));
   }, [authDisabled, threedFolder]);
 
-  const areas: (ThreeDArea & { path?: string })[] = authDisabled
-    ? THREED_AREAS
-    : liveAreas ?? [{ id: 0, name: "All", path: threedFolder?.path }];
+  const areas = useMemo<(ThreeDArea & { path?: string })[]>(() => {
+    if (authDisabled) return THREED_AREAS;
+    return liveAreas ?? [{ id: 0, name: "All", path: threedFolder?.path }];
+  }, [authDisabled, liveAreas, threedFolder?.path]);
   const [activeArea, setActiveArea] = useState<number | string>(areas[0]?.id ?? 1);
+  const selectedAreaId = areas.some((areaOption) => areaOption.id === activeArea)
+    ? activeArea
+    : (areas[0]?.id ?? 1);
   const [gallery, setGallery] = useState(() => (isAuthDisabled() ? THREED_RENDER_GALLERY : []));
   const [liveGallery, setLiveGallery] = useState<ThreeDRenderImage[]>([]);
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
-  const [finalUploaded, setFinalUploaded] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [finalUploading, setFinalUploading] = useState(false);
+  const [resolvedFinalPath, setResolvedFinalPath] = useState<string | null>(null);
+  const [localFinalFiles, setLocalFinalFiles] = useState<FinalFileRecord[]>([]);
 
-  useEffect(() => {
-    if (!areas.some((a) => a.id === activeArea)) {
-      setActiveArea(areas[0]?.id ?? 1);
-    }
-  }, [areas, activeArea]);
+  const discoveredFinalPath = useMemo(() => {
+    const child = threedFolder?.children?.find((folder) => isFinalFolderName(folder.name));
+    return child?.path ?? null;
+  }, [threedFolder]);
+  const finalFolderPath = discoveredFinalPath ?? resolvedFinalPath;
 
-  const area = areas.find((a) => a.id === activeArea) ?? areas[0]!;
+  const area = areas.find((a) => a.id === selectedAreaId) ?? areas[0]!;
   const folderPath =
     ("path" in area && area.path) || threedFolder?.path || "";
 
   const { data: folderFiles = [], refetch } = useQuery({
     queryKey: queryKeys.files.folder(project.id, folderPath),
-    queryFn: async () => {
-      const qs = new URLSearchParams({ folderPath });
-      const res = await authApiClient<{ data: ProjectFile[] }>(
-        `/projects/${project.id}/files?${qs}`,
-      );
-      return res.data ?? [];
-    },
+    queryFn: () => fetchProjectFolderFiles(project.id, folderPath),
     enabled: !authDisabled && Boolean(folderPath),
+    staleTime: 20_000,
+  });
+
+  const { data: finalFolderFiles = [] } = useQuery({
+    queryKey: queryKeys.files.folder(project.id, finalFolderPath ?? "final-pending"),
+    queryFn: () => fetchProjectFolderFiles(project.id, finalFolderPath!),
+    enabled: !authDisabled && Boolean(finalFolderPath) && !finalUploading,
     staleTime: 20_000,
   });
 
@@ -182,8 +234,104 @@ export function ThreeDVisualizationsScreen({
   }, [folderFiles, getDownloadUrl, authDisabled]);
 
   const displayGallery = authDisabled ? gallery : liveGallery;
+  const displayedFinalFiles = authDisabled ? localFinalFiles : finalFolderFiles;
+  const finalSummary = finalFilesSummary(displayedFinalFiles);
   const shortName = project.name.split(" ")[0] ?? project.name;
   const vimeoUrl = apiProject?.vimeo_url ?? null;
+
+  function openFinalPicker() {
+    if (finalUploading) return;
+    finalInputRef.current?.click();
+  }
+
+  async function ensureFinalFolder(): Promise<string> {
+    if (finalFolderPath) return finalFolderPath;
+    if (!threedFolder?.path) {
+      throw new Error("3Ds folder not found. Provision project folders first.");
+    }
+    try {
+      const created = await createFolder(FINAL_FOLDER_NAME, threedFolder.path);
+      if (!created?.path) {
+        throw new Error("Could not create the Final folder.");
+      }
+      setResolvedFinalPath(created.path);
+      return created.path;
+    } catch (err) {
+      try {
+        const tree = await qc.fetchQuery({
+          queryKey: queryKeys.files.tree(project.id),
+          queryFn: async () => {
+            const res = await authApiClient<{ data: ProjectFolderTree }>(
+              `/projects/${project.id}/files/tree`,
+            );
+            return res.data;
+          },
+        });
+        const existing = resolveThreedFolder(tree)?.children?.find((folder) =>
+          isFinalFolderName(folder.name),
+        );
+        if (existing?.path) {
+          setResolvedFinalPath(existing.path);
+          return existing.path;
+        }
+      } catch {
+        // Keep the original folder error.
+      }
+      throw err;
+    }
+  }
+
+  async function handleFinalFilesSelected(list: FileList | null) {
+    const picked = list ? Array.from(list) : [];
+    if (!picked.length) return;
+
+    if (authDisabled) {
+      const now = new Date().toISOString();
+      setLocalFinalFiles(
+        picked.map((file, index) => ({
+          id: `${Date.now()}-${index}`,
+          fileName: file.name,
+          fileSize: String(file.size),
+          created_at: now,
+        })),
+      );
+      return;
+    }
+
+    setFinalUploading(true);
+    const previousIds = finalFolderFiles.map((file) => file.id);
+    let folderPathForUpload: string | null = null;
+    let uploadedCount = 0;
+    try {
+      folderPathForUpload = await ensureFinalFolder();
+      for (const file of picked) {
+        await uploadFile(folderPathForUpload, file);
+        uploadedCount += 1;
+      }
+      for (const id of previousIds) {
+        await deleteFile(id);
+      }
+      const fresh = await fetchProjectFolderFiles(project.id, folderPathForUpload);
+      qc.setQueryData(queryKeys.files.folder(project.id, folderPathForUpload), fresh);
+      toast.success(picked.length === 1 ? "Final file uploaded" : "Final files uploaded");
+    } catch (err) {
+      if (folderPathForUpload) {
+        try {
+          const fresh = await fetchProjectFolderFiles(project.id, folderPathForUpload);
+          qc.setQueryData(queryKeys.files.folder(project.id, folderPathForUpload), fresh);
+        } catch {
+          // Keep the original failure visible.
+        }
+      }
+      const fallback =
+        uploadedCount === picked.length
+          ? "Uploaded, but previous files could not be removed"
+          : "Upload failed";
+      toast.error(err instanceof Error ? err.message : fallback);
+    } finally {
+      setFinalUploading(false);
+    }
+  }
 
   async function handleUpload() {
     if (authDisabled) {
@@ -244,7 +392,7 @@ export function ThreeDVisualizationsScreen({
         </p>
       </div>
 
-      <AreaTabs areas={areas} activeId={activeArea} setActiveId={setActiveArea} />
+      <AreaTabs areas={areas} activeId={selectedAreaId} setActiveId={setActiveArea} />
 
       <SectionCard>
         <SectionTitle
@@ -282,23 +430,33 @@ export function ThreeDVisualizationsScreen({
 
       <SectionCard>
         <SectionTitle icon="verified" title="Final 3D Files" />
-        {finalUploaded ? (
+        <input
+          ref={finalInputRef}
+          type="file"
+          className="hidden"
+          multiple
+          accept={FINAL_FILE_ACCEPT}
+          onChange={(e) => {
+            void handleFinalFilesSelected(e.target.files);
+            e.target.value = "";
+          }}
+        />
+        {displayedFinalFiles.length > 0 ? (
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2.5 rounded-xl border-[1.5px] border-[#3FA66B] bg-[#DCFCE7] px-[18px] py-3">
               <MaterialIcon name="task_alt" size={20} className="text-[#3FA66B]" />
               <div>
                 <div className="text-[13px] font-semibold text-[#3FA66B]">Final files uploaded</div>
-                <div className="text-[11px] text-[var(--figma-gray500)]">
-                  3D_{shortName}_Final.zip · 3 files · 47.2 MB · 29 Jul 2026
-                </div>
+                <div className="text-[11px] text-[var(--figma-gray500)]">{finalSummary}</div>
               </div>
             </div>
             <button
               type="button"
-              className="cursor-pointer border-none bg-transparent p-0 text-xs text-[var(--figma-teal)] underline"
-              onClick={() => setFinalUploaded(false)}
+              className="cursor-pointer border-none bg-transparent p-0 text-xs text-[var(--figma-teal)] underline disabled:cursor-default disabled:opacity-50"
+              disabled={finalUploading}
+              onClick={openFinalPicker}
             >
-              Replace files
+              {finalUploading ? "Uploading…" : "Replace files"}
             </button>
           </div>
         ) : (
@@ -306,7 +464,12 @@ export function ThreeDVisualizationsScreen({
             <p className="mb-4 text-[13px] text-[var(--figma-gray500)]">
               Upload the final 3D model files (OBJ, FBX, MAX, or packaged renders) after the walkthrough is approved.
             </p>
-            <GradientBtn label="Upload Final Files" icon="upload_file" onClick={() => setFinalUploaded(true)} />
+            <GradientBtn
+              label={finalUploading ? "Uploading…" : "Upload Final Files"}
+              icon="upload_file"
+              disabled={finalUploading}
+              onClick={openFinalPicker}
+            />
           </div>
         )}
       </SectionCard>
@@ -314,8 +477,9 @@ export function ThreeDVisualizationsScreen({
       <ClientConfirmationWidget
         phase="3D Design"
         nextPhase="Execution"
+        projectId={project.id}
+        localOnly={false}
         defaultFeedback="Client approved the 3D renders and walkthrough. Minor lighting adjustment requested for the lobby east view."
-        localOnly
       />
 
       {lightbox !== null && displayGallery[lightbox]?.url && (

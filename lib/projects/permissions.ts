@@ -7,6 +7,16 @@ export function canManageProject(role: SidebarRole, isViewer = false): boolean {
   return role === "superadmin" || role === "admin" || role === "lead";
 }
 
+/** Create, assign, and update tasks. Project managers, plus active project members. */
+export function canManageTasks(
+  role: SidebarRole,
+  isViewer = false,
+  isProjectMember = false,
+): boolean {
+  if (role === "guest" || isViewer) return false;
+  return canManageProject(role, isViewer) || isProjectMember;
+}
+
 /** Active MEMBER or project lead. Viewers and guests are not contributors. */
 export function isActiveProjectMember(
   members: ProjectMember[],

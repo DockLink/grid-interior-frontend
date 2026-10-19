@@ -12,6 +12,24 @@ export interface ThreeDRenderImage {
   fileId?: string;
 }
 
+export interface ThreeDConfirmation {
+  id: string | null;
+  project_id: string;
+  presented: boolean;
+  feedback_received: boolean;
+  confirmed: boolean;
+  feedback_notes: string;
+  confirmed_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ThreeDConfirmationUpdate {
+  presented?: boolean;
+  feedback_received?: boolean;
+  confirmed?: boolean;
+  feedback_notes?: string;
+}
+
 const ALLOWED: ThreeDView[] = ["visualizations", "confirmation"];
 
 export function threedViewFromParam(view: string | undefined): ThreeDView {

@@ -57,6 +57,8 @@ export function useLinkSubVendorToProject(subVendorId: string) {
 
       void qc.invalidateQueries({ queryKey: queryKeys.projectLinks.detail(projectId) });
       void qc.invalidateQueries({ queryKey: queryKeys.subVendors.linkedProjects(subVendorId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.subVendors.projects(subVendorId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.subVendors.history(subVendorId) });
       void qc.invalidateQueries({ queryKey: queryKeys.subVendors.detail(subVendorId) });
       void qc.invalidateQueries({ queryKey: queryKeys.subVendors.all });
     },
