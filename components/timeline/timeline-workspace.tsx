@@ -15,7 +15,10 @@ import { toast } from "sonner";
 import { DemoCaption } from "@/components/demo/demo-caption";
 import { MilestoneManagementModal } from "@/components/projects/milestone-management-modal";
 import { AddMaterialItemDialog } from "@/components/timeline/add-material-item-dialog";
-import { openTimelinePrintWindow } from "@/components/timeline/timeline-print";
+import {
+  openClientTimelinePrintWindow,
+  openTimelinePrintWindow,
+} from "@/components/timeline/timeline-print";
 import { useActiveProjectView } from "@/hooks/use-active-project-view";
 import { useProjectLinks } from "@/hooks/use-project-links";
 import { useProjectTaskables } from "@/hooks/use-project-taskables";
@@ -1588,29 +1591,26 @@ function ClientView() {
             }}
           />
           <GradBtn
-            label="Share with Client"
-            icon="share"
+            label="Export PDF"
+            icon="picture_as_pdf"
             small
             onClick={() => {
-              if (!projectId) {
-                toast.error("Project id missing — cannot copy client timeline link.");
+              const opened = openClientTimelinePrintWindow({
+                projectName,
+                projectStartLabel: startLabel,
+                projectEndLabel: endLabel,
+                overallProgress,
+                keyDates,
+                phases,
+                siteCards,
+                siteProgress: siteProgress.progress,
+                showSiteSection,
+              });
+              if (!opened) {
+                toast.error("Allow pop-ups to export the PDF");
                 return;
               }
-              const url = `${window.location.origin}/portal/${projectId}`;
-              if (navigator.clipboard?.writeText) {
-                void navigator.clipboard.writeText(url).then(
-                  () => {
-                    toast.success(
-                      "Copied client timeline link. Portal token email send requires backend support.",
-                    );
-                  },
-                  () => {
-                    toast.error("Could not copy link to clipboard");
-                  },
-                );
-              } else {
-                toast.error("Clipboard API not available. Cannot copy link.");
-              }
+              toast.success("Print dialog opened — choose Save as PDF");
             }}
           />
         </div>

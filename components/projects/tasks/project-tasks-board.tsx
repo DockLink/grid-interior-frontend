@@ -36,10 +36,9 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
     milestoneParents,
     tasks,
     visibleTasks,
-    myTasks,
     memberUsers,
     canManage,
-    isAdmin,
+    canManageTasks,
     isLoading,
     isAssigneesLoading,
     error,
@@ -208,38 +207,44 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
           <span className="rounded-[10px] bg-[var(--figma-gray100)] px-3 py-1.5 text-xs font-medium text-[var(--figma-gray500)]">
             {viewMode === "milestones" || viewMode === "team" || viewMode === "gantt"
               ? `Tasks: ${filteredAll.length}`
-              : isAdmin
+              : canManageTasks
                 ? `All tasks: ${filteredVisible.length}`
                 : `My tasks: ${filteredVisible.length}`}
           </span>
         </div>
 
-        {canManage && (
+        {(canManage || canManageTasks) && (
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowStageManagement(true)}
-              className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[20px] border-[1.5px] border-[var(--figma-border)] bg-white px-3.5 text-[12px] font-semibold text-[var(--figma-navy)] transition-all neu-raised hover:border-[var(--figma-teal)]"
-            >
-              <MaterialIcon name="layers" outlined size={15} className="text-[var(--figma-teal)]" />
-              Stages
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowMilestoneManagement(true)}
-              className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[20px] border-[1.5px] border-[var(--figma-border)] bg-white px-3.5 text-[12px] font-semibold text-[var(--figma-navy)] transition-all neu-raised hover:border-[var(--figma-teal)]"
-            >
-              <MaterialIcon name="flag" outlined size={15} className="text-[var(--figma-teal)]" />
-              Milestones
-            </button>
-            <button
-              type="button"
-              onClick={() => setCreateStatus("todo")}
-              className="gi-gradient-cta inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[24px] px-4 text-[12px] font-semibold"
-            >
-              <MaterialIcon name="add" outlined size={15} />
-              New task
-            </button>
+            {canManage && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowStageManagement(true)}
+                  className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[20px] border-[1.5px] border-[var(--figma-border)] bg-white px-3.5 text-[12px] font-semibold text-[var(--figma-navy)] transition-all neu-raised hover:border-[var(--figma-teal)]"
+                >
+                  <MaterialIcon name="layers" outlined size={15} className="text-[var(--figma-teal)]" />
+                  Stages
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowMilestoneManagement(true)}
+                  className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[20px] border-[1.5px] border-[var(--figma-border)] bg-white px-3.5 text-[12px] font-semibold text-[var(--figma-navy)] transition-all neu-raised hover:border-[var(--figma-teal)]"
+                >
+                  <MaterialIcon name="flag" outlined size={15} className="text-[var(--figma-teal)]" />
+                  Milestones
+                </button>
+              </>
+            )}
+            {canManageTasks && (
+              <button
+                type="button"
+                onClick={() => setCreateStatus("todo")}
+                className="gi-gradient-cta inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[24px] px-4 text-[12px] font-semibold"
+              >
+                <MaterialIcon name="add" outlined size={15} />
+                New task
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -328,7 +333,7 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
                 tasks={filteredVisible.filter((t) => t.status === col.id)}
                 draggedId={draggedId}
                 isOver={overColumn === col.id}
-                showAssigneeNames={isAdmin || canManage}
+                showAssigneeNames={canManageTasks}
                 onDragEnter={(e) => {
                   e.preventDefault();
                   dragEnterCount.current[col.id] = (dragEnterCount.current[col.id] ?? 0) + 1;
@@ -346,7 +351,7 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
                   }
                 }}
                 onDrop={() => handleDrop(col.id)}
-                onAddTask={canManage ? setCreateStatus : () => undefined}
+                onAddTask={canManageTasks ? setCreateStatus : () => undefined}
                 onCardClick={setSelectedTask}
                 onCardDragStart={(id) => {
                   draggedIdRef.current = id;
@@ -358,7 +363,7 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
                   setOverColumn(null);
                   dragEnterCount.current = {};
                 }}
-                canAdd={canManage}
+                canAdd={canManageTasks}
               />
             ))}
           </div>
@@ -412,7 +417,7 @@ export function ProjectTasksBoard({ projectId }: { projectId: string }) {
         task={selectedTask}
         open={!!selectedTask}
         onOpenChange={(open) => !open && setSelectedTask(null)}
-        canManage={canManage}
+        canManage={canManageTasks}
         currentUserId={currentUser?.userId}
         members={memberUsers}
         stageRange={selectedTaskStageRange}

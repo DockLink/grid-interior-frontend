@@ -210,6 +210,7 @@ function QuoteCells({
   onSelect,
   onQuotePrice,
   onAddQuote,
+  onRemoveQuote,
 }: {
   item: BoqLineItem;
   editing: boolean;
@@ -217,6 +218,7 @@ function QuoteCells({
   onSelect: (supplierId: string) => void;
   onQuotePrice: (supplierId: string, price: number) => void;
   onAddQuote: (supplierId: string) => void;
+  onRemoveQuote: (supplierId: string) => void;
 }) {
   const slots = [0, 1, 2].map((i) => item.quotes[i] ?? null);
   const used = new Set(item.quotes.map((q) => q.supplierId));
@@ -258,6 +260,20 @@ function QuoteCells({
                 style={{ color: "inherit", font: "inherit" }}
               >
                 {formatLKR(q.price)}
+              </button>
+            )}
+            {editing && (
+              <button
+                type="button"
+                aria-label={`Remove ${q.supplierName}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onRemoveQuote(q.supplierId);
+                }}
+                className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[var(--figma-alert)]"
+              >
+                <MaterialIcon name="close" size={14} />
               </button>
             )}
           </div>
@@ -453,6 +469,7 @@ type CategoryHandlers = {
   onItemCommit: (item: BoqLineItem) => void;
   onCommercial: (itemId: string, patch: Partial<BoqLineItem>) => void;
   onQuotesChange: (itemId: string, quotes: SupplierQuote[]) => void;
+  onRemoveQuote: (itemId: string, quotes: SupplierQuote[], clearSelection: boolean) => void;
   onImageUpload: (itemId: string, file: File) => Promise<void>;
   onImageClear: (itemId: string) => Promise<void>;
   onContractUpload: (itemId: string, file: File) => Promise<void>;
@@ -777,6 +794,15 @@ function CategoryBlock({
                                 ];
                                 handlers.onLocalItemPatch(row.id, { quotes });
                                 void handlers.onQuotesChange(row.id, quotes);
+                              }}
+                              onRemoveQuote={(supplierId) => {
+                                const quotes = row.quotes.filter((q) => q.supplierId !== supplierId);
+                                const clearSelection = row.selectedSupplierId === supplierId;
+                                handlers.onLocalItemPatch(row.id, {
+                                  quotes,
+                                  ...(clearSelection ? { selectedSupplierId: null } : {}),
+                                });
+                                void handlers.onRemoveQuote(row.id, quotes, clearSelection);
                               }}
                             />
                           </td>
@@ -1255,8 +1281,12 @@ export function BoqLineTable({
                     qty: item.qty,
                     rate: item.rate,
                   });
+                  const selectedStillQuoted =
+                    !item.selectedSupplierId ||
+                    item.quotes.some((q) => q.supplierId === item.selectedSupplierId);
                   await updateCommercial(item.id, {
                     design_firm_price: item.designFirmPrice,
+                    ...(selectedStillQuoted ? {} : { selected_supplier_id: null }),
                   });
                   await replaceQuotes(item.id, toQuotesPayload(item.quotes));
                 });
@@ -1280,6 +1310,14 @@ export function BoqLineTable({
               },
               onQuotesChange: (itemId, quotes) => {
                 void withError(() => replaceQuotes(itemId, toQuotesPayload(quotes)));
+              },
+              onRemoveQuote: (itemId, quotes, clearSelection) => {
+                void withError(async () => {
+                  if (clearSelection) {
+                    await updateCommercial(itemId, { selected_supplier_id: null });
+                  }
+                  await replaceQuotes(itemId, toQuotesPayload(quotes));
+                });
               },
               onImageUpload: handleImageUpload,
               onImageClear: handleImageClear,

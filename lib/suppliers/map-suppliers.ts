@@ -1,10 +1,12 @@
 import { pickNumber, pickString } from "@/lib/api/normalize";
+import type { ProjectCardView } from "@/types/projects";
 import type {
   AvailabilityStatus,
   DeliveryStatus,
   PaymentStatus,
   SubVendor,
   SubVendorApi,
+  SubVendorAssignedProjectApi,
   SubVendorHistory,
   SubVendorHistoryApi,
   SubVendorHistoryStatus,
@@ -113,6 +115,14 @@ function formatOrderDate(iso: string | null | undefined): string {
   });
 }
 
+function formatSubVendorAmount(raw: number | string | null | undefined): string {
+  if (raw == null || raw === "") return "—";
+  const asNumber =
+    typeof raw === "number" ? raw : Number(String(raw).replace(/[^0-9.-]/g, ""));
+  if (!Number.isFinite(asNumber)) return typeof raw === "string" ? raw : "—";
+  return `LKR ${asNumber.toLocaleString("en-US")}`;
+}
+
 function formatOrderAmount(raw: number | string | null | undefined): string {
   if (raw == null || raw === "") return "—";
   if (typeof raw === "string") {
@@ -216,8 +226,10 @@ export function mapSubVendorHistoryApiToView(
 ): SubVendorHistory {
   const record = raw as Record<string, unknown>;
   const amountRaw = record.amount;
+  const projectId = pickString(record, "project_id", "projectId");
   return {
     id: pickString(record, "id") ?? "",
+    projectId: projectId || undefined,
     project: pickString(record, "project_name", "projectName", "project") ?? "—",
     startDate: formatHistoryDate(pickString(record, "start_date", "startDate")),
     endDate: formatHistoryDate(pickString(record, "end_date", "endDate")),
@@ -226,10 +238,53 @@ export function mapSubVendorHistoryApiToView(
     amount:
       amountRaw == null || amountRaw === ""
         ? undefined
-        : formatOrderAmount(
+        : formatSubVendorAmount(
             typeof amountRaw === "number" || typeof amountRaw === "string" ? amountRaw : null,
           ),
   };
+}
+
+function historyProjectKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function isInactiveProjectStatus(status: string | null | undefined): boolean {
+  const normalized = (status ?? "").trim().toUpperCase();
+  return normalized === "INACTIVE" || normalized === "CANCELLED" || normalized === "CANCELED";
+}
+
+export function mergeSubVendorHistory(
+  history: SubVendorHistory[],
+  links: SubVendorAssignedProjectApi[],
+  projects: ProjectCardView[],
+): SubVendorHistory[] {
+  const cards = new Map(projects.map((project) => [project.id, project]));
+  const seenIds = new Set(
+    history.map((row) => row.projectId).filter((id): id is string => Boolean(id)),
+  );
+  const seenNames = new Set(history.map((row) => historyProjectKey(row.project)));
+  const extras: SubVendorHistory[] = [];
+
+  for (const link of links) {
+    const name = link.name?.trim() || "Project";
+    const nameKey = historyProjectKey(name);
+    if (seenIds.has(link.project_id) || seenNames.has(nameKey)) continue;
+    seenIds.add(link.project_id);
+    seenNames.add(nameKey);
+    const card = cards.get(link.project_id);
+    const inactive = isInactiveProjectStatus(link.status) || card?.status === "Inactive";
+    extras.push({
+      id: `linked-${link.project_id}`,
+      projectId: link.project_id,
+      project: name,
+      startDate: card?.startDate?.trim() || "—",
+      endDate: card?.endDate?.trim() || "—",
+      scope: link.scope?.trim() || "—",
+      status: inactive ? "Completed" : "In Progress",
+    });
+  }
+
+  return [...history, ...extras];
 }
 
 export function mapSubVendorPaymentApiToView(
@@ -240,7 +295,7 @@ export function mapSubVendorPaymentApiToView(
   return {
     id: pickString(record, "id") ?? "",
     project: pickString(record, "project_name", "projectName", "project") ?? "—",
-    amount: formatOrderAmount(
+    amount: formatSubVendorAmount(
       typeof amountRaw === "number" || typeof amountRaw === "string" ? amountRaw : null,
     ),
     date: formatOrderDate(pickString(record, "payment_date", "paymentDate", "date")),

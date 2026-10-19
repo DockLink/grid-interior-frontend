@@ -1,6 +1,9 @@
 import { parseCalendarDate, toCalendarDateIso } from "@/lib/projects/calendar-date";
 import type { SiteOverlapBar } from "@/lib/projects/mock-execution";
-import type { ClientKeyDateCard } from "@/lib/timeline/map-client-view";
+import type {
+  ClientKeyDateCard,
+  ClientSubStageCard,
+} from "@/lib/timeline/map-client-view";
 import {
   PROJECT_END,
   PROJECT_NAME,
@@ -376,18 +379,190 @@ export function buildTimelinePrintHtml(
 </html>`;
 }
 
+function openPrintDocument(html: string): boolean {
+  const popup = window.open("", "_blank", "width=1100,height=760");
+  if (!popup) return false;
+  popup.opener = null;
+  popup.document.open();
+  popup.document.write(html);
+  popup.document.close();
+  popup.focus();
+  popup.print();
+  return true;
+}
+
 export function openTimelinePrintWindow(
   phases: GanttPhase[],
   milestones: Milestone[],
   meta: TimelinePrintMeta = {},
 ): boolean {
-  const popup = window.open("", "_blank", "width=1100,height=760");
-  if (!popup) return false;
-  popup.opener = null;
-  popup.document.open();
-  popup.document.write(buildTimelinePrintHtml(phases, milestones, meta));
-  popup.document.close();
-  popup.focus();
-  popup.print();
-  return true;
+  return openPrintDocument(buildTimelinePrintHtml(phases, milestones, meta));
+}
+
+export interface ClientTimelinePrintData {
+  projectName: string;
+  projectStartLabel: string;
+  projectEndLabel: string;
+  overallProgress: number;
+  keyDates: ClientKeyDateCard[];
+  phases: GanttPhase[];
+  siteCards: ClientSubStageCard[];
+  siteProgress: number;
+  showSiteSection: boolean;
+}
+
+function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+function clientPhaseStatus(status: GanttPhase["status"]): string {
+  if (status === "completed") return "Completed";
+  if (status === "active") return "In progress";
+  return "Upcoming";
+}
+
+function siteStatusLabel(status: ClientSubStageCard["status"]): string {
+  if (status === "complete") return "Complete";
+  if (status === "in-progress") return "In progress";
+  if (status === "blocked") return "Blocked";
+  return "Upcoming";
+}
+
+export function buildClientTimelinePrintHtml(data: ClientTimelinePrintData): string {
+  const overall = clampPercent(data.overallProgress);
+  const site = clampPercent(data.siteProgress);
+
+  const keyDateRows = data.keyDates
+    .map(
+      (item) => `<tr>
+        <td>${escapeHtml(item.label)}</td>
+        <td>${escapeHtml(item.date)}</td>
+        <td>${escapeHtml(keyDateStatusLabel(item.status))}</td>
+      </tr>`,
+    )
+    .join("");
+
+  const phaseRows = data.phases
+    .map(
+      (phase) => `<tr>
+        <td>${escapeHtml(phase.name)}</td>
+        <td>${escapeHtml(clientPhaseStatus(phase.status))}</td>
+        <td>${clampPercent(phase.progress)}%</td>
+      </tr>`,
+    )
+    .join("");
+
+  const siteRows = data.siteCards
+    .map(
+      (card) => `<tr>
+        <td>${escapeHtml(card.number)}</td>
+        <td>${escapeHtml(card.name)}${card.checkpoint ? `<div class="note">Checkpoint</div>` : ""}</td>
+        <td>${escapeHtml(card.detail || "—")}</td>
+        <td>${escapeHtml(card.dateLabel || "—")}</td>
+        <td>${escapeHtml(siteStatusLabel(card.status))}</td>
+      </tr>`,
+    )
+    .join("");
+
+  const siteSection = data.showSiteSection
+    ? `<h2>Site execution · sub-stages</h2>
+      <p class="sub">Live from project tasks · ${site}% site complete</p>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Sub-stage</th>
+            <th>Detail</th>
+            <th>Date</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${siteRows || `<tr><td colspan="5">No tasks under the Site / Execution stage yet.</td></tr>`}
+        </tbody>
+      </table>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(data.projectName)} — Client Timeline</title>
+  <style>
+    @page { size: A4 portrait; margin: 14mm; }
+    body { font-family: "Segoe UI", Helvetica, Arial, sans-serif; color: #1B2A4A; margin: 0; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    h2 { font-size: 13px; margin: 22px 0 8px; color: #0E7C86; text-transform: uppercase; letter-spacing: 0.06em; }
+    .brand { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #0E7C86; font-weight: 700; margin-bottom: 10px; }
+    .sub { font-size: 12px; color: #6B7280; margin: 0 0 4px; }
+    .meta { font-size: 12px; color: #374151; margin: 0 0 16px; }
+    .progress { border: 1px solid #E5E7EB; border-radius: 10px; padding: 12px 14px; margin-bottom: 6px; }
+    .progress-label { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+    .progress-label span:last-child { color: #0E7C86; }
+    .track { height: 10px; border-radius: 5px; background: #F3F4F6; overflow: hidden; }
+    .fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg, #1B2A4A, #0E7C86); }
+    .range { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #9CA3AF; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    th { text-align: left; padding: 7px 8px; border-bottom: 2px solid #1B2A4A; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+    td { padding: 7px 8px; border-bottom: 1px solid #E5E7EB; vertical-align: top; }
+    .note { margin-top: 2px; font-size: 10px; font-weight: 700; color: #F26D6D; }
+    .footer { margin-top: 22px; font-size: 11px; color: #6B7280; }
+  </style>
+</head>
+<body>
+  <div class="brand">GRID Interior · Client Timeline</div>
+  <h1>${escapeHtml(data.projectName)}</h1>
+  <p class="sub">${escapeHtml(data.projectStartLabel)} → ${escapeHtml(data.projectEndLabel)}</p>
+  <p class="meta">Exported ${escapeHtml(printedToday())} · Save as PDF from the print dialog</p>
+
+  <div class="progress">
+    <div class="progress-label">
+      <span>Overall Project Progress</span>
+      <span>${overall}%</span>
+    </div>
+    <div class="track"><div class="fill" style="width:${overall}%"></div></div>
+    <div class="range">
+      <span>${escapeHtml(data.projectStartLabel)}</span>
+      <span>${escapeHtml(data.projectEndLabel)}</span>
+    </div>
+  </div>
+
+  <h2>Key dates</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Key date</th>
+        <th>Date</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${keyDateRows || `<tr><td colspan="3">No key dates.</td></tr>`}
+    </tbody>
+  </table>
+
+  <h2>Project phases</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Phase</th>
+        <th>Status</th>
+        <th>Progress</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${phaseRows || `<tr><td colspan="3">No stages yet for this project.</td></tr>`}
+    </tbody>
+  </table>
+
+  ${siteSection}
+
+  <p class="footer">GRID Interior CRM · Client timeline · Confidential</p>
+</body>
+</html>`;
+}
+
+export function openClientTimelinePrintWindow(data: ClientTimelinePrintData): boolean {
+  return openPrintDocument(buildClientTimelinePrintHtml(data));
 }

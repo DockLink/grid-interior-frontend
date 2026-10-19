@@ -28,7 +28,7 @@ export function useSubVendorHistory(
     options.enabled !== false && Boolean(subVendorId) && !isAuthDisabled();
   const qKey = queryKeys.subVendors.history(subVendorId ?? "");
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, isFetched, error, refetch } = useQuery({
     queryKey: qKey,
     queryFn: async () => {
       const raw = await authApiClient<
@@ -42,7 +42,8 @@ export function useSubVendorHistory(
 
   return {
     history: (data ?? []) as SubVendorHistory[],
-    isLoading,
+    isLoading: enabled && isLoading,
+    isFetched: !enabled || isFetched,
     error: error
       ? error instanceof Error
         ? error.message

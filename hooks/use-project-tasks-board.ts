@@ -10,7 +10,7 @@ import { authApiClient } from "@/lib/api/authenticated-client";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { withTaskEndDate } from "@/lib/tasks/create-task-payload";
 import { mapMilestoneToView, mapStageToView } from "@/lib/projects/map-stages";
-import { canManageProject } from "@/lib/projects/permissions";
+import { canManageProject, canManageTasks, isActiveProjectMember } from "@/lib/projects/permissions";
 import { queryKeys } from "@/lib/query/keys";
 import { PROJECT_BOARD_TASK_OPTIONS } from "@/lib/tasks/project-task-query";
 import {
@@ -164,6 +164,11 @@ export function useProjectTasksBoard(projectId: string) {
   }, [memberUsers]);
 
   const canManage = canManageProject(effectiveRole, isViewer);
+  const canManageTasksAccess = canManageTasks(
+    effectiveRole,
+    isViewer,
+    isActiveProjectMember(members, user?.id),
+  );
   const isAdmin = effectiveRole === "admin";
 
   const hierarchyComboKey = `${stageIdsKey}|${milestoneIdsKey}`;
@@ -529,7 +534,7 @@ export function useProjectTasksBoard(projectId: string) {
     return tasks.filter((t) => t.assignees.some((a) => a.userId === currentUserView.userId));
   }, [tasks, currentUserView]);
 
-  const visibleTasks = isAdmin || canManage ? tasks : myTasks;
+  const visibleTasks = canManageTasksAccess ? tasks : myTasks;
 
   return {
     stages,
@@ -540,6 +545,7 @@ export function useProjectTasksBoard(projectId: string) {
     myTasks,
     memberUsers,
     canManage,
+    canManageTasks: canManageTasksAccess,
     isAdmin,
     effectiveRole,
     currentUser: currentUserView,

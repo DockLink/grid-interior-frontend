@@ -34,3 +34,20 @@ export async function GET(req: NextRequest, context: RouteContext) {
     data: normalizePaymentList(result.data),
   } satisfies SubVendorPaymentsListResponse);
 }
+
+export async function POST(req: NextRequest, context: RouteContext) {
+  const authorization = req.headers.get("authorization");
+  const authError = requireAuthorization(authorization);
+  if (authError) return authError;
+
+  const { id } = await context.params;
+  const body = await req.json();
+  const result = await backendFetch<SubVendorPaymentApi>(`/sub-vendors/${id}/payments`, {
+    method: "POST",
+    headers: { Authorization: authorization! },
+    body: JSON.stringify(body),
+  });
+
+  if (!result.ok) return NextResponse.json(result.error, { status: result.status });
+  return NextResponse.json(result.data, { status: result.status });
+}

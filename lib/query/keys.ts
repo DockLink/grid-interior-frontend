@@ -89,6 +89,7 @@ export const queryKeys = {
     detail: (id: string) => ["subVendors", "detail", id] as const,
     history: (id: string) => ["subVendors", "history", id] as const,
     payments: (id: string) => ["subVendors", "payments", id] as const,
+    projects: (id: string) => ["subVendors", "projects", id] as const,
     linkedProjects: (id: string) => ["subVendors", "linkedProjects", id] as const,
   },
   vendorTasks: {
@@ -124,6 +125,10 @@ export const queryKeys = {
   concept: {
     all: ["concept"] as const,
     project: (projectId: string) => ["concept", "project", projectId] as const,
+  },
+  threed: {
+    all: ["threed"] as const,
+    confirmation: (projectId: string) => ["threed", "confirmation", projectId] as const,
   },
   audit: {
     all: ["audit"] as const,

@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { NeuTabToggle } from "@/components/projects/hub/neu-tab-toggle";
+import { AddSubVendorPaymentModal } from "@/components/suppliers/add-sub-vendor-payment-modal";
 import { AddSupplierModal } from "@/components/suppliers/add-supplier-modal";
 import {
   AvailabilityDot,
@@ -16,6 +17,7 @@ import { VendorTasksTab } from "@/components/suppliers/vendor-tasks-tab";
 import { LinkSubVendorProjectModal } from "@/components/suppliers/link-sub-vendor-project-modal";
 import { useSubVendor } from "@/hooks/use-sub-vendor";
 import { useSubVendorHistory } from "@/hooks/use-sub-vendor-history";
+import { useSubVendorLinkedProjects } from "@/hooks/use-sub-vendor-linked-projects";
 import { useSubVendorPayments } from "@/hooks/use-sub-vendor-payments";
 import { useProjects } from "@/hooks/use-projects";
 import { useVendorTasks } from "@/hooks/use-vendor-tasks";
@@ -26,6 +28,7 @@ import { stageToPhase } from "@/lib/projects/map-project-hub";
 import {
   AVAILABILITY_CFG,
   HISTORY_STATUS_CFG,
+  mergeSubVendorHistory,
   PAYMENT_STATUS_CFG,
 } from "@/lib/suppliers/map-suppliers";
 import type {
@@ -35,6 +38,7 @@ import type {
   SubVendorPayment,
 } from "@/types/suppliers";
 import type { SubVendorLinkedProject } from "@/types/project-links";
+import type { ProjectCardView } from "@/types/projects";
 import { NAV_ROUTES, projectRoute } from "@/types/navigation";
 import { cn } from "@/lib/utils";
 
@@ -53,7 +57,13 @@ const PROJECT_STATUS_CFG: Record<string, { label: string; color: string; bg: str
   "at-risk": { label: "At Risk", color: "#F5A623", bg: "rgba(245,166,35,0.10)" },
 };
 
-function OverviewTab({ vendor }: { vendor: SubVendor }) {
+function OverviewTab({
+  vendor,
+  pastProjectCount,
+}: {
+  vendor: SubVendor;
+  pastProjectCount: number;
+}) {
   const specColor = CATEGORY_CFG[vendor.specialty]?.color ?? "var(--figma-teal)";
   const avCfg = AVAILABILITY_CFG[vendor.availability];
 
@@ -104,7 +114,7 @@ function OverviewTab({ vendor }: { vendor: SubVendor }) {
           <div className="my-3 h-px bg-[var(--figma-border)]" />
           <div className="flex gap-3">
             {[
-              { icon: "history", label: "Past Projects", value: String(vendor.pastProjects), color: "var(--figma-navy)" },
+              { icon: "history", label: "Past Projects", value: String(pastProjectCount), color: "var(--figma-navy)" },
               { icon: "stars", label: "Payment Record", value: vendor.paymentRecord, color: "var(--figma-success)" },
               { icon: "check_circle", label: "Availability", value: avCfg.label, color: avCfg.color },
             ].map((tile) => (
@@ -174,14 +184,17 @@ function HistoryRow({
 
 function HistoryTab({
   vendor,
-  vendorId,
-  enabled = true,
+  history,
+  isLoading,
+  error,
+  pastProjectCount,
 }: {
   vendor: SubVendor;
-  vendorId: string;
-  enabled?: boolean;
+  history: SubVendorHistory[];
+  isLoading: boolean;
+  error: string | null;
+  pastProjectCount: number;
 }) {
-  const { history, isLoading, error } = useSubVendorHistory(vendorId, { enabled });
   const avCfg = AVAILABILITY_CFG[vendor.availability];
   const showAmount = history.some((entry) => entry.amount != null);
   const colCount = showAmount ? 5 : 4;
@@ -248,9 +261,9 @@ function HistoryTab({
                       <div className="mx-auto max-w-sm text-[13px] text-[var(--figma-gray500)]">
                         Past and current projects for this sub-vendor will appear here. Overview shows{" "}
                         <strong className="font-semibold text-[var(--figma-navy)]">
-                          {vendor.pastProjects}
+                          {pastProjectCount}
                         </strong>{" "}
-                        past project{vendor.pastProjects === 1 ? "" : "s"} as a summary count.
+                        past project{pastProjectCount === 1 ? "" : "s"} as a summary count.
                       </div>
                     </td>
                   </tr>
@@ -274,7 +287,7 @@ function HistoryTab({
 }
 
 function parseAmount(amount: string): number {
-  const num = parseFloat(amount.replace(/[€\s,]/g, ""));
+  const num = parseFloat(amount.replace(/[^0-9.-]/g, ""));
   return Number.isNaN(num) ? 0 : num;
 }
 
@@ -309,13 +322,20 @@ function PaymentRow({
 function PaymentsTab({
   vendor,
   vendorId,
+  projects,
+  projectsLoading = false,
   enabled = true,
 }: {
   vendor: SubVendor;
   vendorId: string;
+  projects: ProjectCardView[];
+  projectsLoading?: boolean;
   enabled?: boolean;
 }) {
-  const { payments, isLoading, error } = useSubVendorPayments(vendorId, { enabled });
+  const { payments, isLoading, error, createPayment, isCreating } = useSubVendorPayments(vendorId, {
+    enabled,
+  });
+  const [addOpen, setAddOpen] = useState(false);
   const total = payments.reduce((sum, p) => sum + parseAmount(p.amount), 0);
 
   if (isLoading) {
@@ -336,6 +356,12 @@ function PaymentsTab({
 
   return (
     <div>
+      <div className="mb-5 flex justify-end">
+        <GradientButton onClick={() => setAddOpen(true)} className="px-4 py-2 text-[13px]">
+          <MaterialIcon name="add" outlined size={16} />
+          Add payment
+        </GradientButton>
+      </div>
       <div className="mb-5 flex gap-4">
         {[
           {
@@ -345,13 +371,13 @@ function PaymentsTab({
           },
           {
             label: "Total Paid",
-            value: `€ ${payments
+            value: `LKR ${payments
               .filter((p) => p.status === "Paid")
               .reduce((s, p) => s + parseAmount(p.amount), 0)
               .toLocaleString()}`,
             color: "var(--figma-success)",
           },
-          { label: "Total (All)", value: `€ ${total.toLocaleString()}`, color: "var(--figma-teal)" },
+          { label: "Total (All)", value: `LKR ${total.toLocaleString()}`, color: "var(--figma-teal)" },
         ].map((tile) => (
           <div key={tile.label} className="flex flex-1 flex-col gap-1.5 rounded-[14px] bg-white p-4 neu-card">
             <div
@@ -389,8 +415,9 @@ function PaymentsTab({
                       No payment records
                     </div>
                     <div className="mx-auto max-w-sm text-[13px] text-[var(--figma-gray400)]">
-                      Line-item payments for this sub-vendor will appear here. Overview rating (
-                      {vendor.paymentRecord}) is the summary field from the backend.
+                      Line-item payments for this sub-vendor will appear here. Use Add payment to
+                      record one. Overview rating ({vendor.paymentRecord}) is the summary field from
+                      the backend.
                     </div>
                   </td>
                 </tr>
@@ -408,6 +435,17 @@ function PaymentsTab({
           </table>
         </div>
       </div>
+
+      {addOpen && (
+        <AddSubVendorPaymentModal
+          subVendorName={vendor.name}
+          projects={projects}
+          projectsLoading={projectsLoading}
+          isCreating={isCreating}
+          onClose={() => setAddOpen(false)}
+          onCreate={createPayment}
+        />
+      )}
     </div>
   );
 }
@@ -489,7 +527,21 @@ export function SubVendorProfileScreen({ vendorId }: { vendorId: string }) {
   const { subVendor: vendor, isLoading, error, updateSubVendor, isUpdating } = useSubVendor(vendorId);
 
   const { tasks: vendorTasks } = useVendorTasks({ party_id: vendorId, party_kind: "subvendor" });
-  const { projects } = useProjects({ page: 1, limit: 100 });
+  const { projects, isLoading: projectsLoading } = useProjects({ page: 1, limit: 100 });
+  const liveProjectHistory =
+    !authDisabled && (tab === "overview" || tab === "history" || tab === "projects");
+  const {
+    history,
+    isLoading: historyLoading,
+    isFetched: historyFetched,
+    error: historyError,
+  } = useSubVendorHistory(vendorId, { enabled: liveProjectHistory });
+  const {
+    projects: assignedProjects,
+    isLoading: assignedLoading,
+    isFetched: assignedFetched,
+    error: assignedError,
+  } = useSubVendorLinkedProjects(vendorId, { enabled: liveProjectHistory });
   const {
     linkedFromProjectLinks,
     isLoading: projectLinksLoading,
@@ -497,6 +549,18 @@ export function SubVendorProfileScreen({ vendorId }: { vendorId: string }) {
   } = useSubVendorLinkedFromProjectLinks(vendorId, projects, {
     enabled: !authDisabled && tab === "projects",
   });
+
+  const mergedHistory = useMemo(
+    () => mergeSubVendorHistory(history, assignedProjects, projects),
+    [history, assignedProjects, projects],
+  );
+  const historyReady = historyFetched && assignedFetched;
+  const pastProjectCount = historyReady ? mergedHistory.length : (vendor?.pastProjects ?? 0);
+  const historyTabLoading = (historyLoading || assignedLoading) && mergedHistory.length === 0;
+  const historyTabError =
+    !historyLoading && !assignedLoading && mergedHistory.length === 0
+      ? (historyError ?? assignedError)
+      : null;
 
   const linkedFromTasks = useMemo(() => {
     const byId = new Map(projects.map((p) => [p.id, p]));
@@ -637,12 +701,26 @@ export function SubVendorProfileScreen({ vendorId }: { vendorId: string }) {
         <NeuTabToggle tabs={TABS} value={tab} onChange={setTab} />
       </div>
 
-      {tab === "overview" && <OverviewTab vendor={vendor} />}
+      {tab === "overview" && (
+        <OverviewTab vendor={vendor} pastProjectCount={pastProjectCount} />
+      )}
       {tab === "history" && (
-        <HistoryTab vendor={vendor} vendorId={vendorId} enabled={tab === "history"} />
+        <HistoryTab
+          vendor={vendor}
+          history={mergedHistory}
+          isLoading={historyTabLoading}
+          error={historyTabError}
+          pastProjectCount={pastProjectCount}
+        />
       )}
       {tab === "payments" && (
-        <PaymentsTab vendor={vendor} vendorId={vendorId} enabled={tab === "payments"} />
+        <PaymentsTab
+          vendor={vendor}
+          vendorId={vendorId}
+          projects={projects}
+          projectsLoading={projectsLoading}
+          enabled={tab === "payments"}
+        />
       )}
       {tab === "projects" && (
         <ProjectsTab
