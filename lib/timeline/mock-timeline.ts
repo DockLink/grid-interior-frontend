@@ -269,13 +269,6 @@ export interface ClientKeyDate {
 /** @deprecated Prefer getClientKeyDatesFromSite() from mock-execution — kept for static fallbacks. */
 export const CLIENT_KEY_DATES: ClientKeyDate[] = [
   {
-    id: "furniture",
-    label: "Furniture delivery",
-    date: "12 Nov 2026",
-    icon: "weekend",
-    status: "upcoming",
-  },
-  {
     id: "start",
     label: "Project start",
     date: "01 Oct 2026",

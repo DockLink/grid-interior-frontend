@@ -50,6 +50,7 @@ export function mapBoqQuoteApi(quote: BoqQuoteApi): SupplierQuote {
     supplierId: quote.supplier_id,
     supplierName: quote.supplier_name,
     price: Number(quote.price) || 0,
+    kind: quote.party_kind === "subvendor" ? "subvendor" : "supplier",
   };
 }
 
@@ -80,7 +81,8 @@ export function mapBoqLineItemApi(item: BoqLineItemApi): BoqLineItem {
     qty: Number(item.qty) || 0,
     rate: Number(item.rate) || 0,
     quotes: (item.quotes ?? []).map(mapBoqQuoteApi),
-    selectedSupplierId: item.selected_supplier_id,
+    selectedSupplierId:
+      item.selected_sub_vendor_id ?? item.selected_supplier_id ?? null,
     designFirmPrice: Number(item.design_firm_price) || 0,
     negotiationStatus: asNegotiation(String(item.negotiation_status)),
     paymentStatus: asPayment(String(item.payment_status)),
@@ -123,7 +125,8 @@ export function mapBoqSummary(raw: BoqSummaryResponse): BoqSummaryBucketApi[] {
 export function toQuotesPayload(quotes: SupplierQuote[]) {
   return {
     quotes: quotes.map((q) => ({
-      supplier_id: q.supplierId,
+      party_kind: q.kind === "subvendor" ? ("subvendor" as const) : ("supplier" as const),
+      party_id: q.supplierId,
       price: q.price,
     })),
   };

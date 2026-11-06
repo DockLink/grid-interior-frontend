@@ -12,19 +12,20 @@ import {
   WorkspaceBreadcrumb,
 } from "@/components/projects/hub/shared/workspace-ui";
 import { useProjectBoq } from "@/hooks/use-boq";
-import { useSubVendors } from "@/hooks/use-sub-vendors";
-import { useSuppliers } from "@/hooks/use-suppliers";
+import { useProjectLinks } from "@/hooks/use-project-links";
 import { useUploadFile } from "@/hooks/use-upload-file";
 import { handleApiError } from "@/lib/api/handle-api-error";
 import { isAuthDisabled } from "@/lib/auth/dev-bypass";
 import { isBoqHttpUrl, toQuotesPayload } from "@/lib/boq/map-boq";
 import { cn } from "@/lib/utils";
+import type { BoqCommercialUpdatePayload } from "@/types/boq";
 import { formatLKR } from "@/types/detail";
 import type {
   AdvancePaymentStatus,
   BoqCategory,
   BoqLineItem,
   NegotiationStatus,
+  QuotePartyKind,
   SupplierQuote,
 } from "@/types/execution";
 import { categorySubtotal, lineItemTotal } from "@/types/execution";
@@ -33,11 +34,25 @@ import type { ActiveProjectView } from "@/types/project-hub";
 type QuoteParty = {
   id: string;
   name: string;
-  kind: "supplier" | "subvendor";
+  kind: QuotePartyKind;
 };
 
 function quotePartyLabel(party: QuoteParty): string {
   return `${party.name} (${party.kind === "supplier" ? "Supplier" : "Sub-vendor"})`;
+}
+
+function selectionCommercialPayload(
+  partyId: string | null,
+  quotes: SupplierQuote[],
+): Pick<BoqCommercialUpdatePayload, "selected_supplier_id" | "selected_sub_vendor_id"> {
+  if (!partyId) {
+    return { selected_supplier_id: null, selected_sub_vendor_id: null };
+  }
+  const quote = quotes.find((q) => q.supplierId === partyId);
+  if (quote?.kind === "subvendor") {
+    return { selected_supplier_id: null, selected_sub_vendor_id: partyId };
+  }
+  return { selected_supplier_id: partyId, selected_sub_vendor_id: null };
 }
 
 const NEG: Record<NegotiationStatus, { label: string; color: string; bg: string }> = {
@@ -244,6 +259,7 @@ function QuoteCells({
               style={{ color: "inherit", font: "inherit" }}
             >
               {q.supplierName}
+              {q.kind === "subvendor" ? " (Sub-vendor)" : ""}
             </button>
             {editing ? (
               <MoneyInput
@@ -790,6 +806,7 @@ function CategoryBlock({
                                     supplierId: party.id,
                                     supplierName: party.name,
                                     price: row.rate,
+                                    kind: party.kind,
                                   },
                                 ];
                                 handlers.onLocalItemPatch(row.id, { quotes });
@@ -941,22 +958,25 @@ export function BoqLineTable({
     updateCommercial,
   } = useProjectBoq(project.id);
 
-  const { suppliers } = useSuppliers({ page: 1, limit: 100 });
-  const { subVendors } = useSubVendors({ page: 1, limit: 100 });
+  const { links } = useProjectLinks(project.id);
   const parties = useMemo<QuoteParty[]>(
     () => [
-      ...suppliers.map((supplier) => ({
-        id: supplier.id,
-        name: supplier.name,
-        kind: "supplier" as const,
-      })),
-      ...subVendors.map((vendor) => ({
-        id: vendor.id,
-        name: vendor.name,
-        kind: "subvendor" as const,
-      })),
+      ...links.suppliers
+        .filter((supplier) => Boolean(supplier.id && supplier.name))
+        .map((supplier) => ({
+          id: supplier.id,
+          name: supplier.name,
+          kind: "supplier" as const,
+        })),
+      ...links.subVendors
+        .filter((vendor) => Boolean(vendor.id && vendor.name))
+        .map((vendor) => ({
+          id: vendor.id,
+          name: vendor.name,
+          kind: "subvendor" as const,
+        })),
     ],
-    [suppliers, subVendors],
+    [links.suppliers, links.subVendors],
   );
   const { uploadFile } = useUploadFile();
   const authOff = isAuthDisabled();
@@ -1286,27 +1306,41 @@ export function BoqLineTable({
                     item.quotes.some((q) => q.supplierId === item.selectedSupplierId);
                   await updateCommercial(item.id, {
                     design_firm_price: item.designFirmPrice,
-                    ...(selectedStillQuoted ? {} : { selected_supplier_id: null }),
+                    ...(selectedStillQuoted
+                      ? {}
+                      : {
+                          selected_supplier_id: null,
+                          selected_sub_vendor_id: null,
+                        }),
                   });
                   await replaceQuotes(item.id, toQuotesPayload(item.quotes));
                 });
               },
               onCommercial: (itemId, patch) => {
                 patchLocalItem(cat.id, itemId, patch);
-                void withError(() =>
-                  updateCommercial(itemId, {
-                    selected_supplier_id:
-                      patch.selectedSupplierId !== undefined
-                        ? patch.selectedSupplierId
-                        : undefined,
+                void withError(() => {
+                  let quotes: SupplierQuote[] = [];
+                  for (const c of latestCatsRef.current) {
+                    const it = c.items.find((x) => x.id === itemId);
+                    if (it) {
+                      quotes = it.quotes;
+                      break;
+                    }
+                  }
+                  const selection =
+                    patch.selectedSupplierId !== undefined
+                      ? selectionCommercialPayload(patch.selectedSupplierId, quotes)
+                      : {};
+                  return updateCommercial(itemId, {
+                    ...selection,
                     design_firm_price: patch.designFirmPrice,
                     negotiation_status: patch.negotiationStatus,
                     payment_status: patch.paymentStatus,
                     contract_uploaded: patch.contractUploaded,
                     contract_file_id:
                       patch.contractFileId !== undefined ? patch.contractFileId : undefined,
-                  }),
-                );
+                  });
+                });
               },
               onQuotesChange: (itemId, quotes) => {
                 void withError(() => replaceQuotes(itemId, toQuotesPayload(quotes)));
@@ -1314,7 +1348,10 @@ export function BoqLineTable({
               onRemoveQuote: (itemId, quotes, clearSelection) => {
                 void withError(async () => {
                   if (clearSelection) {
-                    await updateCommercial(itemId, { selected_supplier_id: null });
+                    await updateCommercial(itemId, {
+                      selected_supplier_id: null,
+                      selected_sub_vendor_id: null,
+                    });
                   }
                   await replaceQuotes(itemId, toQuotesPayload(quotes));
                 });

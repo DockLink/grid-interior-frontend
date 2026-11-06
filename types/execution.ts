@@ -30,10 +30,13 @@ export interface ExecutionStage {
   icon: string;
 }
 
+export type QuotePartyKind = "supplier" | "subvendor";
+
 export interface SupplierQuote {
   supplierId: string;
   supplierName: string;
   price: number;
+  kind: QuotePartyKind;
 }
 
 export interface BoqLineItem {

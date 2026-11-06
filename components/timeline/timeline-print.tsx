@@ -11,7 +11,9 @@ import {
   type GanttPhase,
   type Milestone,
 } from "@/lib/timeline/mock-timeline";
-import { statusLabel, weekToDateLabel } from "@/lib/timeline/timeline-export";
+import { statusLabel } from "@/lib/timeline/timeline-export";
+
+const GANTT_ROWS_PER_CHUNK = 9;
 
 function escapeHtml(value: string): string {
   return value
@@ -85,14 +87,13 @@ function resolvePhaseDates(
 
 function phaseDateLabel(phase: GanttPhase, edge: "start" | "end", projectStartIso?: string): string {
   const dates = resolvePhaseDates(phase, projectStartIso);
-  if (dates) return formatIsoLabel(edge === "start" ? dates.start : dates.end);
-  const week = edge === "start" ? phase.startWeek : phase.startWeek + phase.durationWeeks;
-  return weekToDateLabel(week, projectStartIso);
+  if (!dates) return "—";
+  return formatIsoLabel(edge === "start" ? dates.start : dates.end);
 }
 
 function phaseDurationLabel(phase: GanttPhase, projectStartIso?: string): string {
   const dates = resolvePhaseDates(phase, projectStartIso);
-  if (!dates) return `${phase.durationWeeks}w`;
+  if (!dates) return "—";
   const weeks = Math.max(1, Math.round(calendarDaysBetween(dates.start, dates.end) / 7));
   return `${weeks}w`;
 }
@@ -101,6 +102,16 @@ function keyDateStatusLabel(status: ClientKeyDateCard["status"]): string {
   if (status === "completed") return "Completed";
   if (status === "active") return "In progress";
   return "Upcoming";
+}
+
+function clampBarPercent(left: number, width: number): { left: number; width: number } | null {
+  if (!Number.isFinite(left) || !Number.isFinite(width)) return null;
+  if (left >= 100 || left + width <= 0) return null;
+  const clampedLeft = Math.max(0, Math.min(100, left));
+  const right = Math.max(0, Math.min(100, left + Math.max(width, 0)));
+  const clampedWidth = Math.max(0.8, right - clampedLeft);
+  if (clampedWidth <= 0) return null;
+  return { left: clampedLeft, width: clampedWidth };
 }
 
 export interface TimelinePrintMeta {
@@ -127,6 +138,11 @@ function buildSummary(phases: GanttPhase[], milestones: Milestone[]) {
   ];
 }
 
+type GanttBodyRow =
+  | { kind: "section"; label: string }
+  | { kind: "phase"; html: string }
+  | { kind: "sub"; html: string };
+
 function buildGanttHtml(
   phases: GanttPhase[],
   overlapBars: SiteOverlapBar[],
@@ -141,7 +157,7 @@ function buildGanttHtml(
   const todayIso = toCalendarDateIso(new Date());
   const todayDays = calendarDaysBetween(chartStartIso, todayIso);
   const showToday = todayDays >= 0 && todayDays <= axisSpanDays;
-  const todayPct = (todayDays / axisSpanDays) * 100;
+  const todayPct = Math.max(0, Math.min(100, (todayDays / axisSpanDays) * 100));
   const todayMark = showToday ? `<div class="today" style="left:${todayPct}%"></div>` : "";
 
   const monthCells = Array.from({ length: monthCount }, (_, index) => {
@@ -149,66 +165,138 @@ function buildGanttHtml(
     return `<div class="gantt-month">${escapeHtml(label)}</div>`;
   }).join("");
 
-  const phaseRows = phases
-    .map((phase) => {
-      const dates = resolvePhaseDates(phase, projectStartIso);
-      const color = safeColor(phase.color, "#0E7C86");
-      const statusText =
-        phase.status === "active" ? `${phase.progress}% done` : statusLabel(phase.status);
-      let bar = `<span class="unscheduled">Unscheduled</span>`;
-      if (dates) {
-        const startOffset = calendarDaysBetween(chartStartIso, dates.start);
-        const lengthDays = Math.max(1, calendarDaysBetween(dates.start, dates.end));
-        const left = (startOffset / axisSpanDays) * 100;
-        const width = (lengthDays / axisSpanDays) * 100;
+  const headRow = `<tr class="gantt-head">
+    <th class="gantt-label">Phase</th>
+    <th class="gantt-track gantt-months-cell">
+      <div class="gantt-months">${monthCells}${todayMark}</div>
+    </th>
+  </tr>`;
+
+  const rows: GanttBodyRow[] = [];
+
+  for (const phase of phases) {
+    const dates = resolvePhaseDates(phase, projectStartIso);
+    const color = safeColor(phase.color, "#0E7C86");
+    const statusText =
+      phase.status === "active" ? `${phase.progress}% done` : statusLabel(phase.status);
+    let bar = `<span class="unscheduled">Unscheduled</span>`;
+    if (dates) {
+      const startOffset = calendarDaysBetween(chartStartIso, dates.start);
+      const lengthDays = Math.max(1, calendarDaysBetween(dates.start, dates.end));
+      const clamped = clampBarPercent(
+        (startOffset / axisSpanDays) * 100,
+        (lengthDays / axisSpanDays) * 100,
+      );
+      if (clamped) {
         const fill =
           phase.progress > 0 && phase.status !== "completed"
             ? `<span class="bar-fill" style="width:${Math.min(100, Math.max(0, phase.progress))}%"></span>`
             : "";
         const tone =
-          phase.status === "completed" ? "bar-complete" : phase.status === "active" ? "bar-active" : "bar-upcoming";
-        bar = `<div class="bar ${tone}" style="left:${left}%;width:${width}%;background:${color}">${fill}<span>${escapeHtml(phase.name)}</span></div>`;
+          phase.status === "completed"
+            ? "bar-complete"
+            : phase.status === "active"
+              ? "bar-active"
+              : "bar-upcoming";
+        bar = `<div class="bar ${tone}" style="left:${clamped.left}%;width:${clamped.width}%;background:${color}">${fill}<span>${escapeHtml(phase.name)}</span></div>`;
       }
-      return `<div class="gantt-row">
-        <div class="gantt-label">
+    }
+    rows.push({
+      kind: "phase",
+      html: `<tr class="gantt-row">
+        <td class="gantt-label">
           <div class="phase-name"><span class="swatch" style="background:${color}"></span>${escapeHtml(phase.name)}</div>
           <div class="phase-status">${escapeHtml(statusText)} · ${escapeHtml(phase.lead.name)}</div>
-        </div>
-        <div class="gantt-track">${todayMark}${bar}</div>
-      </div>`;
-    })
-    .join("");
+        </td>
+        <td class="gantt-track">${todayMark}${bar}</td>
+      </tr>`,
+    });
+  }
 
-  const startShiftDays = projectStartIso ? calendarDaysBetween(chartStartIso, projectStartIso) : 0;
-  const subRows = overlapBars
-    .map((bar) => {
+  if (overlapBars.length) {
+    rows.push({ kind: "section", label: "Execution sub-stages" });
+    const startShiftDays = projectStartIso
+      ? calendarDaysBetween(chartStartIso, projectStartIso)
+      : 0;
+    for (const bar of overlapBars) {
       const color = bar.status === "blocked" ? "#FCA5A5" : safeColor(bar.color, "#1B2A4A");
-      const left = ((bar.startWeek * 7 + startShiftDays) / axisSpanDays) * 100;
-      const width = ((bar.durationWeeks * 7) / axisSpanDays) * 100;
-      const opacity = bar.status === "upcoming" ? 0.35 : bar.status === "complete" ? 0.55 : 0.9;
-      return `<div class="gantt-row gantt-sub">
-        <div class="gantt-label">
-          <div class="phase-name">${escapeHtml(bar.id)} ${escapeHtml(bar.name)}</div>
-          <div class="phase-status">${escapeHtml(statusLabel(bar.status))}</div>
-        </div>
-        <div class="gantt-track">${todayMark}<div class="bar bar-sub" style="left:${left}%;width:${Math.max(width, 0.8)}%;background:${color};opacity:${opacity}"></div></div>
-      </div>`;
+      const clamped = clampBarPercent(
+        ((bar.startWeek * 7 + startShiftDays) / axisSpanDays) * 100,
+        (bar.durationWeeks * 7) / axisSpanDays * 100,
+      );
+      const opacity =
+        bar.status === "upcoming" ? 0.35 : bar.status === "complete" ? 0.55 : 0.9;
+      const barHtml = clamped
+        ? `<div class="bar bar-sub" style="left:${clamped.left}%;width:${clamped.width}%;background:${color};opacity:${opacity}"></div>`
+        : `<span class="unscheduled">Outside chart range</span>`;
+      rows.push({
+        kind: "sub",
+        html: `<tr class="gantt-row gantt-sub">
+          <td class="gantt-label">
+            <div class="phase-name">${escapeHtml(bar.id)} ${escapeHtml(bar.name)}</div>
+            <div class="phase-status">${escapeHtml(statusLabel(bar.status))}</div>
+          </td>
+          <td class="gantt-track">${todayMark}${barHtml}</td>
+        </tr>`,
+      });
+    }
+  }
+
+  if (!rows.length) {
+    return `<table class="gantt">
+      <thead>${headRow}</thead>
+      <tbody><tr><td class="gantt-empty" colspan="2">No stages to chart.</td></tr></tbody>
+    </table>`;
+  }
+
+  const chunks: GanttBodyRow[][] = [];
+  let current: GanttBodyRow[] = [];
+  let bodyCount = 0;
+
+  for (const row of rows) {
+    if (row.kind === "section" && current.length) {
+      chunks.push(current);
+      current = [];
+      bodyCount = 0;
+    } else if (row.kind !== "section" && bodyCount >= GANTT_ROWS_PER_CHUNK && current.length) {
+      chunks.push(current);
+      current = [];
+      bodyCount = 0;
+    }
+    current.push(row);
+    if (row.kind !== "section") bodyCount += 1;
+  }
+  if (current.length) chunks.push(current);
+
+  return chunks
+    .map((chunk, index) => {
+      const body = chunk
+        .map((row) => {
+          if (row.kind === "section") {
+            return `<tr class="gantt-section-row"><td colspan="2" class="gantt-section">${escapeHtml(row.label)}</td></tr>`;
+          }
+          return row.html;
+        })
+        .join("");
+      const chunkClass = index < chunks.length - 1 ? "gantt gantt-chunk" : "gantt";
+      return `<table class="${chunkClass}">
+        <thead>${headRow}</thead>
+        <tbody>${body}</tbody>
+      </table>`;
     })
     .join("");
-
-  const subSection = overlapBars.length
-    ? `<div class="gantt-section">Execution sub-stages</div>${subRows}`
-    : "";
-
-  return `<div class="gantt">
-    <div class="gantt-row gantt-head">
-      <div class="gantt-label">Phase</div>
-      <div class="gantt-track gantt-months">${monthCells}${todayMark}</div>
-    </div>
-    ${phaseRows || `<div class="gantt-empty">No stages to chart.</div>`}
-    ${subSection}
-  </div>`;
 }
+
+const SHARED_PRINT_CSS = `
+  html, body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  h2 { break-after: avoid; page-break-after: avoid; }
+`;
 
 export function buildTimelinePrintHtml(
   phases: GanttPhase[],
@@ -277,6 +365,7 @@ export function buildTimelinePrintHtml(
   <title>${escapeHtml(projectName)} — Project Timeline</title>
   <style>
     @page { size: A4 landscape; margin: 12mm; }
+    ${SHARED_PRINT_CSS}
     body { font-family: "Segoe UI", Helvetica, Arial, sans-serif; color: #1B2A4A; margin: 0; }
     h1 { font-size: 20px; margin: 0 0 4px; }
     h2 { font-size: 13px; margin: 22px 0 8px; color: #0E7C86; text-transform: uppercase; letter-spacing: 0.06em; }
@@ -287,21 +376,24 @@ export function buildTimelinePrintHtml(
     .stat { flex: 1; border: 1px solid #E5E7EB; border-radius: 8px; padding: 8px 10px; }
     .stat-value { font-size: 14px; font-weight: 800; }
     .stat-label { font-size: 10px; color: #6B7280; margin-top: 2px; }
-    table { width: 100%; border-collapse: collapse; font-size: 11px; }
-    th { text-align: left; padding: 7px 8px; border-bottom: 2px solid #1B2A4A; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
-    td { padding: 7px 8px; border-bottom: 1px solid #E5E7EB; vertical-align: top; }
-    .gantt { border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; }
-    .gantt-row { display: flex; border-bottom: 1px solid #E5E7EB; min-height: 34px; page-break-inside: avoid; }
-    .gantt-head { background: #F9FAFB; min-height: 28px; }
-    .gantt-label { width: 190px; flex-shrink: 0; padding: 6px 10px; border-right: 1px solid #E5E7EB; font-size: 10px; }
-    .gantt-head .gantt-label { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6B7280; }
+    table.data { width: 100%; border-collapse: collapse; font-size: 11px; }
+    table.data th { text-align: left; padding: 7px 8px; border-bottom: 2px solid #1B2A4A; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+    table.data td { padding: 7px 8px; border-bottom: 1px solid #E5E7EB; vertical-align: top; }
+    .section-page { break-before: page; page-break-before: always; }
+    .gantt { width: 100%; border-collapse: collapse; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 10px; margin-bottom: 10px; }
+    .gantt-chunk { break-after: page; page-break-after: always; }
+    .gantt-row, .gantt-head { break-inside: avoid; page-break-inside: avoid; }
+    .gantt-label { width: 190px; padding: 6px 10px; border-right: 1px solid #E5E7EB; border-bottom: 1px solid #E5E7EB; vertical-align: middle; font-size: 10px; }
+    .gantt-head .gantt-label { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6B7280; background: #F9FAFB; text-align: left; }
+    .gantt-head .gantt-track { background: #F9FAFB; }
     .phase-name { font-weight: 700; font-size: 11px; display: flex; align-items: center; gap: 6px; }
     .phase-status { color: #6B7280; margin-top: 2px; text-transform: capitalize; }
-    .swatch { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .gantt-track { flex: 1; position: relative; min-height: 34px; }
-    .gantt-months { display: flex; min-height: 28px; }
+    .swatch { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+    .gantt-track { position: relative; min-height: 34px; padding: 0; border-bottom: 1px solid #E5E7EB; vertical-align: middle; }
+    .gantt-months-cell { padding: 0; }
+    .gantt-months { display: flex; min-height: 28px; position: relative; }
     .gantt-month { flex: 1; border-right: 1px solid #E5E7EB; padding: 6px 6px; font-size: 9px; font-weight: 700; color: #6B7280; }
-    .bar { position: absolute; top: 7px; height: 18px; border-radius: 9px; overflow: hidden; color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; }
+    .bar { position: absolute; top: 7px; height: 18px; border-radius: 9px; color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; max-width: 100%; }
     .bar span { position: relative; z-index: 1; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .bar-upcoming { color: #1B2A4A; opacity: 0.85; }
     .bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255,255,255,0.35); }
@@ -323,7 +415,7 @@ export function buildTimelinePrintHtml(
   <div class="stats">${summary}</div>
 
   <h2>Key dates</h2>
-  <table>
+  <table class="data">
     <thead>
       <tr>
         <th>Key date</th>
@@ -339,8 +431,8 @@ export function buildTimelinePrintHtml(
   <h2>Timeline</h2>
   ${buildGanttHtml(phases, overlapBars, startIso, chartStartIso, chartEndIso)}
 
-  <h2>Phases</h2>
-  <table>
+  <h2 class="section-page">Phases</h2>
+  <table class="data">
     <thead>
       <tr>
         <th>Phase</th>
@@ -358,8 +450,8 @@ export function buildTimelinePrintHtml(
     </tbody>
   </table>
 
-  <h2>Milestones</h2>
-  <table>
+  <h2 class="section-page">Milestones</h2>
+  <table class="data">
     <thead>
       <tr>
         <th>Milestone</th>
@@ -387,7 +479,36 @@ function openPrintDocument(html: string): boolean {
   popup.document.write(html);
   popup.document.close();
   popup.focus();
-  popup.print();
+
+  let printed = false;
+  const triggerPrint = () => {
+    if (printed || popup.closed) return;
+    printed = true;
+    try {
+      popup.print();
+    } catch {
+      // Popup may already be closed by the user.
+    }
+  };
+
+  const schedulePrint = () => {
+    const fonts = popup.document.fonts;
+    const afterLayout = () => {
+      requestAnimationFrame(() => requestAnimationFrame(triggerPrint));
+    };
+    if (fonts?.ready) {
+      void fonts.ready.then(afterLayout).catch(afterLayout);
+    } else {
+      afterLayout();
+    }
+  };
+
+  if (popup.document.readyState === "complete") {
+    schedulePrint();
+  } else {
+    popup.addEventListener("load", schedulePrint, { once: true });
+  }
+  window.setTimeout(triggerPrint, 2000);
   return true;
 }
 
@@ -468,7 +589,7 @@ export function buildClientTimelinePrintHtml(data: ClientTimelinePrintData): str
   const siteSection = data.showSiteSection
     ? `<h2>Site execution · sub-stages</h2>
       <p class="sub">Live from project tasks · ${site}% site complete</p>
-      <table>
+      <table class="data">
         <thead>
           <tr>
             <th>#</th>
@@ -491,6 +612,7 @@ export function buildClientTimelinePrintHtml(data: ClientTimelinePrintData): str
   <title>${escapeHtml(data.projectName)} — Client Timeline</title>
   <style>
     @page { size: A4 portrait; margin: 14mm; }
+    ${SHARED_PRINT_CSS}
     body { font-family: "Segoe UI", Helvetica, Arial, sans-serif; color: #1B2A4A; margin: 0; }
     h1 { font-size: 22px; margin: 0 0 4px; }
     h2 { font-size: 13px; margin: 22px 0 8px; color: #0E7C86; text-transform: uppercase; letter-spacing: 0.06em; }
@@ -503,9 +625,9 @@ export function buildClientTimelinePrintHtml(data: ClientTimelinePrintData): str
     .track { height: 10px; border-radius: 5px; background: #F3F4F6; overflow: hidden; }
     .fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg, #1B2A4A, #0E7C86); }
     .range { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #9CA3AF; }
-    table { width: 100%; border-collapse: collapse; font-size: 11px; }
-    th { text-align: left; padding: 7px 8px; border-bottom: 2px solid #1B2A4A; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
-    td { padding: 7px 8px; border-bottom: 1px solid #E5E7EB; vertical-align: top; }
+    table.data { width: 100%; border-collapse: collapse; font-size: 11px; }
+    table.data th { text-align: left; padding: 7px 8px; border-bottom: 2px solid #1B2A4A; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+    table.data td { padding: 7px 8px; border-bottom: 1px solid #E5E7EB; vertical-align: top; }
     .note { margin-top: 2px; font-size: 10px; font-weight: 700; color: #F26D6D; }
     .footer { margin-top: 22px; font-size: 11px; color: #6B7280; }
   </style>
@@ -529,7 +651,7 @@ export function buildClientTimelinePrintHtml(data: ClientTimelinePrintData): str
   </div>
 
   <h2>Key dates</h2>
-  <table>
+  <table class="data">
     <thead>
       <tr>
         <th>Key date</th>
@@ -543,7 +665,7 @@ export function buildClientTimelinePrintHtml(data: ClientTimelinePrintData): str
   </table>
 
   <h2>Project phases</h2>
-  <table>
+  <table class="data">
     <thead>
       <tr>
         <th>Phase</th>

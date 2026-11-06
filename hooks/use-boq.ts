@@ -105,6 +105,7 @@ export function useProjectBoq(
           contract_file_id: null,
           contract_url: null,
           selected_supplier_id: null,
+          selected_sub_vendor_id: null,
           sort_order: payload.sort_order ?? 0,
           quotes: [],
         };

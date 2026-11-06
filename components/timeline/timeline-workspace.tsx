@@ -673,7 +673,7 @@ function GanttChart() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateColumns: "repeat(2, 1fr)",
           gap: 14,
           marginBottom: 20,
         }}
@@ -1548,6 +1548,7 @@ function ClientView() {
   const overallProgress = authDisabled ? 38 : averagePhaseProgress(phases);
   const startLabel = authDisabled ? PROJECT_START : live.projectStartLabel;
   const endLabel = authDisabled ? PROJECT_END : live.projectEndLabel;
+  const projectStartIso = authDisabled ? "2026-05-15" : live.projectStartIso;
   const showSiteSection = authDisabled || Boolean(liveSiteStage);
 
   return (
@@ -1586,6 +1587,7 @@ function ClientView() {
               downloadTimelinePhasesExcel(
                 phases,
                 `${slugForFilename(projectName)}-client-timeline.csv`,
+                projectStartIso,
               );
               toast.success("Excel file downloaded");
             }}
@@ -1620,7 +1622,7 @@ function ClientView() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateColumns: "repeat(2, 1fr)",
           gap: 14,
           marginBottom: 20,
         }}

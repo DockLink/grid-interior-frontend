@@ -33,6 +33,19 @@ function parseProjectStart(projectStartIso?: string): Date {
   return new Date("2026-05-15");
 }
 
+function toIsoDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function weekToIsoDate(startWeek: number, projectStartIso?: string): string {
+  const d = parseProjectStart(projectStartIso);
+  d.setDate(d.getDate() + Math.round(startWeek) * 7);
+  return toIsoDate(d);
+}
+
 export function weekToDateLabel(startWeek: number, projectStartIso?: string): string {
   const d = parseProjectStart(projectStartIso);
   d.setDate(d.getDate() + Math.round(startWeek) * 7);
@@ -55,6 +68,49 @@ export function slugForFilename(value: string): string {
   return slug || "export";
 }
 
+function isoOrEmpty(value?: string): string {
+  if (!value) return "";
+  const slice = value.slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(slice) ? slice : "";
+}
+
+function addWeeksToIso(iso: string, weeks: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  d.setDate(d.getDate() + Math.max(1, weeks) * 7);
+  return toIsoDate(d);
+}
+
+function resolveExportPhaseDates(
+  phase: GanttPhase,
+  projectStartIso?: string,
+): { start: string; end: string } | null {
+  if (phase.scheduled === false && (!phase.startDate || !phase.endDate)) return null;
+
+  const start =
+    isoOrEmpty(phase.startDate) ||
+    (projectStartIso != null || phase.startWeek != null
+      ? weekToIsoDate(phase.startWeek, projectStartIso)
+      : "");
+
+  let end =
+    isoOrEmpty(phase.endDate) ||
+    (start ? addWeeksToIso(start, Math.max(1, phase.durationWeeks)) : "");
+
+  if (!start || !end) return null;
+  if (end <= start) {
+    const d = new Date(`${start}T00:00:00`);
+    d.setDate(d.getDate() + 1);
+    end = toIsoDate(d);
+  }
+  return { start, end };
+}
+
+/** Pad ISO dates so Excel column auto-width is less likely to show ########. */
+function excelDateCell(iso: string): string {
+  return `${iso}          `;
+}
+
 export function downloadTimelinePhasesExcel(
   phases: GanttPhase[],
   filename: string,
@@ -70,16 +126,19 @@ export function downloadTimelinePhasesExcel(
     "Lead",
     "Milestone",
   ];
-  const rows = phases.map((phase) => [
-    phase.name,
-    statusLabel(phase.status),
-    weekToDateLabel(phase.startWeek, projectStartIso),
-    weekToDateLabel(phase.startWeek + phase.durationWeeks, projectStartIso),
-    String(phase.durationWeeks),
-    String(phase.progress),
-    phase.lead.name,
-    phase.milestone ?? "",
-  ]);
+  const rows = phases.map((phase) => {
+    const dates = resolveExportPhaseDates(phase, projectStartIso);
+    return [
+      phase.name,
+      statusLabel(phase.status),
+      dates ? excelDateCell(dates.start) : "",
+      dates ? excelDateCell(dates.end) : "",
+      dates ? String(phase.durationWeeks) : "",
+      String(phase.progress),
+      phase.lead.name,
+      phase.milestone ?? "",
+    ];
+  });
   downloadCsv(header, rows, filename);
 }
 
