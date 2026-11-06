@@ -1,6 +1,7 @@
 import type { AdvancePaymentStatus, NegotiationStatus } from "@/types/execution";
 
 export interface BoqQuoteApi {
+  party_kind?: "supplier" | "subvendor";
   supplier_id: string;
   supplier_name: string;
   price: number;
@@ -29,6 +30,7 @@ export interface BoqLineItemApi {
   /** Resolved signed URL for the contract (response). */
   contract_url?: string | null;
   selected_supplier_id: string | null;
+  selected_sub_vendor_id?: string | null;
   sort_order: number;
   quotes: BoqQuoteApi[];
 }
@@ -93,11 +95,16 @@ export interface BoqLineItemUpdatePayload {
 }
 
 export interface BoqQuotesReplacePayload {
-  quotes: Array<{ supplier_id: string; price: number }>;
+  quotes: Array<{
+    party_kind: "supplier" | "subvendor";
+    party_id: string;
+    price: number;
+  }>;
 }
 
 export interface BoqCommercialUpdatePayload {
   selected_supplier_id?: string | null;
+  selected_sub_vendor_id?: string | null;
   design_firm_price?: number;
   negotiation_status?: NegotiationStatus;
   payment_status?: AdvancePaymentStatus;

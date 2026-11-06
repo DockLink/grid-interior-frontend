@@ -40,6 +40,21 @@ function formatContactDate(iso: string | null | undefined): string {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function formatInvoicedAsLkr(raw: string | null | undefined): string {
+  if (!raw?.trim()) return "LKR 0";
+  const trimmed = raw.trim();
+  if (/^LKR\b/i.test(trimmed)) return trimmed.replace(/^LKR\s*/i, "LKR ");
+  const withoutSymbol = trimmed.replace(/^[€$£]\s*/, "").replace(/\s*EUR\b/i, "").trim();
+  const asNumber = Number(withoutSymbol.replace(/,/g, ""));
+  if (Number.isFinite(asNumber)) {
+    return `LKR ${asNumber.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }
+  return `LKR ${withoutSymbol}`;
+}
+
 export function mapClientApiToView(raw: ClientApi | Record<string, unknown>): Client {
   const api = raw as ClientApi;
   const id = pickString(raw as Record<string, unknown>, "id") ?? "";
@@ -71,8 +86,9 @@ export function mapClientApiToView(raw: ClientApi | Record<string, unknown>): Cl
       Number((raw as Record<string, unknown>).active_projects ??
         (raw as Record<string, unknown>).activeProjects ??
         0) || 0,
-    totalInvoiced:
-      pickString(raw as Record<string, unknown>, "total_invoiced", "totalInvoiced") ?? "€ 0",
+    totalInvoiced: formatInvoicedAsLkr(
+      pickString(raw as Record<string, unknown>, "total_invoiced", "totalInvoiced"),
+    ),
     lastContact: formatContactDate(
       pickString(raw as Record<string, unknown>, "last_contact", "lastContact"),
     ),

@@ -1,14 +1,12 @@
 "use client";
 
-import { ArrowRight, FileText, ImageIcon, Layers, Table2 } from "lucide-react";
-import Link from "next/link";
+import { FileText, ImageIcon, Layers, Table2 } from "lucide-react";
 
 import {
   FILE_ACTIVITY_DATA,
   fileExtColor,
   type FileActivityItem,
 } from "@/components/dashboard/studio/demo-data";
-import { NAV_ROUTES } from "@/types/navigation";
 
 function FileIcon({ ext }: { ext: string }) {
   const color = fileExtColor(ext);
@@ -86,15 +84,6 @@ export function FileActivityPanel({
           })}
         </div>
       )}
-      <div className="border-t border-[#E4E9F0] px-5 py-3">
-        <Link
-          href={NAV_ROUTES.files}
-          className="inline-flex items-center gap-1 text-[12px] font-medium text-[#0FA8A0] transition-colors hover:text-[#0B9990]"
-        >
-          <ArrowRight className="size-3" />
-          View all files
-        </Link>
-      </div>
     </div>
   );
 }

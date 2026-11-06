@@ -12,7 +12,7 @@ function q(
   supplierName: string,
   price: number,
 ): SupplierQuote {
-  return { supplierId, supplierName, price };
+  return { supplierId, supplierName, price, kind: "supplier" };
 }
 
 function item(
@@ -974,12 +974,6 @@ const KEY_DATE_STAGE_MAP: {
   icon: string;
   stageId: string;
 }[] = [
-  {
-    id: "furniture",
-    label: "Furniture delivery",
-    icon: "weekend",
-    stageId: "6.9",
-  },
   { id: "start", label: "Project start", icon: "flag", stageId: "6.1" },
   {
     id: "handover",

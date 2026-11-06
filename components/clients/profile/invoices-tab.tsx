@@ -8,8 +8,8 @@ import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { useInvoices } from "@/hooks/use-invoices";
 import type { Client, InvoiceStatus } from "@/types/clients";
 
-function formatEuro(amount: number): string {
-  return `€${amount.toLocaleString(undefined, {
+function formatLkr(amount: number): string {
+  return `LKR ${amount.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -76,7 +76,7 @@ function UploadInvoiceModal({
         </div>
 
         <div className="mb-3 flex flex-col gap-1.5">
-          <label className="text-[13px] font-medium text-[var(--figma-navy)]">Amount (€)</label>
+          <label className="text-[13px] font-medium text-[var(--figma-navy)]">Amount (LKR)</label>
           <input
             type="number"
             min="0.01"
@@ -160,19 +160,19 @@ export function InvoicesTab({ client }: { client: Client }) {
         {[
           {
             label: "Total Invoiced",
-            val: isLoading ? "…" : formatEuro(summary.total),
+            val: isLoading ? "…" : formatLkr(summary.total),
             icon: "receipt_long",
             color: "var(--figma-navy)",
           },
           {
             label: "Amount Received",
-            val: isLoading ? "…" : formatEuro(summary.received),
+            val: isLoading ? "…" : formatLkr(summary.received),
             icon: "check_circle",
             color: "#3FA66B",
           },
           {
             label: "Outstanding",
-            val: isLoading ? "…" : formatEuro(summary.outstanding),
+            val: isLoading ? "…" : formatLkr(summary.outstanding),
             icon: "pending",
             color: "#D97706",
           },
@@ -238,7 +238,7 @@ export function InvoicesTab({ client }: { client: Client }) {
                 <div className="flex items-center gap-4">
                   <div className="text-right">
                     <div className="text-sm font-bold text-[var(--figma-navy)]">
-                      {formatEuro(invoice.amount)}
+                      {formatLkr(invoice.amount)}
                     </div>
                     <div className="text-xs font-medium text-gray-500">{invoice.status}</div>
                   </div>

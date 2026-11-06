@@ -1,5 +1,9 @@
 import { calendarDateFromApi, toCalendarDateIso } from "@/lib/projects/calendar-date";
 import type { GanttPhase, Milestone } from "@/lib/timeline/mock-timeline";
+import {
+  findHandoverNamedMilestone,
+  resolveHandoverDateLabel,
+} from "@/lib/timeline/resolve-handover-key-date";
 import type { SiteSubStageStatus } from "@/types/execution";
 import type { Task, TaskableStatus } from "@/types/tasks";
 
@@ -23,8 +27,6 @@ export interface ClientSubStageCard {
   checkpoint: boolean;
 }
 
-const FURNITURE_RE = /furniture|procurement|ff\s*&?\s*e|delivery/i;
-const HANDOVER_RE = /handover|hand[\s-]?over|completion|close[\s-]?out/i;
 const SITE_STAGE_RE = /site|execution/i;
 
 function formatLabel(iso: string): string {
@@ -75,12 +77,7 @@ export function mapClientKeyDates(args: {
   now?: Date;
 }): ClientKeyDateCard[] {
   const now = args.now ?? new Date();
-  const furniture =
-    args.milestones.find((m) => FURNITURE_RE.test(m.name)) ??
-    args.milestones.find((m) => m.status === "upcoming" || m.status === "overdue") ??
-    args.milestones[0];
-  const handoverNamed = [...args.milestones].reverse().find((m) => HANDOVER_RE.test(m.name));
-  const handover = handoverNamed ?? args.milestones[args.milestones.length - 1];
+  const handover = findHandoverNamedMilestone(args.milestones);
 
   return [
     {
@@ -91,16 +88,9 @@ export function mapClientKeyDates(args: {
       status: keyDateStatusFromIso(args.projectStartIso, now),
     },
     {
-      id: "furniture",
-      label: "Furniture delivery",
-      date: furniture?.date ?? "—",
-      icon: "weekend",
-      status: keyDateStatusFromMilestone(furniture, args.projectStartIso, now),
-    },
-    {
       id: "handover",
       label: "Handover",
-      date: handover?.date ?? args.projectEndLabel,
+      date: resolveHandoverDateLabel(args.milestones, args.projectEndLabel),
       icon: "handshake",
       status: keyDateStatusFromMilestone(
         handover,
