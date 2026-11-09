@@ -939,9 +939,87 @@ export function cycleSiteSubstageStatus(id: string): void {
   emitSiteSubstages();
 }
 
-export function formatSiteDayDate(startDay: number): string {
-  const base = new Date(`${SITE_EXECUTION_START_ISO}T00:00:00`);
-  base.setDate(base.getDate() + startDay - 1);
+/** Apply explicit status / day fields on the in-memory mock store (auth-off). */
+export function patchSiteSubstage(
+  id: string,
+  payload: {
+    status?: SiteSubStageStatus;
+    start_day?: number;
+    duration_days?: number;
+  },
+): SiteSubStage | null {
+  const current = siteSubstages.find((s) => s.id === id);
+  if (!current) return null;
+
+  if (
+    payload.status &&
+    (payload.status === "complete" || payload.status === "in-progress") &&
+    !canMarkComplete(current, siteSubstages)
+  ) {
+    return current;
+  }
+
+  siteSubstages = resolveSiteSubstages(
+    siteSubstages.map((s) => {
+      if (s.id !== id) return s;
+      return {
+        ...s,
+        status: payload.status ?? s.status,
+        startDay:
+          payload.start_day !== undefined
+            ? Math.max(1, Math.round(payload.start_day))
+            : s.startDay,
+        durationDays:
+          payload.duration_days !== undefined
+            ? Math.max(1, Math.round(payload.duration_days))
+            : s.durationDays,
+      };
+    }),
+  );
+  emitSiteSubstages();
+  return siteSubstages.find((s) => s.id === id) ?? null;
+}
+
+/** Calendar ISO (YYYY-MM-DD) for site day N relative to anchor day 1. */
+export function siteDayToIso(
+  startDay: number,
+  anchorIso: string = SITE_EXECUTION_START_ISO,
+): string {
+  const day = Math.max(1, Math.round(startDay));
+  let iso = (anchorIso || SITE_EXECUTION_START_ISO).slice(0, 10);
+  let base = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(base.getTime())) {
+    iso = SITE_EXECUTION_START_ISO;
+    base = new Date(`${iso}T00:00:00`);
+  }
+  base.setDate(base.getDate() + day - 1);
+  const y = base.getFullYear();
+  const m = String(base.getMonth() + 1).padStart(2, "0");
+  const d = String(base.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** Convert a calendar ISO date to site day offset (1-based) from anchor. */
+export function isoToSiteDay(
+  iso: string,
+  anchorIso: string = SITE_EXECUTION_START_ISO,
+): number {
+  const dayIso = iso.slice(0, 10);
+  const anchor = (anchorIso || SITE_EXECUTION_START_ISO).slice(0, 10);
+  const start = new Date(`${anchor}T00:00:00`);
+  const end = new Date(`${dayIso}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
+  const diff = Math.round((end.getTime() - start.getTime()) / 86400000);
+  return Math.max(1, diff + 1);
+}
+
+export function formatSiteDayDate(
+  startDay: number,
+  anchorIso: string = SITE_EXECUTION_START_ISO,
+): string {
+  const iso = siteDayToIso(startDay, anchorIso);
+  const base = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(base.getTime())) return "—";
   return base.toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
@@ -1041,12 +1119,38 @@ const OVERLAP_COLORS = [
 /** Map site substages onto the internal Gantt week axis for Timeline. */
 export function getSiteOverlapBarsFromSite(
   stages: SiteSubStage[] = getSiteSubstagesSnapshot(),
+  options?: { ganttStartWeek?: number },
 ): SiteOverlapBar[] {
+  const ganttStartWeek =
+    options?.ganttStartWeek ?? SITE_EXECUTION_GANTT_START_WEEK;
   return stages.map((s, i) => ({
     id: s.number,
     name: s.name,
-    startWeek: SITE_EXECUTION_GANTT_START_WEEK + (s.startDay - 1) / 7,
+    startWeek: ganttStartWeek + (s.startDay - 1) / 7,
     durationWeeks: Math.max(s.durationDays / 7, 0.35),
+    color: OVERLAP_COLORS[i % OVERLAP_COLORS.length],
+    status: s.status,
+  }));
+}
+
+/** Calendar-day placements relative to a site-execution anchor date (day 1). */
+export interface SiteOverlapPlacement {
+  id: string;
+  name: string;
+  startOffsetDays: number;
+  durationDays: number;
+  color: string;
+  status: SiteSubStageStatus;
+}
+
+export function getSiteOverlapPlacements(
+  stages: SiteSubStage[] = getSiteSubstagesSnapshot(),
+): SiteOverlapPlacement[] {
+  return stages.map((s, i) => ({
+    id: s.number,
+    name: s.name,
+    startOffsetDays: Math.max(0, s.startDay - 1),
+    durationDays: Math.max(1, s.durationDays),
     color: OVERLAP_COLORS[i % OVERLAP_COLORS.length],
     status: s.status,
   }));

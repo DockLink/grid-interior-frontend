@@ -20,6 +20,7 @@ import {
   openTimelinePrintWindow,
 } from "@/components/timeline/timeline-print";
 import { useActiveProjectView } from "@/hooks/use-active-project-view";
+import { useSiteSubstages } from "@/hooks/use-execution";
 import { useProjectLinks } from "@/hooks/use-project-links";
 import { useProjectTaskables } from "@/hooks/use-project-taskables";
 import { useProjectTimeline } from "@/hooks/use-project-timeline";
@@ -50,6 +51,7 @@ import {
   getClientKeyDatesFromSite,
   getSiteExecutionProgress,
   getSiteOverlapBarsFromSite,
+  getSiteOverlapPlacements,
   getSiteSubstagesSnapshot,
   resolveSiteSubstages,
   subscribeSiteSubstages,
@@ -74,7 +76,7 @@ import {
 import type { SiteSubStageStatus } from "@/types/execution";
 import type { MaterialItem } from "@/types/timeline-materials";
 
-function useSiteSubstages() {
+function useMockSiteSubstages() {
   return useSyncExternalStore(
     subscribeSiteSubstages,
     getSiteSubstagesSnapshot,
@@ -280,6 +282,8 @@ function resolvePhaseDates(
 
 // ── GANTT CHART ───────────────────────────────────────────────────────────────
 function GanttChart() {
+  const params = useParams();
+  const projectId = typeof params.projectId === "string" ? params.projectId : "";
   const projectName = useTimelineProjectName();
   const live = useTimelineLive();
   const authDisabled = isAuthDisabled();
@@ -292,7 +296,13 @@ function GanttChart() {
   const [dragAnchorStart, setDragAnchorStart] = useState<string | null>(null);
   const [syncTick, setSyncTick] = useState(0);
   const suspendSyncRef = useRef(0);
-  const siteStages = useSiteSubstages();
+  const mockSiteStages = useMockSiteSubstages();
+  const liveSite = useSiteSubstages(projectId, { enabled: !authDisabled });
+  const siteStages = authDisabled ? mockSiteStages : liveSite.substages;
+  const resolvedSiteStages = useMemo(
+    () => resolveSiteSubstages(siteStages),
+    [siteStages],
+  );
   const projectStartIso = live.projectStartIso;
   const milestones = live.milestones;
   const keyDates = mapClientKeyDates({
@@ -302,12 +312,52 @@ function GanttChart() {
     projectEndLabel: live.projectEndLabel,
     milestones,
   });
-  const overlapBars = getSiteOverlapBarsFromSite(resolveSiteSubstages(siteStages));
+  const mockOverlapBars = useMemo(
+    () => getSiteOverlapBarsFromSite(resolvedSiteStages),
+    [resolvedSiteStages],
+  );
+  const liveOverlapPlacements = useMemo(
+    () => getSiteOverlapPlacements(resolvedSiteStages),
+    [resolvedSiteStages],
+  );
 
   useEffect(() => {
     if (suspendSyncRef.current > 0) return;
     setPhases(live.phases);
   }, [live.phases, syncTick]);
+
+  const sitePhase = useMemo(() => findSiteExecutionStage(phases), [phases]);
+  const siteAnchorIso = useMemo(() => {
+    if (authDisabled || !sitePhase) return projectStartIso;
+    return (
+      resolvePhaseDates(sitePhase, projectStartIso)?.start ?? projectStartIso
+    );
+  }, [authDisabled, sitePhase, projectStartIso]);
+
+  const overlapBars = useMemo(() => {
+    if (authDisabled) return mockOverlapBars;
+    return liveOverlapPlacements.map((bar) => {
+      const barStartIso = addCalendarDays(siteAnchorIso, bar.startOffsetDays);
+      const offsetFromProject = calendarDaysBetween(
+        projectStartIso,
+        barStartIso,
+      );
+      return {
+        id: bar.id,
+        name: bar.name,
+        startWeek: offsetFromProject / 7,
+        durationWeeks: Math.max(bar.durationDays / 7, 0.35),
+        color: bar.color,
+        status: bar.status,
+      };
+    });
+  }, [
+    authDisabled,
+    liveOverlapPlacements,
+    mockOverlapBars,
+    projectStartIso,
+    siteAnchorIso,
+  ]);
 
   const chartStartIso = useMemo(() => {
     if (dragScale && dragAnchorStart) return dragAnchorStart;
@@ -316,8 +366,9 @@ function GanttChart() {
       const date = resolvePhaseDates(phase, projectStartIso)?.start;
       if (date && date < start) start = date;
     }
+    if (!authDisabled && siteAnchorIso < start) start = siteAnchorIso;
     return start;
-  }, [dragAnchorStart, dragScale, phases, projectStartIso]);
+  }, [authDisabled, dragAnchorStart, dragScale, phases, projectStartIso, siteAnchorIso]);
 
   const chartEndIso = useMemo(() => {
     let end = live.projectEndIso;
@@ -325,8 +376,24 @@ function GanttChart() {
       const date = resolvePhaseDates(phase, projectStartIso)?.end;
       if (date && date > end) end = date;
     }
+    if (!authDisabled) {
+      for (const bar of liveOverlapPlacements) {
+        const barEnd = addCalendarDays(
+          siteAnchorIso,
+          bar.startOffsetDays + bar.durationDays,
+        );
+        if (barEnd > end) end = barEnd;
+      }
+    }
     return end;
-  }, [phases, projectStartIso, live.projectEndIso]);
+  }, [
+    authDisabled,
+    liveOverlapPlacements,
+    phases,
+    projectStartIso,
+    live.projectEndIso,
+    siteAnchorIso,
+  ]);
 
   const axisDays = Math.max(7, calendarDaysBetween(chartStartIso, chartEndIso));
   const axisWeeks = Math.max(1, Math.ceil(axisDays / 7));
@@ -1138,48 +1205,168 @@ function GanttChart() {
         >
           Execution sub-stages (overlapping) · synced from Site Execution
         </div>
-        {overlapBars.map((bar) => {
-          const startShiftDays = calendarDaysBetween(chartStartIso, projectStartIso);
-          const subLeft = ((bar.startWeek * 7 + startShiftDays) / axisSpanDays) * 100;
-          const subWidth = ((bar.durationWeeks * 7) / axisSpanDays) * 100;
-          return (
-          <div key={bar.id} style={{ display: "flex", minWidth: 960, borderBottom: `1px solid ${T.border}` }}>
-            <div
-              style={{
-                width: PHASE_LABEL_W,
-                flexShrink: 0,
-                padding: "8px 16px",
-                borderRight: `1px solid ${T.border}`,
-                fontSize: 11,
-                color: T.gray500,
-              }}
-            >
-              {bar.id} {bar.name}
-            </div>
-            <div style={{ flex: 1, minWidth: barAreaMinWidth, position: "relative", height: 28 }}>
-              <div
-                style={{
-                  position: "absolute",
-                  left: `${subLeft}%`,
-                  width: `${subWidth}%`,
-                  top: 6,
-                  height: 16,
-                  borderRadius: 8,
-                  background:
-                    bar.status === "blocked" ? "#FCA5A5" : bar.color,
-                  opacity:
-                    bar.status === "upcoming"
-                      ? 0.35
-                      : bar.status === "complete"
-                        ? 0.55
-                        : 0.9,
-                }}
-                title={`${bar.name} · ${bar.status}`}
-              />
-            </div>
+        {!authDisabled && liveSite.isLoading ? (
+          <div
+            style={{
+              padding: "10px 16px",
+              fontSize: 12,
+              color: T.gray500,
+              borderBottom: `1px solid ${T.border}`,
+            }}
+          >
+            Loading site sub-stages…
           </div>
-          );
-        })}
+        ) : null}
+        {!authDisabled && !liveSite.isLoading && liveSite.error ? (
+          <div
+            style={{
+              padding: "10px 16px",
+              fontSize: 12,
+              color: T.alert,
+              borderBottom: `1px solid ${T.border}`,
+            }}
+          >
+            Could not load site sub-stages.
+          </div>
+        ) : null}
+        {!authDisabled &&
+        !liveSite.isLoading &&
+        !liveSite.error &&
+        liveOverlapPlacements.length === 0 ? (
+          <div
+            style={{
+              padding: "10px 16px",
+              fontSize: 12,
+              color: T.gray500,
+              borderBottom: `1px solid ${T.border}`,
+            }}
+          >
+            No site sub-stages yet.
+          </div>
+        ) : null}
+        {authDisabled
+          ? mockOverlapBars.map((bar) => {
+              const startShiftDays = calendarDaysBetween(
+                chartStartIso,
+                projectStartIso,
+              );
+              const subLeft =
+                ((bar.startWeek * 7 + startShiftDays) / axisSpanDays) * 100;
+              const subWidth = ((bar.durationWeeks * 7) / axisSpanDays) * 100;
+              return (
+                <div
+                  key={bar.id}
+                  style={{
+                    display: "flex",
+                    minWidth: 960,
+                    borderBottom: `1px solid ${T.border}`,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: PHASE_LABEL_W,
+                      flexShrink: 0,
+                      padding: "8px 16px",
+                      borderRight: `1px solid ${T.border}`,
+                      fontSize: 11,
+                      color: T.gray500,
+                    }}
+                  >
+                    {bar.id} {bar.name}
+                  </div>
+                  <div
+                    style={{
+                      flex: 1,
+                      minWidth: barAreaMinWidth,
+                      position: "relative",
+                      height: 28,
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: `${subLeft}%`,
+                        width: `${subWidth}%`,
+                        top: 6,
+                        height: 16,
+                        borderRadius: 8,
+                        background:
+                          bar.status === "blocked" ? "#FCA5A5" : bar.color,
+                        opacity:
+                          bar.status === "upcoming"
+                            ? 0.35
+                            : bar.status === "complete"
+                              ? 0.55
+                              : 0.9,
+                      }}
+                      title={`${bar.name} · ${bar.status}`}
+                    />
+                  </div>
+                </div>
+              );
+            })
+          : liveOverlapPlacements.map((bar) => {
+              const barStartIso = addCalendarDays(
+                siteAnchorIso,
+                bar.startOffsetDays,
+              );
+              const subLeft =
+                (calendarDaysBetween(chartStartIso, barStartIso) /
+                  axisSpanDays) *
+                100;
+              const subWidth = (bar.durationDays / axisSpanDays) * 100;
+              return (
+                <div
+                  key={bar.id}
+                  style={{
+                    display: "flex",
+                    minWidth: 960,
+                    borderBottom: `1px solid ${T.border}`,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: PHASE_LABEL_W,
+                      flexShrink: 0,
+                      padding: "8px 16px",
+                      borderRight: `1px solid ${T.border}`,
+                      fontSize: 11,
+                      color: T.gray500,
+                    }}
+                  >
+                    {bar.id} {bar.name}
+                  </div>
+                  <div
+                    style={{
+                      flex: 1,
+                      minWidth: barAreaMinWidth,
+                      position: "relative",
+                      height: 28,
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: `${subLeft}%`,
+                        width: `${Math.max(subWidth, 0.4)}%`,
+                        top: 6,
+                        height: 16,
+                        borderRadius: 8,
+                        background:
+                          bar.status === "blocked" ? "#FCA5A5" : bar.color,
+                        opacity:
+                          bar.status === "upcoming"
+                            ? 0.35
+                            : bar.status === "complete"
+                              ? 0.55
+                              : 0.9,
+                      }}
+                      title={`${bar.name} · ${bar.status} · ${barStartIso}`}
+                    />
+                  </div>
+                </div>
+              );
+            })}
       </div>
 
       {/* Tooltip */}
@@ -1503,10 +1690,12 @@ function ClientView() {
     "TASK",
     { limit: 200 },
   );
-  const siteStages = useSiteSubstages();
-  const resolvedSite = resolveSiteSubstages(siteStages);
-  const mockKeyDates = getClientKeyDatesFromSite(resolvedSite);
-  const mockSiteProgress = getSiteExecutionProgress(resolvedSite);
+  const mockSiteStages = useMockSiteSubstages();
+  const liveSiteApi = useSiteSubstages(projectId, { enabled: !authDisabled });
+  const resolvedMockSite = resolveSiteSubstages(mockSiteStages);
+  const resolvedLiveSite = resolveSiteSubstages(liveSiteApi.substages);
+  const mockKeyDates = getClientKeyDatesFromSite(resolvedMockSite);
+  const mockSiteProgress = getSiteExecutionProgress(resolvedMockSite);
 
   const mockPhases = CLIENT_GANTT_PHASES.map((p) =>
     p.name === "Site Execution"
@@ -1518,7 +1707,7 @@ function ClientView() {
       : p,
   );
 
-  const mockSiteCards: ClientSubStageCard[] = resolvedSite.map((s) => ({
+  const mockSiteCards: ClientSubStageCard[] = resolvedMockSite.map((s) => ({
     id: s.id,
     number: s.number,
     name: s.name,
@@ -1529,10 +1718,28 @@ function ClientView() {
   }));
 
   const liveSiteStage = findSiteExecutionStage(live.phases);
-  const liveSiteCards = liveSiteStage
+  const liveSiteAnchorIso = liveSiteStage
+    ? resolvePhaseDates(liveSiteStage, live.projectStartIso)?.start ??
+      live.projectStartIso
+    : live.projectStartIso;
+  const liveApiSiteCards: ClientSubStageCard[] = resolvedLiveSite.map((s) => ({
+    id: s.id,
+    number: s.number,
+    name: s.name,
+    detail: s.detail,
+    status: s.status,
+    dateLabel: formatSiteDayDate(s.startDay, liveSiteAnchorIso),
+    checkpoint: s.checkpoint,
+  }));
+  const liveTaskSiteCards = liveSiteStage
     ? mapSiteSubstageCards(projectTasks, liveSiteStage.stageId ?? "")
     : [];
-  const liveSiteProgress = siteProgressFromCards(liveSiteCards);
+  const liveSiteCards =
+    liveApiSiteCards.length > 0 ? liveApiSiteCards : liveTaskSiteCards;
+  const liveSiteProgress =
+    liveApiSiteCards.length > 0
+      ? getSiteExecutionProgress(resolvedLiveSite)
+      : siteProgressFromCards(liveSiteCards);
   const liveKeyDates = mapClientKeyDates({
     projectStartIso: live.projectStartIso,
     projectEndIso: live.projectEndIso,
@@ -1549,7 +1756,11 @@ function ClientView() {
   const startLabel = authDisabled ? PROJECT_START : live.projectStartLabel;
   const endLabel = authDisabled ? PROJECT_END : live.projectEndLabel;
   const projectStartIso = authDisabled ? "2026-05-15" : live.projectStartIso;
-  const showSiteSection = authDisabled || Boolean(liveSiteStage);
+  const showSiteSection =
+    authDisabled ||
+    liveApiSiteCards.length > 0 ||
+    Boolean(liveSiteStage) ||
+    liveSiteApi.isLoading;
 
   return (
     <div style={{ padding: "28px 40px" }}>
@@ -1981,15 +2192,15 @@ function ClientView() {
               Site Execution · Sub-stages
             </div>
             <div style={{ fontSize: 11, color: T.gray500, marginTop: 2 }}>
-              Live from project tasks · {siteProgress.progress}% site complete
+              Synced from Site Execution · {siteProgress.progress}% site complete
             </div>
           </div>
         </div>
-        {!authDisabled && tasksLoading ? (
+        {!authDisabled && (liveSiteApi.isLoading || (liveApiSiteCards.length === 0 && tasksLoading)) ? (
           <div style={{ fontSize: 13, color: T.gray500 }}>Loading sub-stages…</div>
         ) : siteCards.length === 0 ? (
           <div style={{ fontSize: 13, color: T.gray500 }}>
-            No tasks under the Site / Execution stage yet.
+            No site sub-stages yet.
           </div>
         ) : (
         <div

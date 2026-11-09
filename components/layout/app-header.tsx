@@ -54,7 +54,7 @@ export function AppHeader() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-4 border-b border-[var(--figma-border)] bg-white px-4 md:px-7">
+    <header className="sticky top-0 z-20 flex h-16 w-full min-w-0 shrink-0 items-center gap-4 border-b border-[var(--figma-border)] bg-white px-4 md:px-7">
       <SidebarTrigger className="-ml-1 text-[var(--figma-gray500)]" />
 
       <div className="min-w-[160px]">

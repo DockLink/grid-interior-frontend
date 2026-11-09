@@ -15,6 +15,7 @@ import {
 import {
   cycleSiteSubstageStatus,
   getSiteSubstagesSnapshot,
+  patchSiteSubstage,
   SITE_SUBSTAGES,
   SITE_TOTAL_DAYS,
 } from "@/lib/projects/mock-execution";
@@ -144,8 +145,7 @@ export function useSiteSubstages(
       payload: SiteSubStageUpdatePayload;
     }) => {
       if (authOff) {
-        if (payload.status) cycleSiteSubstageStatus(substageId);
-        return getSiteSubstagesSnapshot().find((s) => s.id === substageId) ?? null;
+        return patchSiteSubstage(substageId, payload);
       }
       const raw = await authApiClient<SiteSubStageApi>(
         `${base(projectId)}/site/${substageId}`,
