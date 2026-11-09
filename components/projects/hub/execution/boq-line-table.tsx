@@ -493,6 +493,25 @@ type CategoryHandlers = {
   onDeleteItem: (itemId: string) => Promise<void>;
 };
 
+/** Keep in-progress row edits when React Query refetches BOQ categories. */
+function mergeBoqCategories(
+  remote: BoqCategory[],
+  local: BoqCategory[],
+  editingItemIds: ReadonlySet<string>,
+): BoqCategory[] {
+  if (editingItemIds.size === 0) return remote;
+  const localById = new Map<string, BoqLineItem>();
+  for (const cat of local) {
+    for (const item of cat.items) localById.set(item.id, item);
+  }
+  return remote.map((cat) => ({
+    ...cat,
+    items: cat.items.map((item) =>
+      editingItemIds.has(item.id) ? (localById.get(item.id) ?? item) : item,
+    ),
+  }));
+}
+
 function CategoryBlock({
   cat,
   parties,
@@ -500,6 +519,7 @@ function CategoryBlock({
   busyItemId,
   showCommercial,
   projectId,
+  onEditingChange,
 }: {
   cat: BoqCategory;
   parties: QuoteParty[];
@@ -507,6 +527,7 @@ function CategoryBlock({
   busyItemId: string | null;
   showCommercial: boolean;
   projectId: string;
+  onEditingChange: (itemId: string, editing: boolean) => void;
 }) {
   const [open, setOpen] = useState(
     cat.code === "A" || cat.code === "C" || cat.code === "H",
@@ -517,6 +538,7 @@ function CategoryBlock({
 
   const finishEdit = async (row: BoqLineItem) => {
     setEditingId(null);
+    onEditingChange(row.id, false);
     await handlers.onItemCommit(row);
   };
 
@@ -887,7 +909,9 @@ function CategoryBlock({
                             }}
                             onClick={() => {
                               if (!editing) {
+                                if (editingId) onEditingChange(editingId, false);
                                 setEditingId(row.id);
+                                onEditingChange(row.id, true);
                               }
                             }}
                             className={cn(
@@ -915,6 +939,10 @@ function CategoryBlock({
                                 )
                               ) {
                                 return;
+                              }
+                              if (editing) {
+                                setEditingId(null);
+                                onEditingChange(row.id, false);
                               }
                               void handlers.onDeleteItem(row.id);
                             }}
@@ -986,10 +1014,19 @@ export function BoqLineTable({
   const [addCategoryId, setAddCategoryId] = useState("");
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [showCommercial, setShowCommercial] = useState(false);
+  const editingItemIdsRef = useRef<Set<string>>(new Set());
+
+  const handleEditingChange = (itemId: string, editing: boolean) => {
+    const next = editingItemIdsRef.current;
+    if (editing) next.add(itemId);
+    else next.delete(itemId);
+  };
 
   useEffect(() => {
     if (remoteCats.length > 0 || !isLoading) {
-      setCats(remoteCats);
+      setCats((prev) =>
+        mergeBoqCategories(remoteCats, prev, editingItemIdsRef.current),
+      );
       setSynced(true);
       setAddCategoryId((prev) => {
         if (prev && remoteCats.some((c) => c.id === prev)) return prev;
@@ -1270,6 +1307,7 @@ export function BoqLineTable({
             parties={parties}
             busyItemId={busyItemId}
             showCommercial={showCommercial}
+            onEditingChange={handleEditingChange}
             handlers={{
               getLatestItem: (itemId: string) => {
                 for (const c of latestCatsRef.current) {

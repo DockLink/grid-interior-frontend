@@ -32,3 +32,20 @@ export async function GET(req: NextRequest, context: RouteContext) {
   if (!result.ok) return NextResponse.json(result.error, { status: result.status });
   return NextResponse.json({ data: normalizeOrderList(result.data) } satisfies SupplierOrdersListResponse);
 }
+
+export async function POST(req: NextRequest, context: RouteContext) {
+  const authorization = req.headers.get("authorization");
+  const authError = requireAuthorization(authorization);
+  if (authError) return authError;
+
+  const { id } = await context.params;
+  const body = await req.json();
+  const result = await backendFetch<SupplierOrderApi>(`/suppliers/${id}/orders`, {
+    method: "POST",
+    headers: { Authorization: authorization! },
+    body: JSON.stringify(body),
+  });
+
+  if (!result.ok) return NextResponse.json(result.error, { status: result.status });
+  return NextResponse.json(result.data, { status: result.status });
+}

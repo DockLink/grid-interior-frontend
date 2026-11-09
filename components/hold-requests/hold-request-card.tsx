@@ -11,6 +11,7 @@ import {
   formatHoldDate,
   holdRequestStatusLabel,
   holdRequestStatusStyle,
+  toHoldRequestDateIso,
 } from "@/lib/hold-requests/display";
 import type { TaskableHoldRequest } from "@/types/hold-requests";
 
@@ -54,8 +55,8 @@ export function HoldRequestCard({
           toast.error("Adjusted end date must be on or after the start date");
           return;
         }
-        payload.approvedStartDate = new Date(`${adjStart}T00:00:00`).toISOString();
-        payload.approvedEndDate = new Date(`${adjEnd}T23:59:59`).toISOString();
+        payload.approvedStartDate = toHoldRequestDateIso(adjStart);
+        payload.approvedEndDate = toHoldRequestDateIso(adjEnd, true);
       }
       await onProcess(payload);
       toast.success(

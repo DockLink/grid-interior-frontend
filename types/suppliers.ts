@@ -145,16 +145,61 @@ export interface SupplierOrderApi {
 export interface SupplierOrder {
   id: string;
   date: string;
+  projectId?: string | null;
   project: string;
   item: string;
   quantity: string;
   deliveryStatus: DeliveryStatus;
   paymentStatus: PaymentStatus;
   amount: string;
+  amountValue: number;
+  orderDate: string;
 }
 
 export interface SupplierOrdersListResponse {
   data: SupplierOrderApi[];
+}
+
+export interface CreateSupplierOrderPayload {
+  project_id?: string;
+  project_name: string;
+  item: string;
+  quantity: string;
+  amount: number;
+  order_date: string;
+  delivery_status: DeliveryStatus;
+  payment_status: PaymentStatus;
+}
+
+export type UpdateSupplierOrderPayload = CreateSupplierOrderPayload;
+
+export interface SupplierPaymentApi {
+  id: string;
+  project_id?: string | null;
+  project_name?: string | null;
+  amount: number | string;
+  payment_date?: string | null;
+  status: PaymentStatus;
+}
+
+export interface SupplierPayment {
+  id: string;
+  project: string;
+  amount: string;
+  date: string;
+  status: PaymentStatus;
+}
+
+export interface SupplierPaymentsListResponse {
+  data: SupplierPaymentApi[];
+}
+
+export interface CreateSupplierPaymentPayload {
+  project_id?: string;
+  project_name: string;
+  amount: number;
+  payment_date: string;
+  status: PaymentStatus;
 }
 
 export interface SubVendorApi {

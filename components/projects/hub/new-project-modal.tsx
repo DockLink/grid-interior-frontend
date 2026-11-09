@@ -224,19 +224,45 @@ export function NewProjectModal({
   const [showTeamDropdown, setShowTeamDropdown] = useState(false);
   const [teamFocused, setTeamFocused] = useState(false);
   const [coordinator, setCoordinator] = useState<string>("");
+  const [coordinatorSearch, setCoordinatorSearch] = useState("");
+  const [showCoordinatorDropdown, setShowCoordinatorDropdown] = useState(false);
+  const [coordinatorFocused, setCoordinatorFocused] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [clientFocused, setClientFocused] = useState(false);
 
+  const clientQuery = clientSearch.trim().toLowerCase();
   const filteredClients = clients
-    .filter((c) => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
-    .slice(0, 6);
+    .filter((c) => c.id !== selectedClient)
+    .filter((c) => {
+      if (!clientQuery) return true;
+      const name = c.name.toLowerCase();
+      const email = (c.email ?? "").toLowerCase();
+      const company = (c.company ?? "").toLowerCase();
+      return name.includes(clientQuery) || email.includes(clientQuery) || company.includes(clientQuery);
+    });
+
+  const matchesMemberQuery = (m: (typeof studioMembers)[number], query: string) => {
+    if (!query) return true;
+    const name = getUserListPrimaryLabel(m).toLowerCase();
+    const role = (m.roles[0] ?? "Member").toLowerCase();
+    const email = (m.email ?? "").toLowerCase();
+    return name.includes(query) || role.includes(query) || email.includes(query);
+  };
 
   const teamQuery = teamSearch.trim().toLowerCase();
   const filteredTeamMembers = studioMembers
     .filter((m) => !selectedTeam.includes(m.id))
-    .filter((m) => getUserListPrimaryLabel(m).toLowerCase().includes(teamQuery))
-    .slice(0, 6);
+    .filter((m) => matchesMemberQuery(m, teamQuery));
+
+  const coordinatorQuery = coordinatorSearch.trim().toLowerCase();
+  const filteredCoordinators = studioMembers
+    .filter((m) => m.id !== coordinator)
+    .filter((m) => matchesMemberQuery(m, coordinatorQuery));
+
+  const selectedCoordinator = coordinator
+    ? studioMembers.find((m) => m.id === coordinator)
+    : undefined;
 
   const selectedClientRecord = selectedClient
     ? clients.find((c) => c.id === selectedClient)
@@ -287,12 +313,6 @@ export function NewProjectModal({
   useEffect(() => {
     if (preselectedClientId) setSelectedClient(preselectedClientId);
   }, [preselectedClientId]);
-
-  useEffect(() => {
-    if (studioMembers.length === 0) return;
-    setSelectedTeam((prev) => (prev.length ? prev : [studioMembers[0].id]));
-    setCoordinator((prev) => prev || studioMembers[0].id);
-  }, [studioMembers]);
 
   const handleCreate = async () => {
     if (isAuthDisabled()) {
@@ -406,9 +426,9 @@ export function NewProjectModal({
               error={errors.name}
             />
 
-            <div className="relative flex flex-col gap-1">
+            <div>
               <label
-                className="text-[13px] font-medium"
+                className="mb-3 block text-[13px] font-medium"
                 style={{ color: errors.client ? "var(--figma-alert)" : "var(--figma-navy)" }}
               >
                 Client
@@ -422,10 +442,9 @@ export function NewProjectModal({
                   style={{ color: clientFocused ? "var(--figma-teal)" : "var(--figma-gray400)" }}
                 />
                 <input
-                  value={selectedClient ? selectedClientName : clientSearch}
+                  value={clientSearch}
                   onChange={(e) => {
                     setClientSearch(e.target.value);
-                    setSelectedClient(null);
                     setShowClientDropdown(true);
                   }}
                   onFocus={() => {
@@ -438,8 +457,12 @@ export function NewProjectModal({
                       setClientFocused(false);
                     }, 200);
                   }}
-                  placeholder="Search client name…"
-                  className="hub-input-focus w-full rounded-[10px] border bg-white py-2.5 pr-3 pl-9 text-[13px] text-[var(--figma-navy)] outline-none"
+                  placeholder="Search or select client…"
+                  role="combobox"
+                  aria-expanded={showClientDropdown}
+                  aria-controls="client-listbox"
+                  aria-autocomplete="list"
+                  className="hub-input-focus w-full rounded-[10px] border bg-white py-2.5 pr-9 pl-9 text-[13px] text-[var(--figma-navy)] outline-none"
                   style={{
                     borderColor: errors.client
                       ? "var(--figma-alert)"
@@ -452,66 +475,117 @@ export function NewProjectModal({
                       : "var(--neu-inset)",
                   }}
                 />
+                <MaterialIcon
+                  name="expand_more"
+                  outlined
+                  size={16}
+                  className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[var(--figma-gray400)]"
+                />
+                {showClientDropdown && (
+                  <div
+                    id="client-listbox"
+                    role="listbox"
+                    className="absolute top-full right-0 left-0 z-50 mt-1 max-h-[240px] overflow-y-auto rounded-xl border border-[var(--figma-border)] bg-white"
+                    style={{ boxShadow: "var(--neu-dropdown)" }}
+                  >
+                    {clientsLoading ? (
+                      <div className="px-4 py-3 text-[12px] text-[var(--figma-gray500)]">
+                        Loading clients…
+                      </div>
+                    ) : filteredClients.length === 0 ? (
+                      <div className="px-4 py-3 text-[12px] text-[var(--figma-gray500)]">
+                        {clientQuery
+                          ? "No clients match your search"
+                          : clients.length === 0
+                            ? "No clients found"
+                            : "Client already selected"}
+                      </div>
+                    ) : (
+                      filteredClients.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          role="option"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setSelectedClient(c.id);
+                            setClientSearch("");
+                            setShowClientDropdown(false);
+                            setClientFocused(false);
+                            setErrors((p) => ({ ...p, client: "" }));
+                          }}
+                          className="flex w-full cursor-pointer items-center gap-2.5 border-b border-[var(--figma-border)] bg-transparent px-4 py-2.5 text-left font-[inherit] last:border-b-0 hover:bg-[var(--figma-gray50)]"
+                        >
+                          <div
+                            className="flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                            style={{
+                              background: c.color
+                                ? c.color
+                                : "linear-gradient(135deg, var(--figma-navy), var(--figma-teal))",
+                            }}
+                          >
+                            {c.initials ||
+                              c.name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .slice(0, 2)
+                                .join("")}
+                          </div>
+                          <div className="flex-1">
+                            <div className="text-[13px] font-medium text-[var(--figma-navy)]">
+                              {c.name}
+                            </div>
+                            <div className="text-[11px] text-[var(--figma-gray500)]">
+                              {c.email || c.company || "—"}
+                            </div>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
               {errors.client && (
-                <div className="flex items-center gap-1 text-[11px] text-[var(--figma-alert)]">
+                <div className="mt-1 flex items-center gap-1 text-[11px] text-[var(--figma-alert)]">
                   <MaterialIcon name="error_outline" outlined size={13} />
                   {errors.client}
                 </div>
               )}
-              {showClientDropdown && (
-                <div
-                  className="absolute top-full right-0 left-0 z-50 mt-1 overflow-hidden rounded-xl border border-[var(--figma-border)] bg-white"
-                  style={{ boxShadow: "var(--neu-dropdown)" }}
-                >
-                  {clientsLoading ? (
-                    <div className="px-4 py-3 text-[12px] text-[var(--figma-gray500)]">
-                      Loading clients…
+              {selectedClientRecord && (
+                <div className="mt-3 flex flex-col gap-2">
+                  <div className="flex items-center gap-3 rounded-xl border-[1.5px] border-[var(--figma-teal)] bg-[rgba(14,124,134,0.05)] px-3.5 py-[11px]">
+                    <div
+                      className="flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                      style={{
+                        background: selectedClientRecord.color
+                          ? selectedClientRecord.color
+                          : "linear-gradient(135deg, var(--figma-navy), var(--figma-teal))",
+                      }}
+                    >
+                      {selectedClientRecord.initials ||
+                        selectedClientRecord.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .slice(0, 2)
+                          .join("")}
                     </div>
-                  ) : filteredClients.length === 0 ? (
-                    <div className="px-4 py-3 text-[12px] text-[var(--figma-gray500)]">
-                      {clientSearch.trim() ? "No clients match your search" : "No clients found"}
+                    <div className="flex-1">
+                      <div className="text-[13px] font-semibold text-[var(--figma-navy)]">
+                        {selectedClientRecord.name}
+                      </div>
+                      <div className="text-[11px] text-[var(--figma-gray500)]">
+                        {selectedClientRecord.email || selectedClientRecord.company || "—"}
+                      </div>
                     </div>
-                  ) : (
-                    filteredClients.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onMouseDown={() => {
-                          setSelectedClient(c.id);
-                          setClientSearch("");
-                          setShowClientDropdown(false);
-                          setErrors((p) => ({ ...p, client: "" }));
-                        }}
-                        className="flex w-full cursor-pointer items-center gap-2.5 border-b border-[var(--figma-border)] bg-transparent px-4 py-2.5 text-left font-[inherit] text-[13px] text-[var(--figma-navy)] last:border-b-0 hover:bg-[var(--figma-gray50)]"
-                      >
-                        <div
-                          className="flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
-                          style={{
-                            background: c.color
-                              ? c.color
-                              : "linear-gradient(135deg, var(--figma-navy), var(--figma-teal))",
-                          }}
-                        >
-                          {c.initials ||
-                            c.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .slice(0, 2)
-                              .join("")}
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium">{c.name}</div>
-                          <div className="text-[11px] text-[var(--figma-gray500)]">
-                            {c.email || c.company || "—"}
-                          </div>
-                        </div>
-                        {selectedClient === c.id && (
-                          <MaterialIcon name="check" size={16} className="ml-auto text-[var(--figma-teal)]" />
-                        )}
-                      </button>
-                    ))
-                  )}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedClient(null)}
+                      aria-label={`Remove ${selectedClientRecord.name}`}
+                      className="flex size-7 cursor-pointer items-center justify-center rounded-full border-none bg-transparent text-[var(--figma-gray400)] hover:text-[var(--figma-navy)]"
+                    >
+                      <MaterialIcon name="close" outlined size={16} />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -805,8 +879,12 @@ export function NewProjectModal({
                       setTeamFocused(false);
                     }, 200);
                   }}
-                  placeholder="Search team member…"
-                  className="hub-input-focus w-full rounded-[10px] border bg-white py-2.5 pr-3 pl-9 text-[13px] text-[var(--figma-navy)] outline-none"
+                  placeholder="Search or select team member…"
+                  role="combobox"
+                  aria-expanded={showTeamDropdown}
+                  aria-controls="team-member-listbox"
+                  aria-autocomplete="list"
+                  className="hub-input-focus w-full rounded-[10px] border bg-white py-2.5 pr-9 pl-9 text-[13px] text-[var(--figma-navy)] outline-none"
                   style={{
                     borderColor: teamFocused ? "var(--figma-teal)" : "var(--figma-border)",
                     borderWidth: teamFocused ? 2 : 1.5,
@@ -815,9 +893,17 @@ export function NewProjectModal({
                       : "var(--neu-inset)",
                   }}
                 />
+                <MaterialIcon
+                  name="expand_more"
+                  outlined
+                  size={16}
+                  className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[var(--figma-gray400)]"
+                />
               {showTeamDropdown && (
                 <div
-                  className="absolute top-full right-0 left-0 z-50 mt-1 overflow-hidden rounded-xl border border-[var(--figma-border)] bg-white"
+                  id="team-member-listbox"
+                  role="listbox"
+                  className="absolute top-full right-0 left-0 z-50 mt-1 max-h-[240px] overflow-y-auto rounded-xl border border-[var(--figma-border)] bg-white"
                   style={{ boxShadow: "var(--neu-dropdown)" }}
                 >
                   {usersLoading ? (
@@ -837,10 +923,12 @@ export function NewProjectModal({
                       <button
                         key={m.id}
                         type="button"
-                        onMouseDown={() => {
+                        role="option"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
                           setSelectedTeam((prev) => (prev.includes(m.id) ? prev : [...prev, m.id]));
                           setTeamSearch("");
-                          setShowTeamDropdown(false);
+                          setShowTeamDropdown(true);
                         }}
                         className="flex w-full cursor-pointer items-center gap-2.5 border-b border-[var(--figma-border)] bg-transparent px-4 py-2.5 text-left font-[inherit] last:border-b-0 hover:bg-[var(--figma-gray50)]"
                       >
@@ -901,33 +989,136 @@ export function NewProjectModal({
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <label className="text-[13px] font-medium text-[var(--figma-navy)]">Project Coordinator</label>
+            <div>
+              <label className="mb-3 block text-[13px] font-medium text-[var(--figma-navy)]">
+                Project Coordinator
+              </label>
               <div className="relative">
                 <MaterialIcon
                   name="manage_accounts"
                   outlined
                   size={16}
-                  className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--figma-gray400)]"
+                  className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2"
+                  style={{ color: coordinatorFocused ? "var(--figma-teal)" : "var(--figma-gray400)" }}
                 />
-                <select
-                  value={coordinator}
-                  onChange={(e) => setCoordinator(e.target.value)}
-                  className="w-full cursor-pointer appearance-none rounded-[10px] border-[1.5px] border-[var(--figma-border)] bg-white py-2.5 pr-9 pl-9 text-[13px] text-[var(--figma-navy)] outline-none neu-inset"
-                >
-                  {studioMembers.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {getUserListPrimaryLabel(m)} — {m.roles[0] ?? "Member"}
-                    </option>
-                  ))}
-                </select>
+                <input
+                  value={coordinatorSearch}
+                  onChange={(e) => {
+                    setCoordinatorSearch(e.target.value);
+                    setShowCoordinatorDropdown(true);
+                  }}
+                  onFocus={() => {
+                    setCoordinatorFocused(true);
+                    setShowCoordinatorDropdown(true);
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      setShowCoordinatorDropdown(false);
+                      setCoordinatorFocused(false);
+                    }, 200);
+                  }}
+                  placeholder="Search or select coordinator…"
+                  role="combobox"
+                  aria-expanded={showCoordinatorDropdown}
+                  aria-controls="coordinator-listbox"
+                  aria-autocomplete="list"
+                  className="hub-input-focus w-full rounded-[10px] border bg-white py-2.5 pr-9 pl-9 text-[13px] text-[var(--figma-navy)] outline-none"
+                  style={{
+                    borderColor: coordinatorFocused ? "var(--figma-teal)" : "var(--figma-border)",
+                    borderWidth: coordinatorFocused ? 2 : 1.5,
+                    boxShadow: coordinatorFocused
+                      ? "var(--neu-inset), 0 0 0 3px rgba(14,124,134,0.08)"
+                      : "var(--neu-inset)",
+                  }}
+                />
                 <MaterialIcon
                   name="expand_more"
                   outlined
                   size={16}
                   className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[var(--figma-gray400)]"
                 />
+                {showCoordinatorDropdown && (
+                  <div
+                    id="coordinator-listbox"
+                    role="listbox"
+                    className="absolute top-full right-0 left-0 z-50 mt-1 max-h-[240px] overflow-y-auto rounded-xl border border-[var(--figma-border)] bg-white"
+                    style={{ boxShadow: "var(--neu-dropdown)" }}
+                  >
+                    {usersLoading ? (
+                      <div className="px-4 py-3 text-[12px] text-[var(--figma-gray500)]">
+                        Loading team members…
+                      </div>
+                    ) : filteredCoordinators.length === 0 ? (
+                      <div className="px-4 py-3 text-[12px] text-[var(--figma-gray500)]">
+                        {coordinatorQuery
+                          ? "No team members match your search"
+                          : studioMembers.length === 0
+                            ? "No active users found."
+                            : "Coordinator already selected"}
+                      </div>
+                    ) : (
+                      filteredCoordinators.map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          role="option"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setCoordinator(m.id);
+                            setCoordinatorSearch("");
+                            setShowCoordinatorDropdown(false);
+                            setCoordinatorFocused(false);
+                          }}
+                          className="flex w-full cursor-pointer items-center gap-2.5 border-b border-[var(--figma-border)] bg-transparent px-4 py-2.5 text-left font-[inherit] last:border-b-0 hover:bg-[var(--figma-gray50)]"
+                        >
+                          <div
+                            className="flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                            style={{ background: memberColor(m.id) }}
+                          >
+                            {getUserInitials(m)}
+                          </div>
+                          <div className="flex-1">
+                            <div className="text-[13px] font-medium text-[var(--figma-navy)]">
+                              {getUserListPrimaryLabel(m)}
+                            </div>
+                            <div className="text-[11px] text-[var(--figma-gray500)]">
+                              {m.roles[0] ?? "Member"}
+                            </div>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
+              {selectedCoordinator && (
+                <div className="mt-3 flex flex-col gap-2">
+                  <div className="flex items-center gap-3 rounded-xl border-[1.5px] border-[var(--figma-teal)] bg-[rgba(14,124,134,0.05)] px-3.5 py-[11px]">
+                    <div
+                      className="flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                      style={{ background: memberColor(selectedCoordinator.id) }}
+                    >
+                      {getUserInitials(selectedCoordinator)}
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-[13px] font-semibold text-[var(--figma-navy)]">
+                        {getUserListPrimaryLabel(selectedCoordinator)}
+                      </div>
+                      <div className="text-[11px] text-[var(--figma-gray500)]">
+                        {selectedCoordinator.roles[0] ?? "Member"}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCoordinator("")}
+                      aria-label={`Remove ${getUserListPrimaryLabel(selectedCoordinator)}`}
+                      className="flex size-7 cursor-pointer items-center justify-center rounded-full border-none bg-transparent text-[var(--figma-gray400)] hover:text-[var(--figma-navy)]"
+                    >
+                      <MaterialIcon name="close" outlined size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="rounded-xl border border-[var(--figma-border)] bg-[var(--figma-gray50)] p-4">
