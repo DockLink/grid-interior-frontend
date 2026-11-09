@@ -135,6 +135,14 @@ export function mapProjectCardToHistoricalView(card: ProjectCardView): Historica
     description: card.location ?? "",
     photo: card.thumbnail,
     photoAlt: card.name,
+    code: card.number || "",
+    location: card.location ?? "",
+    duration: "",
+    clientEmail: null,
+    clientPhone: null,
+    briefAttachments: [],
+    latitude: null,
+    longitude: null,
   };
 }
 
@@ -154,9 +162,21 @@ export function mapProjectToHistoricalView(project: Project): HistoricalProjectV
     completionDate: card.endDate ?? card.updatedAt ?? "—",
     year: Number.isNaN(year) ? new Date().getFullYear() : year,
     type,
-    description: project.description?.trim() || project.location || "",
+    description: project.description?.trim() || "",
     photo: projectThumbnailUrl(project.images),
     photoAlt: project.name,
+    code: project.code || "",
+    location: project.location ?? "",
+    duration: project.duration || "",
+    clientEmail: project.client?.contact_email?.trim() || null,
+    clientPhone: project.client?.contact_number?.trim() || null,
+    briefAttachments: (project.brief_attachments ?? []).map((a) => ({
+      id: a.id,
+      url: a.url,
+      fileName: a.file_name?.trim() || "Brief attachment",
+    })),
+    latitude: project.latitude ?? null,
+    longitude: project.longitude ?? null,
   };
 }
 

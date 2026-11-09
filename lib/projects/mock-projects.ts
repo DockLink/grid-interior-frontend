@@ -221,7 +221,20 @@ export const ACTIVE_PROJECTS: ActiveProjectView[] = ACTIVE_RAW.map((p, i) => ({
   id: `mock-${i + 1}`,
 }));
 
-const HISTORICAL_RAW: Omit<HistoricalProjectView, "id">[] = [
+type HistoricalRaw = Omit<
+  HistoricalProjectView,
+  | "id"
+  | "code"
+  | "location"
+  | "duration"
+  | "clientEmail"
+  | "clientPhone"
+  | "briefAttachments"
+  | "latitude"
+  | "longitude"
+>;
+
+const HISTORICAL_RAW: HistoricalRaw[] = [
   {
     name: "Grassi Villa — Full Interior",
     clientName: "Elena Grassi",
@@ -344,9 +357,43 @@ const HISTORICAL_RAW: Omit<HistoricalProjectView, "id">[] = [
   },
 ];
 
+const HISTORICAL_MOCK_LOCATIONS = [
+  "Colombo 07, Sri Lanka",
+  "Bambalapitiya, Colombo",
+  "Colombo 03, Sri Lanka",
+  "Nugegoda, Sri Lanka",
+  "Galle Face, Colombo",
+  "World Trade Center, Colombo",
+  "Battaramulla, Sri Lanka",
+  "Mount Lavinia, Sri Lanka",
+  "Colombo 05, Sri Lanka",
+  "Kollupitiya, Colombo",
+];
+
+const HISTORICAL_MOCK_DURATIONS = [
+  "9 months",
+  "4 months",
+  "5 months",
+  "5 months",
+  "6 months",
+  "6 months",
+  "6 months",
+  "6 months",
+  "8 months",
+  "4 months",
+];
+
 export const HISTORICAL_PROJECTS: HistoricalProjectView[] = HISTORICAL_RAW.map((p, i) => ({
   ...p,
   id: `mock-${101 + i}`,
+  code: `GI-H${101 + i}`,
+  location: HISTORICAL_MOCK_LOCATIONS[i] ?? "Colombo, Sri Lanka",
+  duration: HISTORICAL_MOCK_DURATIONS[i] ?? "6 months",
+  clientEmail: `${p.clientName.toLowerCase().replace(/\s+/g, ".")}@example.com`,
+  clientPhone: `+94 77 ${String(1000000 + i * 1111).slice(0, 7)}`,
+  briefAttachments: [],
+  latitude: null,
+  longitude: null,
 }));
 
 export const HISTORICAL_GALLERY: Record<string, HistoricalGalleryItem[]> = {

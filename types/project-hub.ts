@@ -44,6 +44,12 @@ export interface ActiveProjectView {
   activity: HubActivityItem[];
 }
 
+export interface HistoricalBriefAttachment {
+  id: string;
+  url: string;
+  fileName: string;
+}
+
 export interface HistoricalProjectView {
   id: string;
   name: string;
@@ -55,6 +61,14 @@ export interface HistoricalProjectView {
   description: string;
   photo: string;
   photoAlt: string;
+  code: string;
+  location: string;
+  duration: string;
+  clientEmail: string | null;
+  clientPhone: string | null;
+  briefAttachments: HistoricalBriefAttachment[];
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface HistoricalGalleryItem {

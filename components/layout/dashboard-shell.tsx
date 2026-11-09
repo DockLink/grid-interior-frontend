@@ -44,7 +44,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <CommandPaletteProvider>
           <ActivityTracker />
           <SidebarProvider
-            className="bg-[#F8FAFB]"
+            className="max-w-full overflow-x-clip bg-[#F8FAFB]"
             style={
               {
                 "--sidebar-width": "260px",
@@ -53,7 +53,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             }
           >
             <AppSidebar />
-            <SidebarInset className="bg-[#F8FAFB]">
+            <SidebarInset className="min-w-0 max-w-full overflow-x-clip bg-[#F8FAFB]">
               <AppHeader />
               <div className="flex min-w-0 flex-1 flex-col px-4 py-6 md:px-8 md:py-7">
                 {!authDisabled && primaryRole && !canAccessRoute(primaryRole, pathname) ? (
