@@ -683,6 +683,9 @@ function DetailView({
             color: "var(--figma-navy)",
             lineHeight: 1.75,
             whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
+            wordBreak: "break-word",
+            maxWidth: "100%",
             marginBottom: "28px",
           }}
         >

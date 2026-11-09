@@ -348,8 +348,6 @@ export function StagesScreen({
   }, [authDisabled, tasks, localOverrides]);
 
   const done = stages.filter((s) => s.status === "complete").length;
-  const detailStage = stages.find((s) => s.phase === "Detail Drawings")!;
-  const otherStages = stages.filter((s) => s.phase !== "Detail Drawings");
 
   async function handleStatus(stage: PhaseCardModel, status: ExecutionStageStatus) {
     setLocalOverrides((prev) => ({ ...prev, [stage.phase]: status }));
@@ -437,30 +435,26 @@ export function StagesScreen({
       </SectionCard>
 
       <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
-        <StageCard
-          stage={detailStage}
-          disabled={projectEnded}
-          onStatus={(status) => void handleStatus(detailStage, status)}
-          onOpenBoq={onOpenBoq}
-          onOpenSite={onOpenSite}
-        />
-        <EndProjectCard
-          ended={projectEnded}
-          onRequestEnd={() => setConfirmEnd(true)}
-          onReopen={() => {
-            if (endedAuthOff) setLocalEnded(false);
-            else void setEndedAfterBoq(false);
-          }}
-        />
-        {otherStages.map((stage) => (
-          <StageCard
-            key={stage.id}
-            stage={stage}
-            disabled={projectEnded}
-            onStatus={(status) => void handleStatus(stage, status)}
-            onOpenBoq={onOpenBoq}
-            onOpenSite={onOpenSite}
-          />
+        {stages.map((stage) => (
+          <div key={stage.id} className="contents">
+            <StageCard
+              stage={stage}
+              disabled={projectEnded}
+              onStatus={(status) => void handleStatus(stage, status)}
+              onOpenBoq={onOpenBoq}
+              onOpenSite={onOpenSite}
+            />
+            {stage.phase === "Detail Drawings" && (
+              <EndProjectCard
+                ended={projectEnded}
+                onRequestEnd={() => setConfirmEnd(true)}
+                onReopen={() => {
+                  if (endedAuthOff) setLocalEnded(false);
+                  else void setEndedAfterBoq(false);
+                }}
+              />
+            )}
+          </div>
         ))}
       </div>
 

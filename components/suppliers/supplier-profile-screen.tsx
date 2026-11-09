@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
 import { NeuTabToggle } from "@/components/projects/hub/neu-tab-toggle";
 import { AddSupplierModal } from "@/components/suppliers/add-supplier-modal";
+import { AddSupplierOrderModal } from "@/components/suppliers/add-supplier-order-modal";
 import { LinkSupplierProjectModal } from "@/components/suppliers/link-supplier-project-modal";
 import {
   CategoryBadge,
@@ -30,7 +31,11 @@ import {
   DELIVERY_STATUS_CFG,
   PAYMENT_STATUS_CFG,
 } from "@/lib/suppliers/map-suppliers";
-import type { Supplier, SupplierOrder, UpdateSupplierPayload } from "@/types/suppliers";
+import type {
+  Supplier,
+  SupplierOrder,
+  UpdateSupplierPayload,
+} from "@/types/suppliers";
 import type { SupplierLinkedProject } from "@/types/project-links";
 import { NAV_ROUTES, projectRoute } from "@/types/navigation";
 import { cn } from "@/lib/utils";
@@ -249,9 +254,11 @@ function RatesTab({
 function OrderRow({
   order,
   isLast,
+  onEdit,
 }: {
   order: SupplierOrder;
   isLast: boolean;
+  onEdit: (order: SupplierOrder) => void;
 }) {
   const [hov, setHov] = useState(false);
   const dCfg = DELIVERY_STATUS_CFG[order.deliveryStatus];
@@ -275,18 +282,47 @@ function OrderRow({
         <StatusPill label={order.paymentStatus} color={pCfg.color} bg={pCfg.bg} />
       </td>
       <td className="px-4 py-3 text-[13px] font-semibold text-[var(--figma-navy)]">{order.amount}</td>
+      <td className="px-4 py-3">
+        <button
+          type="button"
+          onClick={() => onEdit(order)}
+          className="flex cursor-pointer items-center gap-1 rounded-lg border border-[var(--figma-border)] bg-white px-2.5 py-1.5 text-[12px] font-medium text-[var(--figma-navy)]"
+        >
+          <MaterialIcon name="edit" outlined size={14} />
+          Edit
+        </button>
+      </td>
     </tr>
   );
 }
 
 function OrdersTab({
   supplierId,
+  supplierName,
+  projects,
+  projectsLoading = false,
   enabled = true,
 }: {
   supplierId: string;
+  supplierName: string;
+  projects: { id: string; name: string }[];
+  projectsLoading?: boolean;
   enabled?: boolean;
 }) {
-  const { orders, isLoading, error } = useSupplierOrders(supplierId, { enabled });
+  const {
+    orders,
+    isLoading,
+    error,
+    createOrder,
+    updateOrder,
+    isCreating,
+    isUpdating,
+  } = useSupplierOrders(supplierId, {
+    enabled,
+  });
+  const [modalOrder, setModalOrder] = useState<SupplierOrder | null | undefined>(undefined);
+  const modalOpen = modalOrder !== undefined;
+  const isSaving = isCreating || isUpdating;
 
   if (isLoading) {
     return (
@@ -305,40 +341,90 @@ function OrdersTab({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-[var(--figma-border)] bg-white">
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[13px]">
-          <thead>
-            <tr className="bg-[var(--figma-gray50)]">
-              {["Order Date", "Project", "Item", "Qty", "Delivery Status", "Payment", "Amount"].map((col) => (
-                <th
-                  key={col}
-                  className="border-b border-[var(--figma-border)] px-4 py-[11px] text-left text-[12px] font-semibold tracking-wide whitespace-nowrap text-[var(--figma-navy)]"
-                >
-                  {col}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {orders.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-6 py-12 text-center">
-                  <MaterialIcon name="local_shipping" outlined size={36} className="mx-auto mb-2.5 block text-[var(--figma-border)]" />
-                  <div className="mb-1 text-[14px] font-medium text-[var(--figma-navy)]">No order history yet</div>
-                  <div className="mx-auto max-w-sm text-[13px] text-[var(--figma-gray500)]">
-                    Orders placed with this supplier will appear here with delivery and payment status.
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              orders.map((order, i) => (
-                <OrderRow key={order.id} order={order} isLast={i === orders.length - 1} />
-              ))
-            )}
-          </tbody>
-        </table>
+    <div>
+      <div className="mb-5 flex justify-end">
+        <GradientButton onClick={() => setModalOrder(null)} className="px-4 py-2 text-[13px]">
+          <MaterialIcon name="add" outlined size={16} />
+          Add order
+        </GradientButton>
       </div>
+
+      <div className="overflow-hidden rounded-2xl border border-[var(--figma-border)] bg-white">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-[13px]">
+            <thead>
+              <tr className="bg-[var(--figma-gray50)]">
+                {[
+                  "Order Date",
+                  "Project",
+                  "Item",
+                  "Qty",
+                  "Delivery Status",
+                  "Payment",
+                  "Amount (LKR)",
+                  "",
+                ].map((col, index) => (
+                  <th
+                    key={col || `actions-${index}`}
+                    className="border-b border-[var(--figma-border)] px-4 py-[11px] text-left text-[12px] font-semibold tracking-wide whitespace-nowrap text-[var(--figma-navy)]"
+                  >
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {orders.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-12 text-center">
+                    <MaterialIcon
+                      name="local_shipping"
+                      outlined
+                      size={36}
+                      className="mx-auto mb-2.5 block text-[var(--figma-border)]"
+                    />
+                    <div className="mb-1 text-[14px] font-medium text-[var(--figma-navy)]">
+                      No order history yet
+                    </div>
+                    <div className="mx-auto max-w-sm text-[13px] text-[var(--figma-gray500)]">
+                      Orders placed with this supplier will appear here with delivery and payment
+                      status. Use Add order to record one.
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                orders.map((order, i) => (
+                  <OrderRow
+                    key={order.id}
+                    order={order}
+                    isLast={i === orders.length - 1}
+                    onEdit={(next) => setModalOrder(next)}
+                  />
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {modalOpen && (
+        <AddSupplierOrderModal
+          key={modalOrder?.id ?? "new-order"}
+          supplierName={supplierName}
+          projects={projects}
+          projectsLoading={projectsLoading}
+          isSaving={isSaving}
+          editOrder={modalOrder}
+          onClose={() => setModalOrder(undefined)}
+          onSubmit={async (payload) => {
+            if (modalOrder) {
+              await updateOrder(modalOrder.id, payload);
+              return;
+            }
+            await createOrder(payload);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -455,7 +541,7 @@ export function SupplierProfileScreen({ supplierId }: { supplierId: string }) {
     isDeleting,
   } = useSupplier(supplierId);
   const { tasks: vendorTasks } = useVendorTasks({ party_id: supplierId, party_kind: "supplier" });
-  const { projects } = useProjects({ page: 1, limit: 100 });
+  const { projects, isLoading: projectsLoading } = useProjects({ page: 1, limit: 100 });
   const {
     linkedFromProjectLinks,
     isLoading: projectLinksLoading,
@@ -615,7 +701,15 @@ export function SupplierProfileScreen({ supplierId }: { supplierId: string }) {
           onSave={(payload) => updateSupplier(payload).then(() => undefined)}
         />
       )}
-      {tab === "orders" && <OrdersTab supplierId={supplierId} enabled={tab === "orders"} />}
+      {tab === "orders" && (
+        <OrdersTab
+          supplierId={supplierId}
+          supplierName={supplier.name}
+          projects={projects.map((project) => ({ id: project.id, name: project.name }))}
+          projectsLoading={projectsLoading}
+          enabled={tab === "orders"}
+        />
+      )}
       {tab === "projects" && (
         <ProjectsTab
           projects={linkedProjects}

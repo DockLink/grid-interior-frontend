@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { formatFileDate, formatFileSize } from "@/lib/files/format";
+import { triggerFileDownload } from "@/lib/files/trigger-file-download";
 import type { ProjectFile } from "@/types/files";
 
 export function FileVersionHistoryDialog({
@@ -22,18 +23,15 @@ export function FileVersionHistoryDialog({
   fileId,
   fileName,
   onGetVersions,
-  onGetDownloadUrl,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   fileId: string | null;
   fileName: string;
   onGetVersions: (fileId: string) => Promise<ProjectFile[]>;
-  onGetDownloadUrl: (fileId: string) => Promise<string>;
 }) {
   const [versions, setVersions] = useState<ProjectFile[]>([]);
   const [loading, setLoading] = useState(false);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || !fileId) {
@@ -47,16 +45,8 @@ export function FileVersionHistoryDialog({
       .finally(() => setLoading(false));
   }, [open, fileId, onGetVersions]);
 
-  async function download(id: string) {
-    setDownloadingId(id);
-    try {
-      const url = await onGetDownloadUrl(id);
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch {
-      toast.error("Could not get download link");
-    } finally {
-      setDownloadingId(null);
-    }
+  function download(version: ProjectFile) {
+    triggerFileDownload(version.id, version.fileName || fileName);
   }
 
   return (
@@ -112,8 +102,7 @@ export function FileVersionHistoryDialog({
                   </div>
                   <button
                     type="button"
-                    disabled={downloadingId === v.id}
-                    onClick={() => void download(v.id)}
+                    onClick={() => download(v)}
                     className="ml-3 shrink-0 text-[var(--figma-gray400)] hover:text-[var(--figma-teal)]"
                     title="Download this version"
                   >

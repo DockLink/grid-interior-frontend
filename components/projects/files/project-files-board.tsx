@@ -9,6 +9,7 @@ import { useProjectFiles } from "@/hooks/use-project-files";
 import { useProjectMembers } from "@/hooks/use-project-members";
 import { canDownloadProjectFiles } from "@/lib/projects/permissions";
 import { isArchiveFolderPath } from "@/lib/files/archive-path";
+import { triggerFileDownload } from "@/lib/files/trigger-file-download";
 import type { ProjectFile, ProjectFolderNode } from "@/types/files";
 
 import { FileList } from "./file-list";
@@ -71,7 +72,6 @@ export function ProjectFilesBoard({ projectId }: { projectId: string }) {
     selectFolder,
     provisionFolders,
     uploadFile,
-    getDownloadUrl,
     getVersionHistory,
     deleteFile,
     renameFile,
@@ -109,13 +109,8 @@ export function ProjectFilesBoard({ projectId }: { projectId: string }) {
   const isVersioned = uploadTargetNode?.isVersioned ?? selectedNode?.isVersioned ?? false;
   const canUploadHere = !!uploadFolderPath && !!currentFolderPath;
 
-  async function handleDownload(file: ProjectFile) {
-    try {
-      const url = await getDownloadUrl(file.id);
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch {
-      toast.error("Could not get download link");
-    }
+  function handleDownload(file: ProjectFile) {
+    triggerFileDownload(file.id, file.fileName);
   }
 
   async function handleUploadNewVersion(file: ProjectFile, picked: File) {
@@ -429,7 +424,6 @@ export function ProjectFilesBoard({ projectId }: { projectId: string }) {
         fileId={versionTarget?.id ?? null}
         fileName={versionTarget?.fileName ?? ""}
         onGetVersions={getVersionHistory}
-        onGetDownloadUrl={getDownloadUrl}
       />
 
       <FolderNameDialog

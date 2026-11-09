@@ -304,11 +304,11 @@ export const SUPPLIER_RATES: Record<number, SupplierRate[]> = {
 
 export const SUPPLIER_ORDERS: Record<number, SupplierOrder[]> = {
   1: [
-    { id: 1, date: 'Jul 14, 2025', project: 'Marchetti Residence', item: 'Varenna Kitchen',         quantity: '6 LM',  deliveryStatus: 'Pending',   paymentStatus: 'Partial', amount: '€ 75,000' },
-    { id: 2, date: 'May 20, 2025', project: 'Ferretti Villa',       item: 'Senzafine Wardrobe ×3',  quantity: '3 units', deliveryStatus: 'Delivered', paymentStatus: 'Paid',    amount: '€ 24,600' },
-    { id: 3, date: 'Apr 3, 2025',  project: 'Bianchi Penthouse',    item: 'Custom Bed Frames ×2',   quantity: '2 units', deliveryStatus: 'Delivered', paymentStatus: 'Paid',    amount: '€ 12,800' },
-    { id: 4, date: 'Jan 15, 2025', project: 'Romano Gallery',       item: 'Display Cabinet Units',  quantity: '4 units', deliveryStatus: 'Delivered', paymentStatus: 'Paid',    amount: '€ 15,200' },
-    { id: 5, date: 'Nov 8, 2024',  project: 'Visconti Loft',        item: 'Poliform Wardrobe',      quantity: '2 units', deliveryStatus: 'Delayed',   paymentStatus: 'Unpaid',  amount: '€ 16,400' },
+    { id: 1, date: 'Jul 14, 2025', project: 'Marchetti Residence', item: 'Varenna Kitchen',         quantity: '6 LM',  deliveryStatus: 'Pending',   paymentStatus: 'Partial', amount: 'LKR 75,000' },
+    { id: 2, date: 'May 20, 2025', project: 'Ferretti Villa',       item: 'Senzafine Wardrobe ×3',  quantity: '3 units', deliveryStatus: 'Delivered', paymentStatus: 'Paid',    amount: 'LKR 24,600' },
+    { id: 3, date: 'Apr 3, 2025',  project: 'Bianchi Penthouse',    item: 'Custom Bed Frames ×2',   quantity: '2 units', deliveryStatus: 'Delivered', paymentStatus: 'Paid',    amount: 'LKR 12,800' },
+    { id: 4, date: 'Jan 15, 2025', project: 'Romano Gallery',       item: 'Display Cabinet Units',  quantity: '4 units', deliveryStatus: 'Delivered', paymentStatus: 'Paid',    amount: 'LKR 15,200' },
+    { id: 5, date: 'Nov 8, 2024',  project: 'Visconti Loft',        item: 'Poliform Wardrobe',      quantity: '2 units', deliveryStatus: 'Delayed',   paymentStatus: 'Unpaid',  amount: 'LKR 16,400' },
   ],
 }
 

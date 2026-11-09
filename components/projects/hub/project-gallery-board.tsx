@@ -268,7 +268,12 @@ export function ProjectGalleryBoard({
   });
 
   const imageFiles = useMemo(() => {
-    return remoteFolderFiles.filter(isImageProjectFile);
+    return remoteFolderFiles
+      .filter(isImageProjectFile)
+      .slice()
+      .sort((a, b) =>
+        (b.created_at ?? "").localeCompare(a.created_at ?? ""),
+      );
   }, [remoteFolderFiles]);
 
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});

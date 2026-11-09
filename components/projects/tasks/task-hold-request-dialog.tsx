@@ -9,6 +9,7 @@ import {
   hubInputClass,
 } from "@/components/projects/hub/hub-modal";
 import { MaterialIcon } from "@/components/projects/hub/material-icon";
+import { toCalendarDateIso } from "@/lib/projects/calendar-date";
 import { formatBoardDate } from "@/lib/tasks/task-board";
 import type { ProjectTaskView } from "@/lib/tasks/task-board";
 import { cn } from "@/lib/utils";
@@ -22,7 +23,7 @@ function clampDate(dateIso: string, min: string, max: string): string {
 function addDays(dateIso: string, days: number): string {
   const d = new Date(dateIso + "T00:00:00");
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return toCalendarDateIso(d);
 }
 
 export function TaskHoldRequestDialog({
@@ -48,7 +49,7 @@ export function TaskHoldRequestDialog({
   const taskStart = stageRange ? stageRange.start.slice(0, 10) : task.startDate.slice(0, 10);
   const taskEnd = stageRange ? stageRange.end.slice(0, 10) : task.dueDate;
   const windowLabel = hasStage ? "stage" : "task";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toCalendarDateIso(new Date());
 
   const defaultStart = useMemo(
     () => clampDate(today < taskStart ? taskStart : today, taskStart, taskEnd),
