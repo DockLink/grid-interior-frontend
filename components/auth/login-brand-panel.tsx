@@ -26,7 +26,7 @@ export function LoginBrandPanel() {
             Studio Project OS
           </div>
           <div className="text-[32px] leading-tight font-bold tracking-tight text-white">
-            Grid
+            GRID
             <br />
             Interior
           </div>

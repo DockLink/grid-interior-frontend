@@ -110,7 +110,7 @@ export function LoginForm({ className }: { className?: string }) {
         >
           <Layers className="size-4 text-white" aria-hidden />
         </div>
-        <span className="text-[15px] font-semibold text-[#16233D]">Grid Interior</span>
+        <span className="text-[15px] font-semibold text-[#16233D]">GRID Interior</span>
       </div>
 
       <motion.h1
