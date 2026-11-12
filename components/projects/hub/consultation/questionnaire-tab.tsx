@@ -209,8 +209,20 @@ export function QuestionnaireTab({ project }: { project: ActiveProjectView }) {
   const saveRef = useRef(save);
   const inFlightRef = useRef(false);
   const queuedRef = useRef(false);
+  const [inspoPreviewUrl, setInspoPreviewUrl] = useState<string | null>(null);
+  const [inspoIsImage, setInspoIsImage] = useState(false);
+  const inspoPreviewUrlRef = useRef<string | null>(null);
   formRef.current = form;
   saveRef.current = save;
+
+  const clearInspoPreview = () => {
+    if (inspoPreviewUrlRef.current) {
+      URL.revokeObjectURL(inspoPreviewUrlRef.current);
+      inspoPreviewUrlRef.current = null;
+    }
+    setInspoPreviewUrl(null);
+    setInspoIsImage(false);
+  };
 
   const flushSaveRef = useRef(() => {});
   flushSaveRef.current = () => {
@@ -269,10 +281,38 @@ export function QuestionnaireTab({ project }: { project: ActiveProjectView }) {
     return () => window.clearTimeout(handle);
   }, [form, isAuthOff, ready]);
 
+  useEffect(() => {
+    return () => {
+      if (inspoPreviewUrlRef.current) {
+        URL.revokeObjectURL(inspoPreviewUrlRef.current);
+        inspoPreviewUrlRef.current = null;
+      }
+    };
+  }, []);
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      patch("inspoFileName")(e.target.files[0].name);
-    }
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    clearInspoPreview();
+    const previewUrl = URL.createObjectURL(file);
+    inspoPreviewUrlRef.current = previewUrl;
+    setInspoPreviewUrl(previewUrl);
+    setInspoIsImage(
+      file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(file.name),
+    );
+    patch("inspoFileName")(file.name);
+  };
+
+  const handleRemoveInspo = () => {
+    clearInspoPreview();
+    patch("inspoFileName")(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleViewInspo = () => {
+    if (!inspoPreviewUrl) return;
+    window.open(inspoPreviewUrl, "_blank", "noopener,noreferrer");
   };
 
   const {
@@ -497,23 +537,65 @@ export function QuestionnaireTab({ project }: { project: ActiveProjectView }) {
             <input
               type="file"
               ref={fileInputRef}
+              accept="image/*,.pdf,.png,.jpg,.jpeg,.gif,.webp"
               className="hidden"
               onChange={handleFileUpload}
             />
             {inspoFileName ? (
-              <div className="flex items-center gap-2 rounded-[10px] border border-[var(--figma-border)] bg-[var(--figma-gray50)] px-3.5 py-3">
-                <MaterialIcon name="image" outlined size={18} className="text-[var(--figma-teal)]" />
-                <span className="text-[13px] font-medium text-[var(--figma-navy)]">{inspoFileName}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    patch("inspoFileName")(null);
-                    if (fileInputRef.current) fileInputRef.current.value = "";
-                  }}
-                  className="ml-auto cursor-pointer border-none bg-transparent text-[12px] text-[var(--figma-gray400)]"
-                >
-                  Remove
-                </button>
+              <div className="overflow-hidden rounded-[10px] border border-[var(--figma-border)] bg-[var(--figma-gray50)]">
+                {inspoPreviewUrl && inspoIsImage ? (
+                  <button
+                    type="button"
+                    onClick={handleViewInspo}
+                    className="relative block w-full cursor-pointer border-none bg-transparent p-0"
+                    aria-label={`View ${inspoFileName}`}
+                  >
+                    {/* Blob URLs from local picks cannot use next/image. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={inspoPreviewUrl}
+                      alt={inspoFileName}
+                      className="max-h-[220px] w-full object-contain"
+                      style={{ background: "linear-gradient(135deg, #f0f7f8, #e8f4f5)" }}
+                    />
+                  </button>
+                ) : null}
+                <div className="flex items-center gap-2 px-3.5 py-3">
+                  {inspoPreviewUrl && inspoIsImage ? null : (
+                    <MaterialIcon name="image" outlined size={18} className="text-[var(--figma-teal)]" />
+                  )}
+                  {inspoPreviewUrl ? (
+                    <button
+                      type="button"
+                      onClick={handleViewInspo}
+                      className="min-w-0 truncate border-none bg-transparent p-0 text-left text-[13px] font-medium text-[var(--figma-navy)] underline-offset-2 hover:underline"
+                    >
+                      {inspoFileName}
+                    </button>
+                  ) : (
+                    <span className="min-w-0 truncate text-[13px] font-medium text-[var(--figma-navy)]">
+                      {inspoFileName}
+                    </span>
+                  )}
+                  <div className="ml-auto flex shrink-0 items-center gap-2">
+                    {inspoPreviewUrl ? (
+                      <button
+                        type="button"
+                        onClick={handleViewInspo}
+                        className="cursor-pointer border-none bg-transparent text-[12px] font-medium text-[var(--figma-teal)]"
+                      >
+                        View
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={handleRemoveInspo}
+                      className="cursor-pointer border-none bg-transparent text-[12px] text-[var(--figma-gray400)]"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
               </div>
             ) : (
               <button
