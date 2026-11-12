@@ -1,29 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Readable } from "node:stream";
 
 const BACKEND_API_URL =
   process.env.BACKEND_API_URL ?? "http://localhost:3001/v2";
 
 function unauthorized() {
   return NextResponse.json({ statusCode: 401, message: "Unauthorized" }, { status: 401 });
-}
-
-function toNodeReadable(stream: ReadableStream<Uint8Array>): Readable {
-  const reader = stream.getReader();
-  return new Readable({
-    async read() {
-      try {
-        const { done, value } = await reader.read();
-        if (done) {
-          this.push(null);
-        } else {
-          this.push(Buffer.from(value));
-        }
-      } catch (err) {
-        this.destroy(err as Error);
-      }
-    },
-  });
 }
 
 async function parseResponseBody(res: Response): Promise<unknown> {
@@ -44,30 +25,37 @@ export async function POST(req: NextRequest) {
   if (!authorization) return unauthorized();
 
   const contentType = req.headers.get("content-type") ?? "";
+  const contentLength = req.headers.get("content-length");
 
   // Stream the raw multipart body to the backend instead of buffering with
   // req.formData() — avoids Next.js "Request Entity Too Large" on big photos.
-  const body = req.body
-    ? (toNodeReadable(req.body) as unknown as BodyInit)
-    : undefined;
+  // Use the Web ReadableStream directly and forward Content-Length so undici
+  // does not advertise Content-Length: 0 (which leaves Multer with no file).
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/storage/upload`, {
+      method: "POST",
+      headers: {
+        Authorization: authorization,
+        ...(contentType ? { "content-type": contentType } : {}),
+        ...(contentLength ? { "content-length": contentLength } : {}),
+      },
+      body: req.body,
+      // @ts-expect-error — Node.js fetch (undici) supports duplex streaming.
+      duplex: "half",
+      cache: "no-store",
+    });
 
-  const res = await fetch(`${BACKEND_API_URL}/storage/upload`, {
-    method: "POST",
-    headers: {
-      Authorization: authorization,
-      ...(contentType ? { "content-type": contentType } : {}),
-    },
-    body,
-    // @ts-expect-error — Node.js fetch (undici) supports duplex streaming.
-    duplex: "half",
-    cache: "no-store",
-  });
+    const responseBody = await parseResponseBody(res);
 
-  const responseBody = await parseResponseBody(res);
+    if (!res.ok) {
+      return NextResponse.json(responseBody, { status: res.status });
+    }
 
-  if (!res.ok) {
-    return NextResponse.json(responseBody, { status: res.status });
+    return NextResponse.json(responseBody);
+  } catch {
+    return NextResponse.json(
+      { statusCode: 502, message: "Upload backend unavailable" },
+      { status: 502 },
+    );
   }
-
-  return NextResponse.json(responseBody);
 }
